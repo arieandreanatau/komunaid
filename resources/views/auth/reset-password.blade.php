@@ -1,0 +1,40 @@
+@extends('layouts.guest')
+
+@section('content')
+<div class="bg-white rounded-xl shadow-lg p-8">
+    <div class="text-center mb-6">
+        <h2 class="text-2xl font-bold text-gray-900">Reset Password</h2>
+    </div>
+
+    <form method="POST" action="{{ route('password.store') }}">
+        @csrf
+        <input type="hidden" name="token" value="{{ $request->route('token') }}">
+        <div class="space-y-4">
+            <div>
+                <label for="email" class="block text-sm font-medium text-gray-700">Email</label>
+                <input type="email" name="email" id="email" value="{{ old('email', $request->email) }}" required
+                    class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 border px-3 py-2">
+                @error('email')
+                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                @enderror
+            </div>
+            <div>
+                <label for="password" class="block text-sm font-medium text-gray-700">Password Baru</label>
+                <input type="password" name="password" id="password" required
+                    class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 border px-3 py-2">
+                @error('password')
+                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                @enderror
+            </div>
+            <div>
+                <label for="password_confirmation" class="block text-sm font-medium text-gray-700">Konfirmasi Password</label>
+                <input type="password" name="password_confirmation" id="password_confirmation" required
+                    class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 border px-3 py-2">
+            </div>
+            <button type="submit" class="w-full bg-indigo-600 text-white py-2 rounded-lg font-semibold hover:bg-indigo-700">
+                Reset Password
+            </button>
+        </div>
+    </form>
+</div>
+@endsection

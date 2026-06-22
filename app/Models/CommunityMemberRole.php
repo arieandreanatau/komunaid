@@ -1,0 +1,38 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class CommunityMemberRole extends Model
+{
+    use HasFactory;
+
+    protected $fillable = [
+        'community_id',
+        'user_id',
+        'role',
+        'assigned_by',
+        'assigned_at',
+    ];
+
+    protected $casts = [
+        'assigned_at' => 'datetime',
+    ];
+
+    public function community()
+    {
+        return $this->belongsTo(Community::class);
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function assigner()
+    {
+        return $this->belongsTo(User::class, 'assigned_by');
+    }
+}
