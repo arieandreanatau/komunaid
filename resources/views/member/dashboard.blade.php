@@ -21,7 +21,7 @@
             <div class="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 font-bold">📅</div>
             <div>
                 <p class="text-xs text-gray-500">Event Diikuti</p>
-                <p class="text-2xl font-bold text-gray-900">0</p>
+                <p class="text-2xl font-bold text-gray-900">{{ $eventCount ?? 0 }}</p>
             </div>
         </div>
     </div>
@@ -39,7 +39,7 @@
             <div class="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center text-yellow-600 font-bold">💰</div>
             <div>
                 <p class="text-xs text-gray-500">Wallet</p>
-                <p class="text-2xl font-bold text-gray-900">Rp 0</p>
+                <p class="text-2xl font-bold text-gray-900">Rp {{ number_format($walletBalance ?? 0, 0, ',', '.') }}</p>
             </div>
         </div>
     </div>
@@ -117,10 +117,10 @@
 
         <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
             <h3 class="font-semibold text-gray-900 mb-2">Wallet</h3>
-            <p class="text-gray-500 text-sm mb-3">Saldo dan transaksi Anda.</p>
-            <div class="bg-gray-50 rounded-xl p-4 text-center text-gray-400 text-sm">
-                Coming soon
-            </div>
+            <p class="text-gray-500 text-sm mb-3">Saldo: <span class="font-bold text-emerald-600">Rp {{ number_format($walletBalance ?? 0, 0, ',', '.') }}</span></p>
+            <a href="{{ route('member.wallet.index') }}" class="block text-center bg-emerald-50 text-emerald-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-100 transition">
+                Lihat Wallet
+            </a>
         </div>
     </div>
 </div>

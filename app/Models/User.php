@@ -179,6 +179,16 @@ class User extends Authenticatable
         return $this->hasMany(EventGallery::class, 'uploaded_by');
     }
 
+    public function wallet()
+    {
+        return $this->hasOne(Wallet::class);
+    }
+
+    public function donations()
+    {
+        return $this->hasMany(Donation::class, 'donor_id');
+    }
+
     public function ownedEvents()
     {
         return $this->hasManyThrough(Event::class, Community::class, 'owner_id', 'community_id');

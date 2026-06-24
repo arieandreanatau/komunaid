@@ -11,8 +11,10 @@ use App\Models\Campaign;
 use App\Models\CollaborationRequest;
 use App\Models\RoleRequest;
 use App\Models\EventPaymentConfirmation;
+use App\Models\Donation;
 use App\Models\ApprovalLog;
 use App\Models\AuditLog;
+use App\Services\PlatformFeeService;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
@@ -27,14 +29,15 @@ class DashboardController extends Controller
             'total_brands' => Brand::count(),
             'total_events' => Event::count(),
             'total_collaborations' => CollaborationRequest::count(),
-            'total_donations' => Campaign::where('campaign_type', 'donation')->count(),
+            'total_donations' => Donation::count(),
+            'total_donation_amount' => Donation::where('status', 'confirmed')->sum('amount'),
             'pending_role_requests' => RoleRequest::where('status', 'pending')->count(),
             'pending_community_approvals' => Community::where('status', 'pending')->count(),
             'pending_brand_approvals' => Brand::where('status', 'pending')->count(),
         ];
 
-        $platformRevenue = EventPaymentConfirmation::where('status', 'confirmed')
-            ->sum('amount_paid');
+        $platformFeeService = app(PlatformFeeService::class);
+        $platformRevenue = $platformFeeService->getPlatformRevenue();
 
         $recentApprovals = ApprovalLog::with('reviewer')
             ->latest()

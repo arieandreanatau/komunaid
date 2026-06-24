@@ -11,6 +11,7 @@ use App\Models\CollaborationRequest;
 use App\Models\EventPaymentConfirmation;
 use App\Models\ApprovalLog;
 use App\Models\AuditLog;
+use App\Services\PlatformFeeService;
 use Illuminate\Http\Request;
 use Spatie\Permission\Models\Role;
 
@@ -227,6 +228,11 @@ class ApprovalCenterController extends Controller
         $registration = $payment->registration;
         if ($registration) {
             $registration->update(['payment_status' => 'paid']);
+        }
+
+        if ($registration && $registration->event && $registration->event->isPaid()) {
+            $platformFeeService = app(PlatformFeeService::class);
+            $platformFeeService->recordFee($payment);
         }
 
         ApprovalLog::create([

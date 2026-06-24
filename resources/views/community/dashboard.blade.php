@@ -86,8 +86,17 @@
         <div class="flex items-center gap-3">
             <div class="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center text-orange-600 font-bold text-lg">💰</div>
             <div>
-                <p class="text-xs text-gray-500">Donasi</p>
-                <p class="text-2xl font-bold text-gray-900">Rp {{ number_format($stats['total_donation_ledger']) }}</p>
+                <p class="text-xs text-gray-500">Saldo Wallet</p>
+                <p class="text-2xl font-bold text-gray-900">Rp {{ number_format($stats['wallet_balance'], 0, ',', '.') }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="bg-white rounded-2xl shadow-sm p-5 border border-gray-100">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 font-bold text-lg">📈</div>
+            <div>
+                <p class="text-xs text-gray-500">Pendapatan Event</p>
+                <p class="text-2xl font-bold text-gray-900">Rp {{ number_format($stats['total_event_income'], 0, ',', '.') }}</p>
             </div>
         </div>
     </div>
@@ -119,6 +128,14 @@
             <a href="{{ route('community.collaborations.index') }}" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition text-center">
                 <div class="text-2xl mb-2">🤝</div>
                 <p class="text-sm font-medium text-gray-900">Collaboration</p>
+            </a>
+            <a href="{{ route('community.wallet.index') }}" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition text-center">
+                <div class="text-2xl mb-2">💰</div>
+                <p class="text-sm font-medium text-gray-900">Wallet</p>
+            </a>
+            <a href="{{ route('community.donations.index') }}" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition text-center">
+                <div class="text-2xl mb-2">❤️</div>
+                <p class="text-sm font-medium text-gray-900">Donasi</p>
             </a>
             <a href="{{ route('community.communities.index') }}" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition text-center">
                 <div class="text-2xl mb-2">👥</div>
@@ -209,6 +226,10 @@
                 <div class="flex justify-between text-sm">
                     <span class="text-gray-500">Donasi</span>
                     <span class="font-medium text-gray-900">Rp {{ number_format($stats['total_donation_ledger']) }}</span>
+                </div>
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-500">Saldo Wallet</span>
+                    <span class="font-medium text-gray-900">Rp {{ number_format($stats['wallet_balance'], 0, ',', '.') }}</span>
                 </div>
             </div>
         </div>

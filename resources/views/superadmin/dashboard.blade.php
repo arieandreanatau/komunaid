@@ -89,6 +89,7 @@
             <div>
                 <p class="text-sm font-medium text-gray-500">Donations</p>
                 <p class="text-3xl font-bold text-red-600 mt-1">{{ $stats['total_donations'] }}</p>
+                <p class="text-xs text-gray-400 mt-1">Rp {{ number_format($stats['total_donation_amount'] ?? 0, 0, ',', '.') }}</p>
             </div>
             <div class="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
                 <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
@@ -157,5 +158,41 @@
             </div>
         @endif
     </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+    <a href="{{ route('superadmin.wallets.index') }}" class="bg-white rounded-xl shadow-sm p-5 border border-gray-100 hover:shadow-md transition">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
+                <span class="text-xl">💰</span>
+            </div>
+            <div>
+                <p class="text-sm font-medium text-gray-900">Wallet Management</p>
+                <p class="text-xs text-gray-500">Kelola saldo semua user</p>
+            </div>
+        </div>
+    </a>
+    <a href="{{ route('superadmin.donations.index') }}" class="bg-white rounded-xl shadow-sm p-5 border border-gray-100 hover:shadow-md transition">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                <span class="text-xl">❤️</span>
+            </div>
+            <div>
+                <p class="text-sm font-medium text-gray-900">Donation Management</p>
+                <p class="text-xs text-gray-500">Kelola donasi platform</p>
+            </div>
+        </div>
+    </a>
+    <a href="{{ route('superadmin.platform-fees.index') }}" class="bg-white rounded-xl shadow-sm p-5 border border-gray-100 hover:shadow-md transition">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                <span class="text-xl">📊</span>
+            </div>
+            <div>
+                <p class="text-sm font-medium text-gray-900">Platform Fee Reports</p>
+                <p class="text-xs text-gray-500">Laporan pendapatan platform</p>
+            </div>
+        </div>
+    </a>
 </div>
 @endsection

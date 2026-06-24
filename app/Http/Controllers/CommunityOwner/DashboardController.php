@@ -7,9 +7,12 @@ use App\Models\CollaborationRequest;
 use App\Models\Community;
 use App\Models\CommunityBan;
 use App\Models\CommunityMember;
+use App\Models\Donation;
 use App\Models\Event;
 use App\Models\EventRegistration;
 use App\Models\MemberJoinHistory;
+use App\Services\WalletService;
+use App\Services\PlatformFeeService;
 use Illuminate\Http\Request;
 
 class DashboardController extends Controller
@@ -43,6 +46,17 @@ class DashboardController extends Controller
 
         $totalCollaborations = CollaborationRequest::whereIn('community_id', $communityIds)->count();
 
+        $walletService = app(WalletService::class);
+        $wallet = $walletService->getOrCreateWallet($user);
+
+        $totalDonationConfirmed = Donation::whereIn('community_id', $communityIds)->where('status', 'confirmed')->sum('amount');
+
+        $totalEventIncome = 0;
+        $platformFeeService = app(PlatformFeeService::class);
+        foreach ($ownedCommunities as $community) {
+            $totalEventIncome += $platformFeeService->getCommunityNetIncome($community->id);
+        }
+
         $stats = [
             'total_communities' => $totalCommunities,
             'pending_communities' => $pendingCommunities,
@@ -52,7 +66,9 @@ class DashboardController extends Controller
             'total_events_paid' => $totalEventsPaid,
             'total_events_free' => $totalEventsFree,
             'total_collaborations' => $totalCollaborations,
-            'total_donation_ledger' => 0,
+            'total_donation_ledger' => $totalDonationConfirmed,
+            'total_event_income' => $totalEventIncome,
+            'wallet_balance' => $wallet->balance,
             'total_bans' => $totalBans,
         ];
 

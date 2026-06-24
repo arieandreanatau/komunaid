@@ -7,6 +7,7 @@ use App\Http\Requests\CommunityOwner\StoreEventRequest;
 use App\Http\Requests\CommunityOwner\UpdateEventRequest;
 use App\Models\Community;
 use App\Models\Event;
+use App\Services\PlatformFeeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -143,6 +144,11 @@ class EventController extends Controller
         ]);
 
         $registration->update(['payment_status' => 'paid']);
+
+        if ($event->isPaid()) {
+            $platformFeeService = app(PlatformFeeService::class);
+            $platformFeeService->recordFee($confirmation);
+        }
 
         return back()->with('success', 'Pembayaran berhasil dikonfirmasi.');
     }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Member;
 
 use App\Http\Controllers\Controller;
 use App\Models\Community;
+use App\Services\WalletService;
 
 class DashboardController extends Controller
 {
@@ -15,6 +16,10 @@ class DashboardController extends Controller
         $joinedCommunities = $user->joinedCommunities()->with('category')->get();
         $memberCount = $joinedCommunities->count();
 
-        return view('member.dashboard', compact('user', 'joinedCommunities', 'memberCount'));
+        $walletService = app(WalletService::class);
+        $walletBalance = $walletService->getBalance($user);
+        $eventCount = $user->eventRegistrations()->where('status', 'registered')->count();
+
+        return view('member.dashboard', compact('user', 'joinedCommunities', 'memberCount', 'walletBalance', 'eventCount'));
     }
 }

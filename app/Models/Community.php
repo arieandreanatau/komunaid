@@ -118,6 +118,11 @@ class Community extends Model
         return $this->hasMany(CollaborationRequest::class, 'sender_community_id');
     }
 
+    public function donations()
+    {
+        return $this->hasMany(Donation::class);
+    }
+
     public function getMembersCountAttribute(): int
     {
         return $this->activeMembers()->count();

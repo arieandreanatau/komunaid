@@ -36,6 +36,13 @@ use App\Http\Controllers\Superadmin\BrandController as SuperadminBrandController
 use App\Http\Controllers\Superadmin\CategoryController as SuperadminCategoryController;
 use App\Http\Controllers\Superadmin\MasterRegionController as SuperadminMasterRegionController;
 use App\Http\Controllers\Superadmin\AuditLogController as SuperadminAuditLogController;
+use App\Http\Controllers\Member\WalletController as MemberWalletController;
+use App\Http\Controllers\Member\DonationController as MemberDonationController;
+use App\Http\Controllers\CommunityOwner\DonationController as CommunityOwnerDonationController;
+use App\Http\Controllers\CommunityOwner\CommunityWalletController;
+use App\Http\Controllers\Superadmin\WalletController as SuperadminWalletController;
+use App\Http\Controllers\Superadmin\DonationController as SuperadminDonationController;
+use App\Http\Controllers\Superadmin\PlatformFeeController as SuperadminPlatformFeeController;
 
 // ─── Public Routes ─────────────────────────────────────────────
 Route::get('/', [HomeController::class, 'index'])->name('home');
@@ -95,6 +102,18 @@ Route::middleware(['auth'])->group(function () {
         // Member Event Chat
         Route::get('/events/{event:slug}/chat/{chat}', [MemberEventChatController::class, 'show'])->name('events.chat.show');
         Route::post('/events/{event:slug}/chat/{chat}/reply', [MemberEventChatController::class, 'storeThread'])->name('events.chat.reply');
+
+        // Wallet
+        Route::get('/wallet', [MemberWalletController::class, 'index'])->name('wallet.index');
+        Route::get('/wallet/history', [MemberWalletController::class, 'history'])->name('wallet.history');
+
+        // Donations
+        Route::get('/donations', [MemberDonationController::class, 'index'])->name('donations.index');
+        Route::get('/donations/{donation}', [MemberDonationController::class, 'show'])->name('donations.show');
+        Route::get('/donations/event/{event:slug}', [MemberDonationController::class, 'createEventDonation'])->name('donations.create-event');
+        Route::post('/donations/event/{event:slug}', [MemberDonationController::class, 'storeEventDonation'])->name('donations.store-event');
+        Route::get('/donations/community/{community}', [MemberDonationController::class, 'createCommunityDonation'])->name('donations.create-community');
+        Route::post('/donations/community/{community}', [MemberDonationController::class, 'storeCommunityDonation'])->name('donations.store-community');
     });
 
     // ─── Community Owner Routes ─────────────────────────────
@@ -168,6 +187,15 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/collaborations/{collaboration}/reject', [CommunityCollaborationController::class, 'reject'])->name('collaborations.reject');
         Route::post('/collaborations/{collaboration}/cancel', [CommunityCollaborationController::class, 'cancel'])->name('collaborations.cancel');
         Route::post('/collaborations/{collaboration}/complete', [CommunityCollaborationController::class, 'complete'])->name('collaborations.complete');
+
+        // Community Wallet
+        Route::get('/wallet', [CommunityWalletController::class, 'index'])->name('wallet.index');
+
+        // Donations Management
+        Route::get('/donations', [CommunityOwnerDonationController::class, 'index'])->name('donations.index');
+        Route::get('/donations/{donation}', [CommunityOwnerDonationController::class, 'show'])->name('donations.show');
+        Route::post('/donations/{donation}/confirm', [CommunityOwnerDonationController::class, 'confirm'])->name('donations.confirm');
+        Route::post('/donations/{donation}/reject', [CommunityOwnerDonationController::class, 'reject'])->name('donations.reject');
     });
 
     // ─── Brand Owner Routes ─────────────────────────────────
@@ -270,5 +298,20 @@ Route::middleware(['auth'])->group(function () {
         // Audit Logs
         Route::get('/audit-logs', [SuperadminAuditLogController::class, 'index'])->name('audit-logs.index');
         Route::get('/audit-logs/{auditLog}', [SuperadminAuditLogController::class, 'show'])->name('audit-logs.show');
+
+        // Wallet Management
+        Route::get('/wallets', [SuperadminWalletController::class, 'index'])->name('wallets.index');
+        Route::get('/wallets/{user}', [SuperadminWalletController::class, 'show'])->name('wallets.show');
+        Route::post('/wallets/{user}/adjust', [SuperadminWalletController::class, 'adjust'])->name('wallets.adjust');
+
+        // Donation Management
+        Route::get('/donations', [SuperadminDonationController::class, 'index'])->name('donations.index');
+        Route::get('/donations/{donation}', [SuperadminDonationController::class, 'show'])->name('donations.show');
+        Route::post('/donations/{donation}/confirm', [SuperadminDonationController::class, 'confirm'])->name('donations.confirm');
+        Route::post('/donations/{donation}/reject', [SuperadminDonationController::class, 'reject'])->name('donations.reject');
+
+        // Platform Fee Reports
+        Route::get('/platform-fees', [SuperadminPlatformFeeController::class, 'index'])->name('platform-fees.index');
+        Route::get('/platform-fees/{platformFee}', [SuperadminPlatformFeeController::class, 'show'])->name('platform-fees.show');
     });
 });

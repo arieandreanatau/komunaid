@@ -72,6 +72,7 @@ class DatabaseSeeder extends Seeder
             CommunityCategorySeeder::class,
             CommunitySeeder::class,
             CommunityOwnerSeeder::class,
+            WalletTransactionSeeder::class,
         ]);
     }
 }
