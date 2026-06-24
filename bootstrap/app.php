@@ -15,7 +15,23 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
+            'admin' => \App\Http\Middleware\EnsureSuperadmin::class,
+            'not.superadmin' => \App\Http\Middleware\EnsureNotSuperadmin::class,
         ]);
+
+        $middleware->redirectGuestsTo(function () {
+            if (request()->is('admin/*') || request()->is('admin')) {
+                return route('admin.login');
+            }
+            return route('login');
+        });
+
+        $middleware->redirectUsersTo(function () {
+            if (auth()->check() && auth()->user()->hasRole('superadmin')) {
+                return route('superadmin.dashboard');
+            }
+            return route('member.dashboard');
+        });
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

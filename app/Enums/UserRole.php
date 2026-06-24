@@ -8,6 +8,7 @@ enum UserRole: string
     case MEMBER = 'member';
     case COMMUNITY_OWNER = 'community_owner';
     case BRAND_OWNER = 'brand_owner';
+    case COMPANY_OWNER = 'company_owner';
     case COMMUNITY_STAFF = 'community_staff';
     case BRAND_STAFF = 'brand_staff';
 
@@ -18,6 +19,7 @@ enum UserRole: string
             self::MEMBER => 'Member',
             self::COMMUNITY_OWNER => 'Community Owner',
             self::BRAND_OWNER => 'Brand Owner',
+            self::COMPANY_OWNER => 'Company Owner',
             self::COMMUNITY_STAFF => 'Community Staff',
             self::BRAND_STAFF => 'Brand Staff',
         };

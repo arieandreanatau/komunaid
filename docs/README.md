@@ -15,6 +15,8 @@
 | [08-ui-ux-design.md](08-ui-ux-design.md) | Wireframe, color system, layout patterns |
 | [09-module-checklist.md](09-module-checklist.md) | Checklist per modul |
 | [10-seed-data.md](10-seed-data.md) | Seed data plan |
+| [05-deployment/Runbook.md](05-deployment/Runbook.md) | Deployment runbook & production guide |
+| [05-deployment/Troubleshooting.md](05-deployment/Troubleshooting.md) | Troubleshooting guide |
 
 ## Development Order
 
@@ -26,3 +28,4 @@
 6. Phase 6: Member Module
 7. Phase 7: Wallet System
 8. Phase 8: Polish & Documentation
+9. Phase 9: Deployment & Production
