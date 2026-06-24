@@ -1,0 +1,12 @@
+.git
+node_modules
+.env
+.env_local
+.env.backup
+source-code-laravel
+docs
+storage/logs
+tests
+.fleet
+.idea
+.vscode
