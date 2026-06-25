@@ -11,8 +11,9 @@ class AdminConversationFactoryShim extends Factory
     public function definition(): array
     {
         return [
-            "subject" => fake()->sentence(4),
-            "status" => "open",
+            "title" => fake()->sentence(4),
+            "type" => "direct",
+            "status" => "active",
             "last_message_at" => now(),
         ];
     }

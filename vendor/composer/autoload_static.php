@@ -45,6 +45,7 @@ class ComposerStaticInitb765e422636d934cb75b47d036a889c4
         'ec07570ca5a812141189b1fa81503674' => __DIR__ . '/..' . '/phpunit/phpunit/src/Framework/Assert/Functions.php',
         '320163ac6b93aebe3dc25b60a0533d56' => __DIR__ . '/..' . '/spatie/laravel-ignition/src/helpers.php',
         '377b22b161c09ed6e5152de788ca020a' => __DIR__ . '/..' . '/spatie/laravel-permission/src/helpers.php',
+        'b8d1aef071499129b17522a2dc4769d2' => __DIR__ . '/../..' . '/app/Shims/FactoryShimBootstrap.php',
     );
 
     public static $prefixLengthsPsr4 = array (
@@ -557,8 +558,7 @@ class ComposerStaticInitb765e422636d934cb75b47d036a889c4
         ),
         'Database\\Factories\\' =>
         array (
-            0 => __DIR__ . '/../..' . '/database/factories',
-            1 => __DIR__ . '/..' . '/laravel/pint/database/factories',
+            0 => __DIR__ . '/..' . '/laravel/pint/database/factories',
         ),
         'Cron\\' =>
         array (
@@ -868,6 +868,9 @@ class ComposerStaticInitb765e422636d934cb75b47d036a889c4
         'App\\Services\\Finance\\WalletService' => __DIR__ . '/../..' . '/app/Services/Finance/WalletService.php',
         'App\\Services\\Premium\\PremiumAccessService' => __DIR__ . '/../..' . '/app/Services/Premium/PremiumAccessService.php',
         'App\\Services\\RoleRequestService' => __DIR__ . '/../..' . '/app/Services/RoleRequestService.php',
+        'App\\Shims\\AdminConversationFactoryShim' => __DIR__ . '/../..' . '/app/Shims/AdminConversationFactoryShim.php',
+        'App\\Shims\\ProfileFactoryShim' => __DIR__ . '/../..' . '/app/Shims/ProfileFactoryShim.php',
+        'App\\Shims\\UserFactoryShim' => __DIR__ . '/../..' . '/app/Shims/UserFactoryShim.php',
         'App\\Support\\Helpers\\FormatHelper' => __DIR__ . '/../..' . '/app/Support/Helpers/FormatHelper.php',
         'Attribute' => __DIR__ . '/..' . '/symfony/polyfill-php80/Resources/stubs/Attribute.php',
         'Aws\\ACMPCA\\ACMPCAClient' => __DIR__ . '/..' . '/aws/aws-sdk-php/src/ACMPCA/ACMPCAClient.php',
@@ -2242,7 +2245,6 @@ class ComposerStaticInitb765e422636d934cb75b47d036a889c4
         'Cron\\HoursField' => __DIR__ . '/..' . '/dragonmantank/cron-expression/src/Cron/HoursField.php',
         'Cron\\MinutesField' => __DIR__ . '/..' . '/dragonmantank/cron-expression/src/Cron/MinutesField.php',
         'Cron\\MonthField' => __DIR__ . '/..' . '/dragonmantank/cron-expression/src/Cron/MonthField.php',
-        'Database\\Factories\\AdminConversationFactory' => __DIR__ . '/../..' . '/database/factories/AdminConversationFactory.php',
         'Database\\Factories\\BrandFactory' => __DIR__ . '/../..' . '/database/factories/BrandFactory.php',
         'Database\\Factories\\CollaborationProposalFactory' => __DIR__ . '/../..' . '/database/factories/CollaborationProposalFactory.php',
         'Database\\Factories\\CommunityCategoryFactory' => __DIR__ . '/../..' . '/database/factories/CommunityCategoryFactory.php',
@@ -2251,9 +2253,7 @@ class ComposerStaticInitb765e422636d934cb75b47d036a889c4
         'Database\\Factories\\DocumentationFileFactory' => __DIR__ . '/../..' . '/database/factories/DocumentationFileFactory.php',
         'Database\\Factories\\EventFactory' => __DIR__ . '/../..' . '/database/factories/EventFactory.php',
         'Database\\Factories\\FeatureLockFactory' => __DIR__ . '/../..' . '/database/factories/FeatureLockFactory.php',
-        'Database\\Factories\\ProfileFactory' => __DIR__ . '/../..' . '/database/factories/ProfileFactory.php',
         'Database\\Factories\\TranslationFactory' => __DIR__ . '/../..' . '/database/factories/TranslationFactory.php',
-        'Database\\Factories\\UserFactory' => __DIR__ . '/../..' . '/database/factories/UserFactory.php',
         'Database\\Seeders\\DatabaseSeeder' => __DIR__ . '/../..' . '/database/seeders/DatabaseSeeder.php',
         'Database\\Seeders\\Demo\\DemoAdminChatSeeder' => __DIR__ . '/../..' . '/database/seeders/Demo/DemoAdminChatSeeder.php',
         'Database\\Seeders\\Demo\\DemoBrandCompanySeeder' => __DIR__ . '/../..' . '/database/seeders/Demo/DemoBrandCompanySeeder.php',
