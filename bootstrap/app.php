@@ -21,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin' => \App\Http\Middleware\EnsureSuperadmin::class,
             'not.superadmin' => \App\Http\Middleware\EnsureNotSuperadmin::class,
             'active_user' => \App\Http\Middleware\ActiveUser::class,
+            'not.banned' => \App\Http\Middleware\EnsureNotBanned::class,
         ]);
 
         $middleware->redirectGuestsTo(function () {
