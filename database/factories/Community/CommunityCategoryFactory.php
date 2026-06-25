@@ -1,13 +1,13 @@
 <?php
 
-namespace Database\Factories;
+namespace Database\Factories\Community;
 
-use App\Models\CommunityCategory;
+use App\Models\Community\CommunityCategory;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class CommunityCategoryFactory extends Factory
 {
-    protected $model = CommunityCategory::class;
+    protected $model = \App\Models\Community\CommunityCategory::class;
 
     public function definition(): array
     {

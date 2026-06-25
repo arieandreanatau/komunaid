@@ -1,14 +1,14 @@
 <?php
 
-namespace Database\Factories;
+namespace Database\Factories\Collaboration;
 
-use App\Models\CollaborationProposal;
-use App\Models\User;
+use App\Models\Collaboration\CollaborationProposal;
+use App\Models\Identity\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class CollaborationProposalFactory extends Factory
 {
-    protected $model = CollaborationProposal::class;
+    protected $model = \App\Models\Collaboration\CollaborationProposal::class;
 
     public function definition(): array
     {

@@ -1,13 +1,13 @@
 <?php
 
-namespace Database\Factories;
+namespace Database\Factories\Premium;
 
-use App\Models\FeatureLock;
+use App\Models\Premium\FeatureLock;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class FeatureLockFactory extends Factory
 {
-    protected $model = FeatureLock::class;
+    protected $model = \App\Models\Premium\FeatureLock::class;
 
     public function definition(): array
     {

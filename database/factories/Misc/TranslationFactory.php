@@ -1,13 +1,13 @@
 <?php
 
-namespace Database\Factories;
+namespace Database\Factories\Misc;
 
-use App\Models\Translation;
+use App\Models\Misc\Translation;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class TranslationFactory extends Factory
 {
-    protected $model = Translation::class;
+    protected $model = \App\Models\Misc\Translation::class;
 
     public function definition(): array
     {

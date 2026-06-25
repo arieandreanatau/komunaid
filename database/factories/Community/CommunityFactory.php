@@ -1,15 +1,15 @@
 <?php
 
-namespace Database\Factories;
+namespace Database\Factories\Community;
 
-use App\Models\Community;
-use App\Models\CommunityCategory;
-use App\Models\User;
+use App\Models\Community\Community;
+use App\Models\Community\CommunityCategory;
+use App\Models\Identity\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class CommunityFactory extends Factory
 {
-    protected $model = Community::class;
+    protected $model = \App\Models\Community\Community::class;
 
     public function definition(): array
     {

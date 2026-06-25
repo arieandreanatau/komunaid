@@ -1,14 +1,14 @@
 <?php
 
-namespace Database\Factories;
+namespace Database\Factories\Company;
 
-use App\Models\Company;
-use App\Models\User;
+use App\Models\Company\Company;
+use App\Models\Identity\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class CompanyFactory extends Factory
 {
-    protected $model = Company::class;
+    protected $model = \App\Models\Company\Company::class;
 
     public function definition(): array
     {

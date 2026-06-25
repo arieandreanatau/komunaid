@@ -1,6 +1,6 @@
 <?php
 
-namespace Database\Factories;
+namespace Database\Factories\Identity;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -48,7 +48,7 @@ class UserFactory extends Factory
     public function superadmin(): static
     {
         return $this->state(function (array $attributes) {
-            return function (\App\Models\User $user) {
+            return function (\App\Models\Identity\User $user) {
                 $user->assignRole('superadmin');
             };
         });
@@ -57,7 +57,7 @@ class UserFactory extends Factory
     public function platformAdmin(): static
     {
         return $this->state(function (array $attributes) {
-            return function (\App\Models\User $user) {
+            return function (\App\Models\Identity\User $user) {
                 $user->assignRole('platform_admin');
             };
         });
@@ -66,7 +66,7 @@ class UserFactory extends Factory
     public function member(): static
     {
         return $this->state(function (array $attributes) {
-            return function (\App\Models\User $user) {
+            return function (\App\Models\Identity\User $user) {
                 $user->assignRole('member');
             };
         });
@@ -75,7 +75,7 @@ class UserFactory extends Factory
     public function communityOwner(): static
     {
         return $this->state(function (array $attributes) {
-            return function (\App\Models\User $user) {
+            return function (\App\Models\Identity\User $user) {
                 $user->assignRole('community_owner');
             };
         });
@@ -84,7 +84,7 @@ class UserFactory extends Factory
     public function brandOwner(): static
     {
         return $this->state(function (array $attributes) {
-            return function (\App\Models\User $user) {
+            return function (\App\Models\Identity\User $user) {
                 $user->assignRole('brand_owner');
             };
         });
@@ -93,7 +93,7 @@ class UserFactory extends Factory
     public function companyOwner(): static
     {
         return $this->state(function (array $attributes) {
-            return function (\App\Models\User $user) {
+            return function (\App\Models\Identity\User $user) {
                 $user->assignRole('company_owner');
             };
         });

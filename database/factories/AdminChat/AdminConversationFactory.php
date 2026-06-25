@@ -1,14 +1,14 @@
 <?php
 
-namespace Database\Factories;
+namespace Database\Factories\AdminChat;
 
-use App\Models\AdminConversation;
-use App\Models\User;
+use App\Models\AdminChat\AdminConversation;
+use App\Models\Identity\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class AdminConversationFactory extends Factory
 {
-    protected $model = AdminConversation::class;
+    protected $model = \App\Models\AdminChat\AdminConversation::class;
 
     public function definition(): array
     {

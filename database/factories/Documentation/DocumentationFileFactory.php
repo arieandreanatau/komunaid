@@ -1,14 +1,14 @@
 <?php
 
-namespace Database\Factories;
+namespace Database\Factories\Documentation;
 
-use App\Models\DocumentationFile;
-use App\Models\User;
+use App\Models\Documentation\DocumentationFile;
+use App\Models\Identity\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class DocumentationFileFactory extends Factory
 {
-    protected $model = DocumentationFile::class;
+    protected $model = \App\Models\Documentation\DocumentationFile::class;
 
     public function definition(): array
     {
