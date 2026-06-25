@@ -8,16 +8,16 @@
 
 ## 1. Baseline
 
-| Command | Pre-refactor | Post-refactor |
-|---|---|---|
-| `php artisan optimize:clear` | FAIL (bootstrap/cache missing) → OK after mkdir | OK |
-| `php artisan route:list` | 426 routes, 0 errors | **427 routes** (added `cron.scheduler`) |
-| `php artisan migrate:status` | 99 migrations, all Ran | 99 migrations, all Ran (no schema change) |
-| `php artisan test` | **149 passed / 191 assertions / 34s** | **149 passed / 191 assertions / 34s** |
-| `npm run build` | 55 modules / 46.16 kB JS / 138.84 kB CSS | same |
-| `composer validate` | valid | valid |
+| Command | Pre-refactor | After Tahap 1 | After Tahap 2 (wiring) |
+|---|---|---|---|
+| `php artisan optimize:clear` | FAIL (bootstrap/cache missing) → OK after mkdir | OK | OK |
+| `php artisan route:list` | 426 routes | 427 routes (+cron) | **428 routes** (+premium-demo) |
+| `php artisan migrate:status` | 99 migrations Ran | 99 migrations Ran | 99 migrations Ran |
+| `php artisan test` | 149 passed / 191 assertions | 149 passed / 191 assertions | **166 passed / 222 assertions** |
+| `npm run build` | green | green | green |
+| `composer validate` | valid | valid | valid |
 
-**Net effect:** zero regressions, 1 new route, 12 new files, 4 files modified.
+**Net effect after Tahap 1+2:** 17 new tests added (6 cron, 8 company policy, 3 event finance), 3 services wired to controllers, 1 new user-facing route (`/member/premium-demo`), 0 regressions.
 
 ---
 

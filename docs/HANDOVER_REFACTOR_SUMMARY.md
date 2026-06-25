@@ -8,9 +8,9 @@
 
 ## TL;DR
 
-KomunaID V1 + V2 codebase is **functional** (149 tests passing, 426 routes, 99 migrations). This refactor **adds** structural support without **breaking** anything:
-- 17 new files (enums, helpers, middleware, policies, services, cron controller, docs).
-- 5 files modified (bootstrap, routes, vercel.json, .vercelignore, .env.example).
+KomunaID V1 + V2 codebase is **functional** (166 tests passing, 428 routes, 99 migrations). This refactor **adds** structural support + wires services to controllers without **breaking** anything:
+- Tahap 1: 17 new files (enums, helpers, middleware, policies, services, cron controller, docs) + 5 modified.
+- Tahap 2: 5 new files (controller + view + 3 tests) + 3 modified controllers/services + 1 route added + 17 new tests.
 - 0 migrations added/removed.
 - 0 features removed.
 - 0 security weakened.
@@ -107,14 +107,16 @@ $this->authorize('update', $company);
 6. **No 2FA / no rate limit on login**. Phase 2.
 7. **No CSP/X-Frame-Options headers**. Phase 2.
 8. **Middleware duplication** (`ActiveUser` + `EnsureActiveUser` + `EnsureUserIsActive`). Consolidate in Phase 2.
-9. **Services not yet wired** to existing controllers (`RoleRequestService`, `PremiumAccessService`, `EventFinanceService`). Wire in Phase 2.
+9. **CmsPolicy + DocumentationPolicy + CollaborationProposalPolicy** created but not yet wired into controllers (current enforcement is role middleware only). Phase 2.
+10. **PremiumAccessService used in demo route only.** Production feature-gated views (analytics, bulk export) need Blade directive + controller middleware. Phase 2.
 
 ---
 
 ## File Inventory (Delta From Baseline)
 
-### New files (17 code + 7 docs = 24)
+### New files (Tahap 1: 17 code + 7 docs, Tahap 2: 4 code + 3 tests = 31)
 ```
+# Tahap 1
 app/Support/Enums/RoleEnum.php
 app/Support/Enums/UserStatusEnum.php
 app/Support/Enums/EventStatusEnum.php
@@ -142,15 +144,29 @@ docs/architecture/ROLE_PERMISSION_REVIEW.md
 docs/deployment/DEPLOYMENT_RECOMMENDATION.md
 docs/qa/REFACTOR_TEST_RESULT.md
 docs/HANDOVER_REFACTOR_SUMMARY.md
+
+# Tahap 2
+app/Http/Controllers/Member/PremiumDemoController.php
+resources/views/premium/demo.blade.php
+tests/Feature/CronRouteTest.php
+tests/Feature/CompanyPolicyTest.php
+tests/Feature/EventFinanceServiceTest.php
 ```
 
-### Modified (5)
+### Modified (Tahap 1: 5, Tahap 2: 3 = 8)
 ```
+# Tahap 1
 bootstrap/app.php        # +1 middleware alias
 routes/web.php           # +1 route + 1 use
 vercel.json              # full rewrite
 .vercelignore            # expanded
 .env.example             # new env keys
+
+# Tahap 2
+app/Http/Controllers/Superadmin/RoleRequestController.php   # uses RoleRequestService
+app/Http/Controllers/CommunityOwner/EventFinanceController.php   # uses EventFinanceService
+app/Services/Auth/RoleRequestService.php                       # rewritten to use App\Enums\ApprovalStatus
+routes/web.php                                                 # +1 route (member.premium-demo)
 ```
 
 ### Removed (0)
@@ -162,13 +178,14 @@ None.
 
 | # | Prompt | Why |
 |---|---|---|
-| 1 | `Wire Services to Controllers` | Use RoleRequestService, PremiumAccessService, EventFinanceService in actual routes |
-| 2 | `Add Cron + Policy Tests` | Cover new middleware + new policies in PHPUnit |
-| 3 | `Email & Notification Setup` | Switch from `log` driver to real SMTP/Resend + queue |
-| 4 | `Security Hardening` | CSP, X-Frame, rate limit on login, 2FA |
-| 5 | `UI/UX Polish` | Build `<x-language-switcher>`, sidebar mobile polish, empty states, flash messages |
-| 6 | `Performance Optimization` | Eager loading, index audit, fulltext search |
-| 7 | `Documentation Generator Refactor` | Move DocumentationGeneratorService from controller to scheduled task |
+| 1 | `Wire Policies to Controllers` | Currently `CompanyPolicy`/`CmsPolicy`/`DocumentationPolicy` exist but are opt-in; call `$this->authorize()` in controllers. |
+| 2 | `Build Shared Blade Components` | `<x-language-switcher>`, `<x-premium-locked>`, `<x-empty-state>`, `<x-alert>`, `<x-table>`, `<x-form.input>`. |
+| 3 | `Email & Notification Setup` | Switch from `log` driver to real SMTP/Resend + queue worker (cron-triggered). |
+| 4 | `Security Hardening` | CSP, X-Frame, rate limit on login, 2FA. |
+| 5 | `Performance Optimization` | Eager loading, index audit, fulltext search, N+1 dashboard. |
+| 6 | `Seeders Master/Demo Split` | Move idempotent core data to `database/seeders/Master/`, sample to `Demo/`. |
+| 7 | `Middleware Dedup` | Remove `EnsureActiveUser.php` + `EnsureUserIsActive.php`, keep only `ActiveUser.php`. |
+| 8 | `Apply Enums in Controllers` | Replace string literals with `RoleEnum::`, `EventStatusEnum::` etc. |
 
 ---
 

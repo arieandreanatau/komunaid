@@ -9,20 +9,23 @@
 
 | Metric | Value |
 |---|---|
-| Test files | 14 |
-| Tests passed | **149** |
+| Test files | 17 |
+| Tests passed | **166** |
 | Tests failed | **0** |
-| Assertions | **191** |
-| Duration | ~34s |
+| Assertions | **222** |
+| Duration | ~37s |
 | Status | **GREEN** |
 
-### Test files (14)
+### Test files (17)
 - `Tests\Unit\RedirectByRoleServiceTest` — 10 tests
 - `Tests\Feature\AdminChatTest` — 8 tests
 - `Tests\Feature\AuthTest` — 19 tests
 - `Tests\Feature\BrandCompanyCollaborationTest` — 15 tests
 - `Tests\Feature\CommunityModuleTest` — 9 tests
+- `Tests\Feature\CompanyPolicyTest` — 8 tests (**new**)
+- `Tests\Feature\CronRouteTest` — 6 tests (**new**)
 - `Tests\Feature\DocumentationGeneratorTest` — 6 tests
+- `Tests\Feature\EventFinanceServiceTest` — 3 tests (**new**)
 - `Tests\Feature\EventModuleTest` — 5 tests
 - `Tests\Feature\MemberModuleTest` — 13 tests
 - `Tests\Feature\MultilanguageTest` — 6 tests
@@ -62,6 +65,8 @@
 | 22 | Documentation `/superadmin/documentation` | 200 OK for superadmin | 200 OK | ✓ |
 | 23 | Cron `/api/cron/scheduler` no token | 403 | 403 | ✓ (middleware enforced) |
 | 24 | Cron with `?token=<CRON_SECRET>` | 200 OK JSON | 200 OK | ✓ (depends on env) |
+| 25 | Premium demo `/member/premium-demo` for member | 200 OK | 200 OK | ✓ |
+| 26 | Premium demo for superadmin | 200 OK, all unlocked | 200 OK | ✓ |
 
 ---
 
@@ -79,6 +84,8 @@
 | 8 | Delete actions not via GET | ✓ (SecurityTest) |
 | 9 | Export does not contain password/remember_token | ✓ (SecurityTest) |
 | 10 | `.env` not in repo (`.gitignore`) | ✓ (file system check) |
+| 11 | Cron route token-protected (bearer + query) | ✓ (CronRouteTest, 6 tests) |
+| 12 | Company policy ownership check | ✓ (CompanyPolicyTest, 8 tests) |
 
 ---
 
