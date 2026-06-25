@@ -5,29 +5,10 @@
     <div class="text-center mb-8">
         <h2 class="text-2xl font-bold text-komuna-text">Selamat Datang, {{ $user->name }}!</h2>
         <p class="text-komuna-muted mt-1">Kamu ingin menggunakan KomunaID sebagai apa?</p>
+        <p class="text-komuna-light-text text-xs mt-2">Kamu sudah otomatis terdaftar sebagai Member.</p>
     </div>
 
     <div class="space-y-3">
-        <div class="border border-komuna-border rounded-2xl p-5 hover:border-komuna-blue hover:shadow-md transition cursor-pointer group">
-            <div class="flex items-start gap-4">
-                <div class="w-12 h-12 bg-komuna-light rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-komuna-blue/10">
-                    <svg class="w-6 h-6 text-komuna-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
-                    </svg>
-                </div>
-                <div class="flex-1">
-                    <h3 class="font-semibold text-komuna-text group-hover:text-komuna-blue">Lanjut sebagai Member</h3>
-                    <p class="text-sm text-komuna-muted mt-1">Temukan komunitas, ikuti event, tambah teman, dan simpan komunitas favorit.</p>
-                </div>
-            </div>
-            <form method="POST" action="{{ route('onboarding.continue-as-member') }}" class="mt-4">
-                @csrf
-                <button type="submit" class="w-full bg-komuna-blue text-white py-2.5 rounded-xl font-semibold hover:bg-komuna-navy transition text-sm">
-                    Lanjut sebagai Member
-                </button>
-            </form>
-        </div>
-
         <div class="border border-komuna-border rounded-2xl p-5 hover:border-komuna-success hover:shadow-md transition cursor-pointer group">
             <div class="flex items-start gap-4">
                 <div class="w-12 h-12 bg-komuna-success-soft rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-komuna-success-soft">
@@ -81,9 +62,10 @@
     </div>
 
     <div class="mt-6 text-center">
-        <a href="{{ route('member.dashboard') }}" class="text-sm text-komuna-muted hover:text-komuna-text">
+        <a href="{{ route('member.dashboard') }}" class="inline-block bg-komuna-blue text-white px-8 py-2.5 rounded-xl font-semibold hover:bg-komuna-navy transition text-sm">
             Nanti Saja &rarr;
         </a>
+        <p class="text-xs text-komuna-light-text mt-2">Masuk sebagai Member dan menjelajahi KomunaID</p>
     </div>
 </div>
 @endsection

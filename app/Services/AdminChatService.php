@@ -102,6 +102,8 @@ class AdminChatService
             throw new \Exception('Tidak bisa mengirim pesan ke percakapan yang sudah diarsipkan.');
         }
 
+        $body = e($body);
+
         $message = AdminMessage::create([
             'conversation_id' => $conversation->id,
             'sender_id' => $sender->id,

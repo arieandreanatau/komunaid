@@ -40,19 +40,3 @@ body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 }
-
-.komuna-gradient-hero {
-    background: linear-gradient(135deg, #0B2D89 0%, #126BFF 50%, #25B9F2 100%);
-}
-
-.komuna-gradient-primary {
-    background: linear-gradient(135deg, #0B2D89, #126BFF);
-}
-
-.komuna-gradient-cyan {
-    background: linear-gradient(135deg, #126BFF, #25B9F2);
-}
-
-.komuna-gradient-soft {
-    background: linear-gradient(135deg, #EEF7FF, #FFFFFF, #E6FAFF);
-}

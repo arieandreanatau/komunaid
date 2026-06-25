@@ -36,7 +36,7 @@ class DemoBrandCompanySeeder extends Seeder
                     'phone' => '+62215551234',
                     'city' => 'Jakarta',
                     'province' => 'DKI Jakarta',
-                    'status' => 'active',
+                    'status' => 'approved',
                     'created_by' => $companyOwner->id,
                 ]
             );
@@ -53,7 +53,7 @@ class DemoBrandCompanySeeder extends Seeder
                     'phone' => '+62215555678',
                     'city' => 'Surabaya',
                     'province' => 'Jawa Timur',
-                    'status' => 'active',
+                    'status' => 'approved',
                     'created_by' => $companyOwner->id,
                 ]
             );
@@ -67,7 +67,7 @@ class DemoBrandCompanySeeder extends Seeder
                 'description' => 'Brand kopi lokal yang mendukung kegiatan komunitas.',
                 'industry' => 'F&B',
                 'email' => 'hello@kopikomunitas.test',
-                'status' => 'active',
+                'status' => 'approved',
                 'company_id' => $companies[0]?->id,
                 'created_by' => $brandOwner->id,
             ],
@@ -78,7 +78,7 @@ class DemoBrandCompanySeeder extends Seeder
                 'description' => 'Platform dan brand buku Indonesia.',
                 'industry' => 'Buku/Edukasi',
                 'email' => 'info@bukukita.test',
-                'status' => 'active',
+                'status' => 'approved',
                 'created_by' => $brandOwner->id,
             ],
             [
@@ -88,7 +88,7 @@ class DemoBrandCompanySeeder extends Seeder
                 'description' => 'Brand olahraga lokal Indonesia.',
                 'industry' => 'Sport',
                 'email' => 'info@sportifylocal.test',
-                'status' => 'active',
+                'status' => 'approved',
                 'company_id' => $companies[1]?->id,
                 'created_by' => $brandOwner->id,
             ],

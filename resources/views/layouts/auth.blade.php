@@ -7,7 +7,7 @@
     <title>{{ $pageTitle ?? config('app.name', 'KomunaID') }}</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="min-h-screen flex items-center justify-center komuna-gradient-soft">
+<body class="min-h-screen flex items-center justify-center bg-gradient-to-br from-komuna-light via-white to-komuna-soft-cyan">
     <div class="w-full max-w-md px-4 py-8">
         @yield('content')
         <div class="mt-6 text-center">

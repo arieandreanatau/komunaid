@@ -52,7 +52,7 @@
                     @endif
                 </div>
             </div>
-            <div class="sm:text-right">
+            <div class="sm:text-right flex flex-wrap gap-2">
                 @guest
                     <a href="{{ route('login') }}" class="inline-block bg-emerald-600 text-white px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-emerald-700 transition shadow">
                         Login untuk Join
@@ -65,7 +65,7 @@
                     <form method="POST" action="{{ route('community_action.leave', $community->slug) }}" onsubmit="return confirm('Yakin ingin keluar dari komunitas ini?')">
                         @csrf
                         <button type="submit" class="bg-komuna-danger-soft text-komuna-danger border border-red-200 px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-red-100 transition">
-                            Leave Community
+                            Keluar
                         </button>
                     </form>
                 @elseif($joinCheck && !$joinCheck['allowed'])
@@ -76,10 +76,16 @@
                     <form method="POST" action="{{ route('community_action.join', $community->slug) }}">
                         @csrf
                         <button type="submit" class="bg-emerald-600 text-white px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-emerald-700 transition shadow">
-                            Join Komunitas
+                            Bergabung
                         </button>
                     </form>
                 @endguest
+
+                @auth
+                    <button type="button" onclick="document.getElementById('report-modal').classList.remove('hidden')" class="bg-komuna-danger-soft text-komuna-danger border border-red-200 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-red-100 transition">
+                        Laporkan
+                    </button>
+                @endauth
             </div>
         </div>
 
@@ -154,4 +160,53 @@
         </div>
     </div>
 </div>
+
+@auth
+<div id="report-modal" class="hidden fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="document.getElementById('report-modal').classList.add('hidden')"></div>
+        <div class="relative bg-white rounded-2xl shadow-xl max-w-lg w-full mx-auto p-6 z-10">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-bold text-komuna-text">Laporkan Komunitas</h3>
+                <button type="button" onclick="document.getElementById('report-modal').classList.add('hidden')" class="text-komuna-muted hover:text-komuna-text">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <form method="POST" action="{{ route('community_action.report', $community->slug) }}">
+                @csrf
+                <input type="hidden" name="community_id" value="{{ $community->id }}">
+                <div class="space-y-4">
+                    <div>
+                        <label for="report_reason" class="block text-sm font-medium text-komuna-text mb-1">Alasan Pelaporan</label>
+                        <select name="reason" id="report_reason" required class="block w-full rounded-xl border-komuna-border shadow-sm focus:ring-komuna-success focus:border-komuna-success border px-4 py-2.5 text-sm">
+                            <option value="">Pilih alasan...</option>
+                            <option value="spam">Spam / Konten Tidak Relevan</option>
+                            <option value="inappropriate">Konten Tidak Pantas</option>
+                            <option value="scam">Penipuan / Scam</option>
+                            <option value="fake">Akun Palsu / Komunitas Palsu</option>
+                            <option value="harassment">Pelecehan / Cyberbullying</option>
+                            <option value="other">Lainnya</option>
+                        </select>
+                        @error('reason')
+                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+                    <div>
+                        <label for="report_message" class="block text-sm font-medium text-komuna-text mb-1">Detail (opsional)</label>
+                        <textarea name="message" id="report_message" rows="3" class="block w-full rounded-xl border-komuna-border shadow-sm focus:ring-komuna-success focus:border-komuna-success border px-4 py-2.5 text-sm" placeholder="Jelaskan lebih detail...">{{ old('message') }}</textarea>
+                    </div>
+                    <div class="flex gap-3">
+                        <button type="button" onclick="document.getElementById('report-modal').classList.add('hidden')" class="flex-1 bg-gray-100 text-gray-700 px-4 py-2.5 rounded-xl font-semibold hover:bg-gray-200 transition text-sm">
+                            Batal
+                        </button>
+                        <button type="submit" class="flex-1 bg-red-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-red-700 transition text-sm">
+                            Kirim Laporan
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+@endauth
 @endsection

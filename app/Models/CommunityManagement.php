@@ -10,6 +10,8 @@ class CommunityManagement extends Model
 {
     use HasFactory, SoftDeletes;
 
+    protected $table = 'community_managements';
+
     protected $fillable = [
         'community_id', 'user_id', 'position', 'role_description',
         'start_date', 'end_date', 'active_until_year', 'status',

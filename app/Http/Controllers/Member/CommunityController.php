@@ -84,4 +84,48 @@ class CommunityController extends Controller
 
         return back()->with('success', "Berhasil keluar dari {$community->name}.");
     }
+
+    public function report(Community $community, Request $request)
+    {
+        $request->validate([
+            'reason' => 'required|string|in:spam,inappropriate,scam,fake,harassment,other',
+            'message' => 'nullable|string|max:2000',
+        ], [
+            'reason.required' => 'Alasan pelaporan wajib dipilih.',
+            'reason.in' => 'Alasan pelaporan tidak valid.',
+        ]);
+
+        $user = auth()->user();
+
+        $reportReasons = [
+            'spam' => 'Spam / Konten Tidak Relevan',
+            'inappropriate' => 'Konten Tidak Pantas',
+            'scam' => 'Penipuan / Scam',
+            'fake' => 'Akun Palsu / Komunitas Palsu',
+            'harassment' => 'Pelecehan / Cyberbullying',
+            'other' => 'Lainnya',
+        ];
+
+        $subject = 'Laporan Komunitas: ' . $community->name . ' [' . ($reportReasons[$request->input('reason')] ?? $request->input('reason')) . ']';
+
+        $message = $request->input('message', '');
+        $message .= "\n\n--- Info Laporan ---";
+        $message .= "\nKomunitas: {$community->name}";
+        $message .= "\nSlug: {$community->slug}";
+        $message .= "\nAlasan: " . ($reportReasons[$request->input('reason')] ?? $request->input('reason'));
+
+        $suggestionClass = \App\Models\Suggestion::class;
+        if (class_exists($suggestionClass)) {
+            $suggestionClass::create([
+                'user_id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'subject' => $subject,
+                'message' => $message,
+                'status' => 'new',
+            ]);
+        }
+
+        return back()->with('success', 'Laporan berhasil dikirim. Terima kasih atas laporan Anda.');
+    }
 }

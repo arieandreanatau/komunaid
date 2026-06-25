@@ -46,21 +46,21 @@ class DemoAdminChatSeeder extends Seeder
             AdminMessage::create([
                 'conversation_id' => $conversation->id,
                 'sender_id' => $superadmin->id,
-                'body' => 'Halo, mari koordinasi untuk launching KomunaID V2.',
+                'message' => 'Halo, mari koordinasi untuk launching KomunaID V2.',
                 'message_type' => 'system',
             ]);
 
             AdminMessage::create([
                 'conversation_id' => $conversation->id,
                 'sender_id' => $admin->id,
-                'body' => 'Baik, saya sudah mengecek semua modul. Siap untuk launching.',
+                'message' => 'Baik, saya sudah mengecek semua modul. Siap untuk launching.',
                 'message_type' => 'text',
             ]);
 
             AdminMessage::create([
                 'conversation_id' => $conversation->id,
                 'sender_id' => $superadmin->id,
-                'body' => 'Bagus. Pastikan semua demo data sudah ter-seed dengan benar.',
+                'message' => 'Bagus. Pastikan semua demo data sudah ter-seed dengan benar.',
                 'message_type' => 'text',
             ]);
         }

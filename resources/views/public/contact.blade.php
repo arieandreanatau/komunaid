@@ -6,7 +6,7 @@
 @endsection
 
 @section('content')
-<section class="bg-komuna-gradient-hero text-white py-16">
+<section class="bg-gradient-to-br from-komuna-navy via-komuna-blue to-komuna-cyan text-white py-16">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
         <h1 class="text-3xl sm:text-4xl font-extrabold mb-4">Hubungi Kami</h1>
         <p class="text-blue-200 text-lg">Kami senang mendengar dari Anda. Kirim saran atau pertanyaan kapan saja.</p>

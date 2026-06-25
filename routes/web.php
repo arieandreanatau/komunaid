@@ -158,6 +158,8 @@ Route::middleware(['auth'])->group(function () {
         ->name('community_action.join')->middleware('active_user');
     Route::post('/komunitas/{community:slug}/leave', [MemberCommunityController::class, 'leave'])
         ->name('community_action.leave')->middleware('active_user');
+    Route::post('/komunitas/{community:slug}/report', [MemberCommunityController::class, 'report'])
+        ->name('community_action.report')->middleware('active_user');
 
     // ─── Member Routes ──────────────────────────────────────
     Route::prefix('member')->name('member.')->middleware('active_user')->group(function () {

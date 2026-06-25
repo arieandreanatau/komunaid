@@ -26,11 +26,11 @@
             @endif
             <div class="flex flex-col sm:flex-row justify-center gap-4 mt-8">
                 @guest
-                    <a href="{{ route('register') }}" class="bg-komuna-orange text-white px-8 py-3 rounded-xl text-lg font-semibold hover:bg-orange-500 transition shadow-lg">
+                    <a href="{{ route('register') }}" class="bg-komuna-blue text-white px-8 py-3 rounded-xl text-lg font-semibold hover:bg-komuna-navy-dark transition shadow-lg">
                         Gabung Sekarang
                     </a>
                 @else
-                    <a href="{{ auth()->user()->getDashboardRoute() }}" class="bg-komuna-orange text-white px-8 py-3 rounded-xl text-lg font-semibold hover:bg-orange-500 transition shadow-lg">
+                    <a href="{{ auth()->user()->getDashboardRoute() }}" class="bg-komuna-blue text-white px-8 py-3 rounded-xl text-lg font-semibold hover:bg-komuna-navy-dark transition shadow-lg">
                         Dashboard
                     </a>
                 @endguest
@@ -131,7 +131,7 @@
                 <div class="w-14 h-14 bg-komuna-blue rounded-2xl flex items-center justify-center mx-auto mb-3">
                     <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">{!! $step['icon'] !!}</svg>
                 </div>
-                <span class="absolute -top-1 -right-1 w-6 h-6 bg-komuna-orange text-white text-xs font-bold rounded-full flex items-center justify-center">{{ $i + 1 }}</span>
+                <span class="absolute -top-1 -right-1 w-6 h-6 bg-komuna-cyan text-white text-xs font-bold rounded-full flex items-center justify-center">{{ $i + 1 }}</span>
                 <h4 class="font-bold text-komuna-text text-sm">{{ $step['title'] }}</h4>
                 <p class="text-xs text-komuna-muted mt-1">{{ $step['desc'] }}</p>
             </div>
@@ -151,9 +151,9 @@
                     <li class="flex items-center gap-2"><svg class="w-4 h-4 text-komuna-cyan" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg> Buka volunteer & pengurus</li>
                 </ul>
                 @guest
-                    <a href="{{ route('register') }}" class="inline-block bg-komuna-orange text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-orange-500 transition">Buat Komunitas</a>
+                    <a href="{{ route('register') }}" class="inline-block bg-komuna-blue text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-komuna-navy-dark transition">Buat Komunitas</a>
                 @else
-                    <a href="{{ auth()->user()->getDashboardRoute() }}" class="inline-block bg-komuna-orange text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-orange-500 transition">Dashboard</a>
+                    <a href="{{ auth()->user()->getDashboardRoute() }}" class="inline-block bg-komuna-blue text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-komuna-navy-dark transition">Dashboard</a>
                 @endguest
             </div>
             <div class="text-white">

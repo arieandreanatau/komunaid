@@ -1,7 +1,7 @@
 @extends('layouts.public')
 
 @section('content')
-<section class="komuna-gradient-hero text-white">
+<section class="bg-gradient-to-br from-komuna-navy via-komuna-blue to-komuna-cyan text-white">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-28">
         <div class="text-center">
             <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold mb-6 tracking-tight">

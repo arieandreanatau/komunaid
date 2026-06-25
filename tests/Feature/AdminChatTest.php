@@ -62,6 +62,7 @@ class AdminChatTest extends TestCase
             'title' => 'Test Conversation',
             'type' => 'group',
             'participant_ids' => [$user->id],
+            'first_message' => 'Hello everyone!',
         ]);
 
         $response->assertRedirect();
@@ -137,6 +138,7 @@ class AdminChatTest extends TestCase
 
         $response->assertRedirect();
         $message = \App\Models\AdminMessage::where('conversation_id', $conversation->id)->first();
+        $this->assertNotNull($message);
         $this->assertStringNotContainsString('<script>', $message->body);
     }
 }

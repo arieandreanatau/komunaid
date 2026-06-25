@@ -203,7 +203,7 @@ class DemoEventSeeder extends Seeder
                         'event_id' => $event->id,
                         'user_id' => $member->id,
                         'status' => 'registered',
-                        'payment_status' => $event->price > 0 ? 'pending' : 'free',
+                        'payment_status' => 'paid',
                         'registered_at' => Carbon::now()->subDays(3),
                     ]);
                 }

@@ -176,9 +176,11 @@ class AdminChatController extends Controller
     {
         $user = Auth::user();
         $keyword = $request->q;
+        $status = request('status');
 
         $conversations = $this->chatService->getConversationsForUser($user, [
             'search' => $keyword,
+            'status' => $status,
         ])->paginate(20);
 
         $unreadCounts = [];
@@ -186,7 +188,7 @@ class AdminChatController extends Controller
             $unreadCounts[$conv->id] = $this->chatService->unreadCountForConversation($conv, $user);
         }
 
-        return view('superadmin.admin-chat.index', compact('conversations', 'unreadCounts', 'keyword'))
+        return view('superadmin.admin-chat.index', compact('conversations', 'unreadCounts', 'keyword', 'status'))
             ->with('search', $keyword);
     }
 
