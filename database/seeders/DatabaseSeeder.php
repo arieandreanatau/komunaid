@@ -33,6 +33,7 @@ class DatabaseSeeder extends Seeder
                 DemoPremiumTrialSeeder::class,
                 DemoCmsContentSeeder::class,
                 DemoAdminChatSeeder::class,
+                DemoExtraDataSeeder::class,
             ]);
         }
     }
