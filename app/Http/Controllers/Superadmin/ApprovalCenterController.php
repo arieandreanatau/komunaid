@@ -11,7 +11,7 @@ use App\Models\CollaborationRequest;
 use App\Models\EventPaymentConfirmation;
 use App\Models\ApprovalLog;
 use App\Models\AuditLog;
-use App\Services\PlatformFeeService;
+use App\Services\Finance\PlatformFeeService;
 use App\Enums\ApprovalStatus;
 use Illuminate\Http\Request;
 use Spatie\Permission\Models\Role;

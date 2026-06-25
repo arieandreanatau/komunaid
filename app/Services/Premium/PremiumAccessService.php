@@ -5,8 +5,8 @@ namespace App\Services\Premium;
 use App\Models\FeatureLock;
 use App\Models\Subscription;
 use App\Models\User;
-use App\Support\Enums\FeatureKeyEnum;
-use App\Support\Enums\SubscriptionStatusEnum;
+use App\Enums\FeatureKeyEnum;
+use App\Enums\SubscriptionStatusEnum;
 use Illuminate\Support\Facades\Cache;
 
 class PremiumAccessService

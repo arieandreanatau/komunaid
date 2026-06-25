@@ -5,7 +5,7 @@ namespace App\Http\Controllers\BrandOwner;
 use App\Http\Controllers\Controller;
 use App\Models\Brand;
 use App\Models\User;
-use App\Services\BrandOwnershipService;
+use App\Services\Brand\BrandOwnershipService;
 use Illuminate\Http\Request;
 
 class OwnershipTransferController extends Controller

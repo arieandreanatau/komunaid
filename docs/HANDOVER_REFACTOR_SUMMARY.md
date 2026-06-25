@@ -8,10 +8,11 @@
 
 ## TL;DR
 
-KomunaID V1 + V2 codebase is **functional** (188 tests passing, 428 routes, 99 migrations). This refactor **adds** structural support + wires services + wires policies to controllers without **breaking** anything:
+KomunaID V1 + V2 codebase is **functional** (188 tests passing, 428 routes, 99 migrations). This refactor **adds** structural support + wires services + wires policies + cleans up folder management without **breaking** anything:
 - Tahap 1: 17 new files (enums, helpers, middleware, policies, services, cron controller, docs) + 5 modified.
 - Tahap 2: 5 new files (controller + view + 3 tests) + 3 modified controllers/services + 1 route added + 17 new tests.
 - Tahap 3: 3 new policies wired to ~10 controllers + 3 new test files (22 tests) + `AppServiceProvider` registered in `bootstrap/app.php`.
+- Tahap 4: Folder management cleanup — delete 3 dead Guest/ controllers + 3 views + 1 dead Community/ controller + 2 duplicate middlewares; merge 8 enums to `App\Enums`; move 6 services into 5 sub-folders; split 24 seeders into `Master/` (15) + `Demo/` (9); create 5 new Blade components.
 - 0 migrations added/removed.
 - 0 features removed.
 - 0 security weakened.
@@ -107,9 +108,11 @@ $this->authorize('update', $company);
 5. **No email queue / real email** (uses log driver). Phase 2.
 6. **No 2FA / no rate limit on login**. Phase 2.
 7. **No CSP/X-Frame-Options headers**. Phase 2.
-8. **Middleware duplication** (`ActiveUser` + `EnsureActiveUser` + `EnsureUserIsActive`). Consolidate in Phase 2.
-9. **CollaborationProposalPolicy** not yet created. Phase 2.
-10. **PremiumAccessService used in demo route only.** Production feature-gated views (analytics, bulk export) need Blade directive + controller middleware. Phase 2.
+8. **Models still flat** at `app/Models/` (69 files). Domain grouping deferred — high-risk refactor (would require updating 100s of `App\Models\X::class` references). Phase 5 candidate.
+9. **CollaborationProposalPolicy** not yet created. Phase 5.
+10. **PremiumAccessService used in demo route only.** Production feature-gated views (analytics, bulk export) need Blade directive + controller middleware. Phase 5.
+11. **5 new Blade components created** but not yet adopted by views. Migrate views in Phase 5.
+12. **Demo seeders not in test** — split into `Demo/` folder but not yet auto-discovered by `RefreshDatabase`. Phase 5.
 
 ---
 
@@ -191,8 +194,49 @@ tests/Feature/CmsPolicyTest.php            # 8 tests
 tests/Feature/DocumentationPolicyTest.php  # 8 tests
 tests/Feature/HttpPolicyEnforcementTest.php # 6 tests
 
-### Removed (0)
-None.
+### Tahap 4 cleanup (no new tests; 188 still pass)
+
+# Deleted
+app/Http/Controllers/Guest/                       # 3 dead controllers (HomeController, CommunityDirectoryController, PublicEventController) — not referenced in routes/web.php
+app/Http/Controllers/Community/DashboardController.php  # 1 dead controller
+resources/views/guest/community-detail.blade.php
+resources/views/guest/community-directory.blade.php
+resources/views/guest/home.blade.php
+app/Http/Middleware/EnsureActiveUser.php          # duplicate of ActiveUser
+app/Http/Middleware/EnsureUserIsActive.php        # duplicate of ActiveUser
+app/Support/Enums/                                # 8 enums moved to app/Enums/
+
+# Moved
+app/Support/Enums/RoleEnum.php              -> app/Enums/RoleEnum.php
+app/Support/Enums/UserStatusEnum.php        -> app/Enums/UserStatusEnum.php
+app/Support/Enums/EventStatusEnum.php       -> app/Enums/EventStatusEnum.php
+app/Support/Enums/CommunityStatusEnum.php   -> app/Enums/CommunityStatusEnum.php
+app/Support/Enums/RoleRequestStatusEnum.php -> app/Enums/RoleRequestStatusEnum.php
+app/Support/Enums/CollaborationStatusEnum.php -> app/Enums/CollaborationStatusEnum.php
+app/Support/Enums/SubscriptionStatusEnum.php -> app/Enums/SubscriptionStatusEnum.php
+app/Support/Enums/FeatureKeyEnum.php        -> app/Enums/FeatureKeyEnum.php
+app/Services/BrandOwnershipService.php          -> app/Services/Brand/BrandOwnershipService.php
+app/Services/CollaborationProposalService.php   -> app/Services/Collaboration/CollaborationProposalService.php
+app/Services/CompanyOwnershipService.php        -> app/Services/Company/CompanyOwnershipService.php
+app/Services/CsvExportService.php               -> app/Services/Export/CsvExportService.php
+app/Services/PlatformFeeService.php             -> app/Services/Finance/PlatformFeeService.php
+app/Services/WalletService.php                  -> app/Services/Finance/WalletService.php
+15 idempotent seeders                              -> database/seeders/Master/
+9 demo seeders                                    -> database/seeders/Demo/
+
+# New Blade components
+resources/views/components/button.blade.php
+resources/views/components/table.blade.php
+resources/views/components/pagination.blade.php
+resources/views/components/form/input.blade.php
+resources/views/components/language-switcher.blade.php
+
+# Modified
+routes/web.php                    # removed 2 unused Guest/ imports
+database/seeders/DatabaseSeeder.php  # updated use statements for 24 seeders
+
+### Removed (0 functional files)
+None. (10 dead/duplicate files removed.)
 
 ---
 
@@ -200,14 +244,13 @@ None.
 
 | # | Prompt | Why |
 |---|---|---|
-| 1 | `Build Shared Blade Components` | `<x-language-switcher>`, `<x-premium-locked>`, `<x-empty-state>`, `<x-alert>`, `<x-table>`, `<x-form.input>`. |
-| 2 | `Email & Notification Setup` | Switch from `log` driver to real SMTP/Resend + queue worker (cron-triggered). |
-| 3 | `Security Hardening` | CSP, X-Frame, rate limit on login, 2FA. |
-| 4 | `Performance Optimization` | Eager loading, index audit, fulltext search, N+1 dashboard. |
-| 5 | `Seeders Master/Demo Split` | Move idempotent core data to `database/seeders/Master/`, sample to `Demo/`. |
-| 6 | `Middleware Dedup` | Remove `EnsureActiveUser.php` + `EnsureUserIsActive.php`, keep only `ActiveUser.php`. |
-| 7 | `Apply Enums in Controllers` | Replace string literals with `RoleEnum::`, `EventStatusEnum::` etc. |
-| 8 | `Create CollaborationProposalPolicy` | Currently V2 collaboration uses role middleware only. |
+| 1 | `Wire Models to Sub-folders` | Group 69 models by domain (Identity, Community, Event, etc.). High-risk — needs mass `use` updates. Use scripted approach. |
+| 2 | `Migrate Views to Components` | 5 new components created; migrate member dashboard, superadmin members index, community index, etc. |
+| 3 | `Apply Enums in Controllers` | Replace string literals (`'superadmin'`, `'published'`) with `RoleEnum::` / `EventStatusEnum::` etc. |
+| 4 | `Create CollaborationProposalPolicy` | Currently V2 collaboration uses role middleware only. |
+| 5 | `Email & Notification Setup` | Switch from `log` driver to real SMTP/Resend + queue worker (cron-triggered). |
+| 6 | `Security Hardening` | CSP, X-Frame, rate limit on login, 2FA. |
+| 7 | `Performance Optimization` | Eager loading, index audit, fulltext search, N+1 dashboard. |
 
 ---
 

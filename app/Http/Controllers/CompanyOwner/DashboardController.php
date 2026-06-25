@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Brand;
 use App\Models\Company;
 use App\Models\CollaborationProposal;
-use App\Services\WalletService;
+use App\Services\Finance\WalletService;
 
 class DashboardController extends Controller
 {

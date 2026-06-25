@@ -7,7 +7,7 @@ use App\Http\Requests\CommunityOwner\StoreEventRequest;
 use App\Http\Requests\CommunityOwner\UpdateEventRequest;
 use App\Models\Community;
 use App\Models\Event;
-use App\Services\PlatformFeeService;
+use App\Services\Finance\PlatformFeeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 

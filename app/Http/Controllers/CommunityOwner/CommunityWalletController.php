@@ -4,8 +4,8 @@ namespace App\Http\Controllers\CommunityOwner;
 
 use App\Http\Controllers\Controller;
 use App\Models\Community;
-use App\Services\PlatformFeeService;
-use App\Services\WalletService;
+use App\Services\Finance\PlatformFeeService;
+use App\Services\Finance\WalletService;
 
 class CommunityWalletController extends Controller
 {

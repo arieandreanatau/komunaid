@@ -9,8 +9,8 @@ use App\Models\Company;
 use App\Models\CollaborationProposal;
 use App\Models\CollaborationType;
 use App\Models\Community;
-use App\Services\CollaborationProposalService;
-use App\Services\CsvExportService;
+use App\Services\Collaboration\CollaborationProposalService;
+use App\Services\Export\CsvExportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 

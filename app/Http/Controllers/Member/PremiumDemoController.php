@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Member;
 
 use App\Http\Controllers\Controller;
 use App\Services\Premium\PremiumAccessService;
-use App\Support\Enums\FeatureKeyEnum;
+use App\Enums\FeatureKeyEnum;
 use Illuminate\Http\Request;
 
 class PremiumDemoController extends Controller

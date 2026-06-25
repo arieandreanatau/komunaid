@@ -7,7 +7,7 @@ use App\Http\Requests\CompanyOwner\StoreBrandUnderCompanyRequest;
 use App\Models\Brand;
 use App\Models\Company;
 use App\Models\AuditLog;
-use App\Services\CompanyOwnershipService;
+use App\Services\Company\CompanyOwnershipService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
