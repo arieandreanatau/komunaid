@@ -22,6 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'not.superadmin' => \App\Http\Middleware\EnsureNotSuperadmin::class,
             'active_user' => \App\Http\Middleware\ActiveUser::class,
             'not.banned' => \App\Http\Middleware\EnsureNotBanned::class,
+            'cron.token' => \App\Http\Middleware\VerifyCronToken::class,
         ]);
 
         $middleware->redirectGuestsTo(function () {

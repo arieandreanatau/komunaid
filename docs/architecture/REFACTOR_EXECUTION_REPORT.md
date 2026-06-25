@@ -1,99 +1,157 @@
-# Refactor Execution Report
+# KomunaID — Refactor Execution Report
 
-> Branch: `refactor/v1-v2-audit`
-> Date: 2026-06-25
-> Operator: Kilo
+**Branch:** `refactor/v1-v2-audit`
+**Date:** 2026-06-25
+**Executor:** Kilo (via master refactor prompt)
 
-## Baseline (Phase 0)
+---
 
-| Command | Result |
+## 1. Baseline
+
+| Command | Pre-refactor | Post-refactor |
+|---|---|---|
+| `php artisan optimize:clear` | FAIL (bootstrap/cache missing) → OK after mkdir | OK |
+| `php artisan route:list` | 426 routes, 0 errors | **427 routes** (added `cron.scheduler`) |
+| `php artisan migrate:status` | 99 migrations, all Ran | 99 migrations, all Ran (no schema change) |
+| `php artisan test` | **149 passed / 191 assertions / 34s** | **149 passed / 191 assertions / 34s** |
+| `npm run build` | 55 modules / 46.16 kB JS / 138.84 kB CSS | same |
+| `composer validate` | valid | valid |
+
+**Net effect:** zero regressions, 1 new route, 12 new files, 4 files modified.
+
+---
+
+## 2. Files Created (12)
+
+| File | Purpose |
 |---|---|
-| `php artisan optimize:clear` | cleared bootstrap, config, routes, views, cache |
-| `php artisan about` | Laravel 11.54.0 |
-| `php artisan route:list` | 426 routes |
-| `php artisan migrate:status` | all Ran |
-| `php artisan test` | 149 passed (191 assertions) |
-| `npm run build` | 55 modules, 23.5s, `public/build/manifest.json` emitted |
-| `composer validate` | clean |
-| `composer dump-autoload` | regenerated |
+| `app/Support/Enums/RoleEnum.php` | Role constants + helpers |
+| `app/Support/Enums/UserStatusEnum.php` | active/banned/suspended enum |
+| `app/Support/Enums/EventStatusEnum.php` | Event status enum + helpers |
+| `app/Support/Enums/CommunityStatusEnum.php` | Community status enum |
+| `app/Support/Enums/RoleRequestStatusEnum.php` | Role request status enum |
+| `app/Support/Enums/CollaborationStatusEnum.php` | Collaboration status enum |
+| `app/Support/Enums/SubscriptionStatusEnum.php` | Subscription status enum |
+| `app/Support/Enums/FeatureKeyEnum.php` | Premium feature key enum |
+| `app/Support/Helpers/FormatHelper.php` | Currency/date/badge/role formatting |
+| `app/Http/Middleware/VerifyCronToken.php` | Token-protected cron route |
+| `app/Http/Controllers/Shared/CronController.php` | `/api/cron/scheduler` |
+| `app/Policies/CompanyPolicy.php` | Company ownership authorization |
+| `app/Policies/CmsPolicy.php` | CMS page authorization |
+| `app/Policies/DocumentationPolicy.php` | Documentation authorization |
+| `app/Services/Auth/RoleRequestService.php` | Approve/reject/cancel + log |
+| `app/Services/Premium/PremiumAccessService.php` | Feature lock check + cache |
+| `app/Services/Event/EventFinanceService.php` | Recompute finance summary |
 
-## Phase 1 — Autoload & class resolution
+---
 
-- ✅ Added `'banned_at' => 'datetime'` to `User` model `$casts()`.
-- ✅ Created `app/Http/Middleware/EnsureNotBanned.php` (wraps existing `isBannedOrSuspended()` logic, redirects to `account.restricted`).
-- ✅ Registered `not.banned` alias in `bootstrap/app.php`.
-- Gate: `php artisan route:list` returns 426 routes. ✅
+## 3. Files Modified (5)
 
-## Phase 2 — Middleware & auth
+| File | Change | Reason |
+|---|---|---|
+| `bootstrap/app.php` | Register `cron.token` middleware alias | Wire `VerifyCronToken` |
+| `routes/web.php` | Add `use` + 1 cron route at end | Enable Vercel Cron |
+| `vercel.json` | Full rewrite of `buildCommand` + add `crons` block | Production build pipeline |
+| `.vercelignore` | Expand to exclude dev/IDE/storage-framework | Smaller deploy + secret safety |
+| `.env.example` | Add AWS/R2 + CRON + SESSION/CACHE/QUEUE=database | Document new env keys |
 
-- ✅ `EnsureSuperadmin` already handles banned for `/superadmin/*` (unchanged).
-- ✅ New `EnsureNotBanned` is available for any non-superadmin route group that wants to opt in. Existing routes that used `active_user` are unaffected.
-- Gate: tests still 149/149 pass. ✅
+---
 
-## Phase 3 — Route consolidation
+## 4. Docs Created (5)
 
-- ✅ No duplicate route names detected.
-- ✅ No write-on-GET risks detected.
-- ✅ Route groups already organized in `routes/web.php` by comment blocks.
-- Gate: 426 routes, 0 errors. ✅
-
-## Phase 4 — Controller & request refactor
-
-- Skipped (no fat controllers identified that block MVP). Existing FormRequests + Policies already in use. Will revisit if a future phase needs it.
-
-## Phase 5 — Database cleanup
-
-- ✅ No additive migrations required for MVP. V1 tables documented in `DATABASE_REVIEW.md`.
-- Gate: `php artisan migrate:status` all Ran. ✅
-
-## Phase 6 — Seeder consolidation
-
-- ✅ `MasterSeeder` and `DemoSeeder` already split (no change needed).
-
-## Phase 7 — UI/layout fix
-
-- Skipped (no broken views identified by tests).
-
-## Phase 8 — Premium, multilanguage, admin chat, documentation
-
-- Covered by Feature tests (PremiumFeatureTest, MultilanguageTest, AdminChatTest, DocumentationGeneratorTest). All pass.
-
-## Phase 9 — Build & test
-
-| Command | Result |
+| File | Purpose |
 |---|---|
-| `npm run build` | ✅ |
-| `php artisan test` | ✅ 149/149 |
-| `composer validate` | ✅ |
+| `docs/architecture/ARCHITECTURE_AUDIT_V1_V2.md` | Master audit (Tahap 1) |
+| `docs/architecture/REFACTOR_BLUEPRINT.md` | Refactor plan (Tahap 1) |
+| `docs/architecture/MODULE_STRUCTURE.md` | Module map |
+| `docs/architecture/ROUTE_STRUCTURE.md` | Route reference |
+| `docs/architecture/DATABASE_REVIEW.md` | DB schema review |
+| `docs/architecture/ROLE_PERMISSION_REVIEW.md` | Role/policy map |
+| `docs/deployment/DEPLOYMENT_RECOMMENDATION.md` | Vercel+Hostinger+R2 guide |
 
-## Phase 10 — Security & smoke
+---
 
-- See `docs/qa/REFACTOR_TEST_RESULT.md`. 20/20 smoke + 10/10 security pass.
+## 5. Phase-by-Phase Detail
 
-## Phase 11 — Documentation & handover
+### Phase A — Bootstrap fix (critical)
+- Created `bootstrap/cache/`, `storage/app/public/`, `storage/framework/{cache,sessions,views,testing}/`, `storage/logs/`.
+- Without this, NO artisan command works.
+- `php artisan optimize:clear` now green.
 
-Files written:
+### Phase B — Structural support layer
+- 8 enums for status/role/feature keys (replaces ad-hoc string literals).
+- `FormatHelper` consolidates currency/date/badge formatting.
 
-1. `docs/architecture/ARCHITECTURE_AUDIT_V1_V2.md`
-2. `docs/architecture/REFACTOR_BLUEPRINT.md`
-3. `docs/architecture/MODULE_STRUCTURE.md`
-4. `docs/architecture/ROUTE_STRUCTURE.md`
-5. `docs/architecture/DATABASE_REVIEW.md`
-6. `docs/architecture/ROLE_PERMISSION_REVIEW.md`
-7. `docs/deployment/DEPLOYMENT_RECOMMENDATION.md`
-8. `docs/qa/REFACTOR_TEST_RESULT.md`
-9. `docs/architecture/REFACTOR_EXECUTION_REPORT.md` (this file)
-10. `docs/HANDOVER_REFACTOR_SUMMARY.md`
+### Phase C — Authorization expansion
+- 3 new policies: `CompanyPolicy`, `CmsPolicy`, `DocumentationPolicy`.
+- Auto-discovered by Laravel 11 (no provider registration needed).
+- Existing policies unchanged.
 
-## Files Changed
+### Phase D — Service layer expansion
+- `RoleRequestService` — encapsulates approve/reject/cancel with audit log + Spatie role sync.
+- `PremiumAccessService` — feature lock check with cache + subscription gate; bypass for superadmin/admin_platform.
+- `EventFinanceService` — recompute finance summary from transactions (used by EventFinanceController when present; safe to call).
 
-| # | File | Change Type | Reason | Risk |
-|---|---|---|---|---|
-| 1 | `app/Models/User.php` | Cast addition | `banned_at` not cast to datetime | Low |
-| 2 | `app/Http/Middleware/EnsureNotBanned.php` | New file | Generic banned check for non-superadmin routes | Low |
-| 3 | `bootstrap/app.php` | Alias registration | Register `not.banned` alias | Low |
-| 4 | `docs/architecture/*.md` (6 files) | New docs | Audit, blueprint, module, route, db, role | None |
-| 5 | `docs/deployment/DEPLOYMENT_RECOMMENDATION.md` | New doc | Deployment target guidance | None |
-| 6 | `docs/qa/REFACTOR_TEST_RESULT.md` | New doc | Test result record | None |
-| 7 | `docs/architecture/REFACTOR_EXECUTION_REPORT.md` | New doc | Execution log | None |
-| 8 | `docs/HANDOVER_REFACTOR_SUMMARY.md` | New doc | Handover | None |
+### Phase E — Cron infrastructure (Vercel adaptation)
+- `VerifyCronToken` middleware: `hash_equals` constant-time compare; reads `?token=` or `Authorization: Bearer`.
+- `CronController`: calls `Artisan::call('schedule:run')`, returns JSON with output.
+- Route `/api/cron/scheduler` registered last (after all web groups).
+- `vercel.json` `crons` block: `* * * * *` schedule.
+
+### Phase F — Vercel build pipeline
+- Single `buildCommand` runs composer install (no-dev), npm ci + build, then artisan discover + cache commands.
+- `view:cache`, `config:cache`, `route:cache` reduce cold-start latency.
+- `.vercelignore` excludes dev artifacts and storage subdirs that are rebuilt at runtime.
+
+### Phase G — Env documentation
+- `.env.example` updated with all new keys (AWS/R2, CRON_SECRET, SESSION/CACHE/QUEUE=database).
+
+### Phase H — Validation
+- `php artisan route:list` — 427 routes, 0 errors.
+- `php artisan test` — 149/149 passing.
+- `npm run build` — green.
+- `php artisan migrate:status` — all green.
+
+---
+
+## 6. Risks & Mitigations Applied
+
+| Risk | Mitigation |
+|---|---|
+| New enum usage in existing controllers may break | **Enums are isolated**; no existing controller code was refactored to use them. They are available for future use. |
+| `CompanyPolicy` may conflict with existing controller logic | **Policies are opt-in.** Controllers must call `Gate::authorize()` to use them. None was changed. Safe addition. |
+| `CronController` exposing `Artisan::call` | **Token middleware is enforced** at the route level; without valid `CRON_SECRET`, request returns 403/503. |
+| Vercel cron path with `?token=` in plain text | Vercel stores `CRON_SECRET` as project env; URL is constructed by Vercel at deploy. Alternative: read from `Authorization: Bearer` header. |
+| `composer install --no-dev` removes phpunit on production | Tests are not run in production build. Fine. |
+| `php artisan route:cache` cache stale during development | `optimize:clear` clears all caches. Cached only at Vercel build. |
+
+---
+
+## 7. Outstanding Phase 2 Items (Not Done in This Refactor)
+
+- [ ] Use `RoleEnum`/`StatusEnum` in controllers (deprecation of string literals).
+- [ ] Use `PremiumAccessService` in feature-gated views (e.g. analytics page).
+- [ ] Use `EventFinanceService` in `EventFinanceController`.
+- [ ] Use `RoleRequestService` in `RoleRequestController` (both member + superadmin).
+- [ ] Consolidate middleware: remove `EnsureActiveUser.php` + `EnsureUserIsActive.php` duplicates.
+- [ ] Add `Tests\Feature\CronRouteTest` (token protection).
+- [ ] Add `Tests\Feature\CompanyPolicyTest`.
+- [ ] Add fulltext index on events/communities for public search.
+- [ ] Add `.gitkeep` to `public/build/` (so empty dir committed) or include build in deploy.
+- [ ] Add CSP/X-Frame-Options headers.
+- [ ] Implement email queue (Phase 2).
+- [ ] Add rate limiting on login (Phase 2).
+- [ ] Add 2FA (Phase 2).
+
+---
+
+## 8. Rollback
+
+If refactor causes production issues:
+```bash
+git checkout main       # or pre-refactor branch
+vercel env pull         # restore env from Vercel
+git push origin main    # Vercel auto-redeploys
+```
+
+DB is unchanged. No migration was added/modified. Code changes are isolated to new files + 5 file modifications.

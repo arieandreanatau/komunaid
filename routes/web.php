@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Shared\CronController;
 use App\Http\Controllers\Guest\HomeController;
 use App\Http\Controllers\Guest\CommunityDirectoryController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
@@ -733,3 +734,10 @@ Route::middleware(['auth'])->group(function () {
         });
     });
 });
+
+// ============================================================
+// CRON (token-protected, called by Vercel Cron Jobs)
+// ============================================================
+Route::get('/api/cron/scheduler', [CronController::class, 'run'])
+    ->middleware('cron.token')
+    ->name('cron.scheduler');
