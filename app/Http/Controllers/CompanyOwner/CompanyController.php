@@ -7,13 +7,18 @@ use App\Http\Requests\CompanyOwner\StoreCompanyRequest;
 use App\Http\Requests\CompanyOwner\UpdateCompanyRequest;
 use App\Models\Company;
 use App\Models\AuditLog;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 class CompanyController extends Controller
 {
+    use AuthorizesRequests;
+
     public function index()
     {
+        $this->authorize('viewAny', Company::class);
+
         $user = auth()->user();
         $companies = Company::where('owner_id', $user->id)
             ->withCount('brands')
@@ -25,11 +30,14 @@ class CompanyController extends Controller
 
     public function create()
     {
+        $this->authorize('create', Company::class);
         return view('company-owner.companies.create');
     }
 
     public function store(StoreCompanyRequest $request)
     {
+        $this->authorize('create', Company::class);
+
         $user = auth()->user();
         $data = $request->validated();
         $data['owner_id'] = $user->id;
@@ -51,11 +59,7 @@ class CompanyController extends Controller
 
     public function show(Company $company)
     {
-        $user = auth()->user();
-
-        if ($company->owner_id !== $user->id && !$user->hasRole('superadmin')) {
-            abort(403);
-        }
+        $this->authorize('view', $company);
 
         $company->load(['brands', 'owner']);
         $company->loadCount('brands');
@@ -65,27 +69,19 @@ class CompanyController extends Controller
 
     public function edit(Company $company)
     {
-        $user = auth()->user();
-
-        if ($company->owner_id !== $user->id && !$user->hasRole('superadmin')) {
-            abort(403);
-        }
-
+        $this->authorize('update', $company);
         return view('company-owner.companies.edit', compact('company'));
     }
 
     public function update(UpdateCompanyRequest $request, Company $company)
     {
-        $user = auth()->user();
-
-        if ($company->owner_id !== $user->id && !$user->hasRole('superadmin')) {
-            abort(403);
-        }
+        $this->authorize('update', $company);
 
         if ($company->isSuspendedOrBanned()) {
             return back()->with('error', 'Perusahaan yang disuspend/banned tidak bisa diperbarui.');
         }
 
+        $user = auth()->user();
         $data = $request->validated();
         $data['updated_by'] = $user->id;
 
@@ -106,11 +102,7 @@ class CompanyController extends Controller
 
     public function archive(Company $company)
     {
-        $user = auth()->user();
-
-        if ($company->owner_id !== $user->id && !$user->hasRole('superadmin')) {
-            abort(403);
-        }
+        $this->authorize('update', $company);
 
         $old = ['status' => $company->status];
         $company->update(['status' => 'archived']);
@@ -123,11 +115,7 @@ class CompanyController extends Controller
 
     public function destroy(Company $company)
     {
-        $user = auth()->user();
-
-        if ($company->owner_id !== $user->id && !$user->hasRole('superadmin')) {
-            abort(403);
-        }
+        $this->authorize('delete', $company);
 
         $old = ['status' => $company->status];
         $company->update(['status' => 'archived']);

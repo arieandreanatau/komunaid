@@ -8,11 +8,14 @@ use App\Models\Brand;
 use App\Models\Company;
 use App\Models\AuditLog;
 use App\Services\CompanyOwnershipService;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 class CompanyBrandController extends Controller
 {
+    use AuthorizesRequests;
+
     protected $ownershipService;
 
     public function __construct(CompanyOwnershipService $ownershipService)
@@ -22,11 +25,7 @@ class CompanyBrandController extends Controller
 
     public function index(Company $company)
     {
-        $user = auth()->user();
-
-        if (!$this->ownershipService->canManageCompany($company, $user)) {
-            abort(403);
-        }
+        $this->authorize('manageBrands', $company);
 
         $brands = $company->brands()->latest()->paginate(10);
 
@@ -35,23 +34,15 @@ class CompanyBrandController extends Controller
 
     public function create(Company $company)
     {
-        $user = auth()->user();
-
-        if (!$this->ownershipService->canManageCompany($company, $user)) {
-            abort(403);
-        }
-
+        $this->authorize('manageBrands', $company);
         return view('company-owner.companies.brands.create', compact('company'));
     }
 
     public function store(StoreBrandUnderCompanyRequest $request, Company $company)
     {
+        $this->authorize('manageBrands', $company);
+
         $user = auth()->user();
-
-        if (!$this->ownershipService->canManageCompany($company, $user)) {
-            abort(403);
-        }
-
         $data = $request->validated();
         $data['owner_id'] = $user->id;
         $data['company_id'] = $company->id;
@@ -73,11 +64,7 @@ class CompanyBrandController extends Controller
 
     public function attach(Request $request, Company $company, Brand $brand)
     {
-        $user = auth()->user();
-
-        if (!$this->ownershipService->canManageCompany($company, $user)) {
-            abort(403);
-        }
+        $this->authorize('manageBrands', $company);
 
         if ($brand->company_id === $company->id) {
             return back()->with('warning', 'Brand sudah berada di perusahaan ini.');
@@ -87,6 +74,7 @@ class CompanyBrandController extends Controller
             return back()->with('error', 'Brand sudah berada di bawah perusahaan lain. Detach terlebih dahulu.');
         }
 
+        $user = auth()->user();
         $this->ownershipService->attachBrandToCompany($brand, $company, $user);
 
         return back()->with('success', 'Brand berhasil dihubungkan ke perusahaan.');
@@ -94,16 +82,13 @@ class CompanyBrandController extends Controller
 
     public function detach(Request $request, Company $company, Brand $brand)
     {
-        $user = auth()->user();
-
-        if (!$this->ownershipService->canManageCompany($company, $user)) {
-            abort(403);
-        }
+        $this->authorize('manageBrands', $company);
 
         if ($brand->company_id !== $company->id) {
             return back()->with('error', 'Brand tidak berada di perusahaan ini.');
         }
 
+        $user = auth()->user();
         $this->ownershipService->detachBrandFromCompany($brand, $company, $user);
 
         return back()->with('success', 'Brand berhasil dilepas dari perusahaan.');

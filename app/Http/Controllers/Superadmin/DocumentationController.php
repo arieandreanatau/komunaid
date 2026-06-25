@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\DocumentationFile;
 use App\Services\Documentation\DocumentationGeneratorService;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -15,6 +16,8 @@ use Illuminate\Support\Str;
 
 class DocumentationController extends Controller
 {
+    use AuthorizesRequests;
+
     protected DocumentationGeneratorService $generator;
 
     public function __construct(DocumentationGeneratorService $generator)
@@ -24,6 +27,8 @@ class DocumentationController extends Controller
 
     public function index()
     {
+        $this->authorize('viewAny', DocumentationFile::class);
+
         $documents = DocumentationFile::with('generatedByUser')
             ->latest()
             ->paginate(15);
@@ -35,6 +40,8 @@ class DocumentationController extends Controller
 
     public function generateIndex()
     {
+        $this->authorize('generate', DocumentationFile::class);
+
         $availableDocs = $this->generator->getAvailableDocuments();
         $existingDocs = DocumentationFile::whereIn('document_key', array_keys($availableDocs))
             ->get()
@@ -45,6 +52,8 @@ class DocumentationController extends Controller
 
     public function generateSingle(Request $request, string $documentKey)
     {
+        $this->authorize('generate', DocumentationFile::class);
+
         $availableKeys = array_keys($this->generator->getAvailableDocuments());
         if (!in_array($documentKey, $availableKeys)) {
             return redirect()->route('superadmin.documentation.generate.index')
@@ -69,6 +78,8 @@ class DocumentationController extends Controller
 
     public function generateAll(Request $request)
     {
+        $this->authorize('generate', DocumentationFile::class);
+
         $format = $request->input('format', 'md');
         $validFormats = ['md', 'txt', 'html'];
         if (!in_array($format, $validFormats)) {
@@ -91,6 +102,8 @@ class DocumentationController extends Controller
 
     public function show(DocumentationFile $documentationFile)
     {
+        $this->authorize('view', $documentationFile);
+
         $documentationFile->load('generatedByUser');
 
         $content = null;
@@ -104,6 +117,8 @@ class DocumentationController extends Controller
 
     public function preview(DocumentationFile $documentationFile)
     {
+        $this->authorize('view', $documentationFile);
+
         $documentationFile->load('generatedByUser');
 
         $content = null;
@@ -117,6 +132,8 @@ class DocumentationController extends Controller
 
     public function download(DocumentationFile $documentationFile)
     {
+        $this->authorize('download', $documentationFile);
+
         $filePath = storage_path('app/documentation/' . $documentationFile->file_path);
 
         if (!File::exists($filePath)) {
@@ -143,6 +160,8 @@ class DocumentationController extends Controller
 
     public function destroy(DocumentationFile $documentationFile)
     {
+        $this->authorize('delete', $documentationFile);
+
         $filePath = storage_path('app/documentation/' . $documentationFile->file_path);
         $title = $documentationFile->title;
 
@@ -162,6 +181,8 @@ class DocumentationController extends Controller
 
     public function routeInventory()
     {
+        $this->authorize('viewAny', DocumentationFile::class);
+
         $routes = collect();
         $allRoutes = \Illuminate\Support\Facades\Route::getRoutes();
 
@@ -210,6 +231,8 @@ class DocumentationController extends Controller
 
     public function databaseInventory()
     {
+        $this->authorize('viewAny', DocumentationFile::class);
+
         $dbName = DB::getDatabaseName();
         $tables = DB::select('SHOW TABLES');
         $tableNameKey = "Tables_in_{$dbName}";

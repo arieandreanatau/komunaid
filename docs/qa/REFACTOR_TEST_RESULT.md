@@ -9,24 +9,27 @@
 
 | Metric | Value |
 |---|---|
-| Test files | 17 |
-| Tests passed | **166** |
+| Test files | 20 |
+| Tests passed | **188** |
 | Tests failed | **0** |
-| Assertions | **222** |
-| Duration | ~37s |
+| Assertions | **246** |
+| Duration | ~24s |
 | Status | **GREEN** |
 
-### Test files (17)
+### Test files (20)
 - `Tests\Unit\RedirectByRoleServiceTest` — 10 tests
 - `Tests\Feature\AdminChatTest` — 8 tests
 - `Tests\Feature\AuthTest` — 19 tests
 - `Tests\Feature\BrandCompanyCollaborationTest` — 15 tests
+- `Tests\Feature\CmsPolicyTest` — 8 tests (**new Tahap 3**)
 - `Tests\Feature\CommunityModuleTest` — 9 tests
-- `Tests\Feature\CompanyPolicyTest` — 8 tests (**new**)
-- `Tests\Feature\CronRouteTest` — 6 tests (**new**)
+- `Tests\Feature\CompanyPolicyTest` — 8 tests
+- `Tests\Feature\CronRouteTest` — 6 tests
 - `Tests\Feature\DocumentationGeneratorTest` — 6 tests
-- `Tests\Feature\EventFinanceServiceTest` — 3 tests (**new**)
+- `Tests\Feature\DocumentationPolicyTest` — 8 tests (**new Tahap 3**)
+- `Tests\Feature\EventFinanceServiceTest` — 3 tests
 - `Tests\Feature\EventModuleTest` — 5 tests
+- `Tests\Feature\HttpPolicyEnforcementTest` — 6 tests (**new Tahap 3**)
 - `Tests\Feature\MemberModuleTest` — 13 tests
 - `Tests\Feature\MultilanguageTest` — 6 tests
 - `Tests\Feature\PremiumFeatureTest` — 4 tests

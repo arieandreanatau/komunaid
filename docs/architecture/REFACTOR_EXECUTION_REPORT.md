@@ -8,16 +8,16 @@
 
 ## 1. Baseline
 
-| Command | Pre-refactor | After Tahap 1 | After Tahap 2 (wiring) |
-|---|---|---|---|
-| `php artisan optimize:clear` | FAIL (bootstrap/cache missing) → OK after mkdir | OK | OK |
-| `php artisan route:list` | 426 routes | 427 routes (+cron) | **428 routes** (+premium-demo) |
-| `php artisan migrate:status` | 99 migrations Ran | 99 migrations Ran | 99 migrations Ran |
-| `php artisan test` | 149 passed / 191 assertions | 149 passed / 191 assertions | **166 passed / 222 assertions** |
-| `npm run build` | green | green | green |
-| `composer validate` | valid | valid | valid |
+| Command | Pre-refactor | After Tahap 1 | After Tahap 2 | After Tahap 3 (policies) |
+|---|---|---|---|---|
+| `php artisan optimize:clear` | FAIL → OK after mkdir | OK | OK | OK |
+| `php artisan route:list` | 426 routes | 427 routes | 428 routes | **428 routes** (no new routes) |
+| `php artisan migrate:status` | 99 Ran | 99 Ran | 99 Ran | 99 Ran |
+| `php artisan test` | 149 passed / 191 assertions | 149 passed / 191 assertions | 166 passed / 222 assertions | **188 passed / 246 assertions** |
+| `npm run build` | green | green | green | green |
+| `composer validate` | valid | valid | valid | valid |
 
-**Net effect after Tahap 1+2:** 17 new tests added (6 cron, 8 company policy, 3 event finance), 3 services wired to controllers, 1 new user-facing route (`/member/premium-demo`), 0 regressions.
+**Net effect after Tahap 1+2+3:** 39 new tests added total, 3 services wired to controllers, 1 new route, 3 new policies wired to ~10 controllers, 1 new provider registration (`AppServiceProvider` in `bootstrap/app.php`), 0 regressions, 0 schema changes.
 
 ---
 

@@ -6,13 +6,18 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreBlogRequest;
 use App\Http\Requests\UpdateBlogRequest;
 use App\Models\Blog;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
 class SuperadminBlogController extends Controller
 {
+    use AuthorizesRequests;
+
     public function index(Request $request)
     {
+        $this->authorize('viewAny', Blog::class);
+
         $query = Blog::with('author');
 
         if ($request->filled('search')) {
@@ -31,11 +36,14 @@ class SuperadminBlogController extends Controller
 
     public function create()
     {
+        $this->authorize('create', Blog::class);
         return view('superadmin.cms.blogs.create');
     }
 
     public function store(StoreBlogRequest $request)
     {
+        $this->authorize('create', Blog::class);
+
         $data = $request->validated();
         $data['author_id'] = auth()->id();
         $data['slug'] = $data['slug'] ?: Str::slug($data['title']);
@@ -60,11 +68,14 @@ class SuperadminBlogController extends Controller
 
     public function edit(Blog $blog)
     {
+        $this->authorize('update', $blog);
         return view('superadmin.cms.blogs.edit', compact('blog'));
     }
 
     public function update(Blog $blog, UpdateBlogRequest $request)
     {
+        $this->authorize('update', $blog);
+
         $data = $request->validated();
         $data['slug'] = $data['slug'] ?: Str::slug($data['title']);
 
@@ -88,6 +99,8 @@ class SuperadminBlogController extends Controller
 
     public function destroy(Blog $blog)
     {
+        $this->authorize('delete', $blog);
+
         $blog->delete();
         return redirect()->route('superadmin.cms.blogs.index')
             ->with('success', 'Blog berhasil dihapus.');
@@ -95,6 +108,8 @@ class SuperadminBlogController extends Controller
 
     public function publish(Blog $blog)
     {
+        $this->authorize('publish', $blog);
+
         $blog->update([
             'status' => 'published',
             'published_at' => $blog->published_at ?? now(),
@@ -106,6 +121,8 @@ class SuperadminBlogController extends Controller
 
     public function archive(Blog $blog)
     {
+        $this->authorize('update', $blog);
+
         $blog->update(['status' => 'archived']);
 
         return redirect()->route('superadmin.cms.blogs.index')
