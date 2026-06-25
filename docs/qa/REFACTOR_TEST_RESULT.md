@@ -13,7 +13,7 @@
 | Tests passed | **188** |
 | Tests failed | **0** |
 | Assertions | **246** |
-| Duration | ~24s |
+| Duration | ~110s |
 | Status | **GREEN** |
 
 ### Test files (20)

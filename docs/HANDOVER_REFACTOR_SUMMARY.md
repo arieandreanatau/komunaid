@@ -13,6 +13,7 @@ KomunaID V1 + V2 codebase is **functional** (188 tests passing, 428 routes, 99 m
 - Tahap 2: 5 new files (controller + view + 3 tests) + 3 modified controllers/services + 1 route added + 17 new tests.
 - Tahap 3: 3 new policies wired to ~10 controllers + 3 new test files (22 tests) + `AppServiceProvider` registered in `bootstrap/app.php`.
 - Tahap 4: Folder management cleanup — delete 3 dead Guest/ controllers + 3 views + 1 dead Community/ controller + 2 duplicate middlewares; merge 8 enums to `App\Enums`; move 6 services into 5 sub-folders; split 24 seeders into `Master/` (15) + `Demo/` (9); create 5 new Blade components.
+- Tahap 5: Attempted to group 69 models into 14 domain sub-folders; blocked by **Windows file system lock** on 3 factory files (User, Profile, AdminConversation). Workaround: `app/Shims/FactoryShimBootstrap.php` + 3 shim classes + composer.json autoload `files` entry. Models remain at flat `app/Models/` (deferred).
 - 0 migrations added/removed.
 - 0 features removed.
 - 0 security weakened.
@@ -108,11 +109,12 @@ $this->authorize('update', $company);
 5. **No email queue / real email** (uses log driver). Phase 2.
 6. **No 2FA / no rate limit on login**. Phase 2.
 7. **No CSP/X-Frame-Options headers**. Phase 2.
-8. **Models still flat** at `app/Models/` (69 files). Domain grouping deferred — high-risk refactor (would require updating 100s of `App\Models\X::class` references). Phase 5 candidate.
+8. **Models still flat** at `app/Models/` (69 files). Domain grouping deferred — see Tahap 5 below for Windows file lock issue.
 9. **CollaborationProposalPolicy** not yet created. Phase 5.
 10. **PremiumAccessService used in demo route only.** Production feature-gated views (analytics, bulk export) need Blade directive + controller middleware. Phase 5.
 11. **5 new Blade components created** but not yet adopted by views. Migrate views in Phase 5.
 12. **Demo seeders not in test** — split into `Demo/` folder but not yet auto-discovered by `RefreshDatabase`. Phase 5.
+13. **Factory shim workaround** (`app/Shims/FactoryShimBootstrap.php`). Three legacy factory files (User, Profile, AdminConversation) are blocked by Windows file lock; the shim provides class aliases so tests work. **The shim is environment-specific (Windows) and should be removed when the lock is resolved (reboot or chkdsk). On Linux/Mac, the original Tahap 5 plan (group models into sub-folders) would work without shim.**
 
 ---
 
@@ -244,13 +246,14 @@ None. (10 dead/duplicate files removed.)
 
 | # | Prompt | Why |
 |---|---|---|
-| 1 | `Wire Models to Sub-folders` | Group 69 models by domain (Identity, Community, Event, etc.). High-risk — needs mass `use` updates. Use scripted approach. |
+| 1 | `Wire Models to Sub-folders (Linux only)` | Re-attempt Tahap 5 model grouping on a non-Windows filesystem to avoid the file lock. |
 | 2 | `Migrate Views to Components` | 5 new components created; migrate member dashboard, superadmin members index, community index, etc. |
 | 3 | `Apply Enums in Controllers` | Replace string literals (`'superadmin'`, `'published'`) with `RoleEnum::` / `EventStatusEnum::` etc. |
 | 4 | `Create CollaborationProposalPolicy` | Currently V2 collaboration uses role middleware only. |
 | 5 | `Email & Notification Setup` | Switch from `log` driver to real SMTP/Resend + queue worker (cron-triggered). |
 | 6 | `Security Hardening` | CSP, X-Frame, rate limit on login, 2FA. |
 | 7 | `Performance Optimization` | Eager loading, index audit, fulltext search, N+1 dashboard. |
+| 8 | `Remove Factory Shim` | After migrating off Windows (or after reboot fixes file lock), delete `app/Shims/FactoryShimBootstrap.php` + 3 shim classes + remove `files` autoload entry. Then attempt Tahap 5 model grouping. |
 
 ---
 
