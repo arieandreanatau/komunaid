@@ -14,7 +14,17 @@ class EnsureSuperadmin
             return redirect()->route('admin.login');
         }
 
-        if (!Auth::user()->hasRole('superadmin')) {
+        $user = Auth::user();
+
+        if ($user->status === 'banned' || $user->status === 'suspended' || $user->banned_at !== null) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()->route('account.restricted');
+        }
+
+        if (!$user->hasRole('superadmin') && !$user->hasRole('platform_admin')) {
             abort(403);
         }
 

@@ -30,6 +30,14 @@ class CommunityController extends Controller
             $query->where('category_id', $request->category);
         }
 
+        if ($request->filled('region')) {
+            $query->where('region', $request->region);
+        }
+
+        if ($request->filled('owner')) {
+            $query->where('owner_id', $request->owner);
+        }
+
         $communities = $query->latest()->paginate(20);
 
         return view('superadmin.communities.index', compact('communities'));
@@ -37,10 +45,12 @@ class CommunityController extends Controller
 
     public function show(Community $community)
     {
-        $community->load(['owner', 'category', 'members', 'events']);
+        $community->load(['owner', 'category', 'members.user', 'events']);
         $membersCount = $community->activeMembers()->count();
+        $pendingCount = $community->pendingMembers()->count();
+        $bannedCount = $community->bannedMembers()->count();
 
-        return view('superadmin.communities.show', compact('community', 'membersCount'));
+        return view('superadmin.communities.show', compact('community', 'membersCount', 'pendingCount', 'bannedCount'));
     }
 
     public function approve(Community $community)
@@ -81,22 +91,90 @@ class CommunityController extends Controller
         return back()->with('success', 'Komunitas berhasil ditolak.');
     }
 
-    public function suspend(Community $community)
+    public function suspend(Request $request, Community $community)
     {
-        $old = ['status' => $community->status];
-        $community->update(['status' => 'archived']);
+        $request->validate([
+            'reason' => 'required|string|max:1000',
+        ]);
 
-        AuditLog::log('community_suspended', $community, 'Komunitas disuspend: ' . $community->name, $old, ['status' => 'archived']);
+        $old = ['status' => $community->status];
+        $community->update(['status' => 'suspended']);
+
+        AuditLog::log('community_suspended', $community, 'Komunitas disuspend: ' . $community->name . '. Alasan: ' . $request->reason, $old, ['status' => 'suspended']);
 
         return back()->with('success', 'Komunitas berhasil disuspend.');
     }
 
+    public function ban(Request $request, Community $community)
+    {
+        $request->validate([
+            'reason' => 'required|string|max:1000',
+        ]);
+
+        $old = ['status' => $community->status];
+        $community->update(['status' => 'banned']);
+
+        AuditLog::log('community_banned', $community, 'Komunitas dibanned: ' . $community->name . '. Alasan: ' . $request->reason, $old, ['status' => 'banned']);
+
+        return back()->with('success', 'Komunitas berhasil dibanned.');
+    }
+
+    public function activate(Community $community)
+    {
+        $old = ['status' => $community->status];
+        $community->update(['status' => 'approved']);
+
+        AuditLog::log('community_activated', $community, 'Komunitas diaktifkan: ' . $community->name, $old, ['status' => 'approved']);
+
+        return back()->with('success', 'Komunitas berhasil diaktifkan.');
+    }
+
     public function destroy(Community $community)
     {
-        $community->delete();
+        $old = ['status' => $community->status];
+        $community->update(['status' => 'archived']);
 
-        AuditLog::log('community_deleted', $community, 'Komunitas dihapus (soft delete): ' . $community->name);
+        AuditLog::log('community_deleted', $community, 'Komunitas dihapus (soft delete): ' . $community->name, $old, ['status' => 'archived']);
 
         return redirect()->route('superadmin.communities.index')->with('success', 'Komunitas berhasil dihapus.');
+    }
+
+    public function export(Request $request)
+    {
+        $query = Community::with('owner', 'category');
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        $communities = $query->latest()->get();
+
+        $filename = 'komunaid_communities_' . date('Ymd') . '.csv';
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ];
+
+        return response()->stream(function () use ($communities) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['ID', 'Name', 'Slug', 'Owner', 'Category', 'City', 'Province', 'Status', 'Member Count', 'Created At']);
+
+            foreach ($communities as $community) {
+                fputcsv($handle, [
+                    $community->id,
+                    $community->name,
+                    $community->slug,
+                    $community->owner->name ?? '-',
+                    $community->category->name ?? '-',
+                    $community->city ?? '-',
+                    $community->region ?? '-',
+                    $community->status,
+                    $community->activeMembers()->count(),
+                    $community->created_at?->format('Y-m-d H:i'),
+                ]);
+            }
+
+            fclose($handle);
+        }, 200, $headers);
     }
 }

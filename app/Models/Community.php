@@ -18,24 +18,42 @@ class Community extends Model
         'slug',
         'description',
         'about',
+        'short_description',
         'logo',
         'banner',
+        'logo_path',
+        'banner_path',
         'region',
         'city',
+        'province',
+        'country',
+        'address',
         'website',
         'contact_email',
+        'contact_phone',
         'instagram',
+        'instagram_url',
+        'website_url',
         'social_media',
         'community_type',
+        'location_type',
         'visibility',
         'status',
         'is_public',
         'max_members',
+        'member_count',
+        'is_recommended',
+        'is_featured',
+        'created_by',
+        'updated_by',
     ];
 
     protected $casts = [
         'is_public' => 'boolean',
         'max_members' => 'integer',
+        'member_count' => 'integer',
+        'is_recommended' => 'boolean',
+        'is_featured' => 'boolean',
     ];
 
     protected static function boot(): void
@@ -56,6 +74,11 @@ class Community extends Model
     public function owner()
     {
         return $this->belongsTo(User::class, 'owner_id');
+    }
+
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
 
     public function members()
@@ -123,6 +146,42 @@ class Community extends Model
         return $this->hasMany(Donation::class);
     }
 
+    public function internalRoles()
+    {
+        return $this->hasMany(CommunityInternalRole::class);
+    }
+
+    public function managements()
+    {
+        return $this->hasMany(CommunityManagement::class);
+    }
+
+    public function volunteers()
+    {
+        return $this->hasMany(CommunityVolunteer::class);
+    }
+
+    public function ownershipTransfers()
+    {
+        return $this->hasMany(CommunityOwnershipTransfer::class);
+    }
+
+    public function campaigns()
+    {
+        return $this->hasMany(CommunityCampaign::class);
+    }
+
+    public function bookmarks()
+    {
+        return $this->hasMany(CommunityBookmark::class);
+    }
+
+    public function collaborationProposalsAsTarget()
+    {
+        return $this->hasMany(CollaborationProposal::class, 'target_id')
+            ->where('target_type', 'community');
+    }
+
     public function getMembersCountAttribute(): int
     {
         return $this->activeMembers()->count();
@@ -162,5 +221,19 @@ class Community extends Model
     public function isOwnedBy(User $user): bool
     {
         return $this->owner_id === $user->id;
+    }
+
+    public function scopePublicApproved($query)
+    {
+        return $query->where('status', 'approved')
+            ->where('is_public', true);
+    }
+
+    public function scopeRecommended($query)
+    {
+        return $query->where(function ($q) {
+            $q->where('is_recommended', true)
+                ->orWhere('is_featured', true);
+        });
     }
 }

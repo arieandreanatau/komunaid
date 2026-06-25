@@ -74,7 +74,7 @@ class WalletService
             $balanceBefore = (float) $wallet->balance;
 
             if ($balanceBefore < $amount) {
-                throw new \InsufficientBalanceException('Saldo wallet tidak mencukupi.');
+                throw new \RuntimeException('Saldo wallet tidak mencukupi.');
             }
 
             $balanceAfter = $balanceBefore - $amount;

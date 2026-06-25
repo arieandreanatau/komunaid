@@ -34,7 +34,7 @@ class CommunityBan extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function banner()
+    public function bannedBy()
     {
         return $this->belongsTo(User::class, 'banned_by');
     }

@@ -1,54 +1,58 @@
 @import "tailwindcss";
 
 @theme {
-    --color-komuna-navy: #0A318E;
-    --color-komuna-blue: #0E7BFC;
-    --color-komuna-cyan: #29B1FD;
-    --color-komuna-soft: #D6E7F7;
+    --color-komuna-navy: #0B2D89;
+    --color-komuna-navy-dark: #08276A;
+    --color-komuna-blue: #126BFF;
+    --color-komuna-blue-dark: #0E56CC;
+    --color-komuna-cyan: #25B9F2;
+    --color-komuna-cyan-dark: #1A9ED1;
+    --color-komuna-light: #EEF7FF;
+    --color-komuna-soft-cyan: #E6FAFF;
+    --color-komuna-surface: #F8FAFC;
+    --color-komuna-border: #E2E8F0;
+    --color-komuna-border-soft: #F1F5F9;
+    --color-komuna-text: #0F172A;
+    --color-komuna-muted: #64748B;
+    --color-komuna-light-text: #94A3B8;
+    --color-komuna-success: #16A34A;
+    --color-komuna-success-soft: #DCFCE7;
+    --color-komuna-warning: #F59E0B;
+    --color-komuna-warning-soft: #FEF3C7;
+    --color-komuna-danger: #DC2626;
+    --color-komuna-danger-soft: #FEE2E2;
+    --color-komuna-info: #0284C7;
+    --color-komuna-info-soft: #E0F2FE;
 
-    --color-navy-50: #E8EEF9;
-    --color-navy-100: #C5D4F0;
-    --color-navy-200: #9BB8E4;
-    --color-navy-300: #6E9AD8;
-    --color-navy-400: #4A7FCC;
-    --color-navy-500: #2664C0;
-    --color-navy-600: #1A5AB8;
-    --color-navy-700: #124DA8;
-    --color-navy-800: #0A318E;
-    --color-navy-900: #062260;
-
-    --color-blue-50: #EBF5FE;
-    --color-blue-100: #C8E4FB;
-    --color-blue-200: #93C9F7;
-    --color-blue-300: #5DAEF3;
-    --color-blue-400: #2793EF;
-    --color-blue-500: #0E7BFC;
-    --color-blue-600: #0B63C9;
-    --color-blue-700: #084B96;
-    --color-blue-800: #053363;
-    --color-blue-900: #021C31;
-
-    --color-cyan-50: #EBF8FE;
-    --color-cyan-100: #C7EDFC;
-    --color-cyan-200: #8FD9FA;
-    --color-cyan-300: #57C5F8;
-    --color-cyan-400: #29B1FD;
-    --color-cyan-500: #14A0EB;
-    --color-cyan-600: #0F80B9;
-    --color-cyan-700: #0B6087;
-    --color-cyan-800: #074055;
-    --color-cyan-900: #042028;
-
-    --color-softblue-50: #F4F9FE;
-    --color-softblue-100: #D6E7F7;
-    --color-softblue-200: #A8CCED;
-    --color-softblue-300: #7AB1E3;
-    --color-softblue-400: #4C96D9;
-    --color-softblue-500: #2E7BC4;
-    --color-softblue-600: #23629A;
-    --color-softblue-700: #194A71;
-    --color-softblue-800: #103248;
-    --color-softblue-900: #081A24;
+    --color-komuna-teal: #0B2D89;
+    --color-komuna-green: #16A34A;
+    --color-komuna-orange: #126BFF;
+    --color-komuna-soft: #EEF7FF;
 
     --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.komuna-gradient-hero {
+    background: linear-gradient(135deg, #0B2D89 0%, #126BFF 50%, #25B9F2 100%);
+}
+
+.komuna-gradient-primary {
+    background: linear-gradient(135deg, #0B2D89, #126BFF);
+}
+
+.komuna-gradient-cyan {
+    background: linear-gradient(135deg, #126BFF, #25B9F2);
+}
+
+.komuna-gradient-soft {
+    background: linear-gradient(135deg, #EEF7FF, #FFFFFF, #E6FAFF);
 }

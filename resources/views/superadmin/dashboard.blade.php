@@ -1,198 +1,146 @@
-@extends('layouts.app')
+﻿@extends('layouts.admin')
+
+@php $pageTitle = 'Dashboard Superadmin' @endphp
 
 @section('content')
-<div class="mb-8">
-    <h1 class="text-2xl font-bold text-gray-900">Dashboard Superadmin</h1>
-    <p class="text-gray-600">Panel manajemen KomunaID</p>
+<div class="mb-6">
+    <h1 class="text-2xl font-bold text-[#0B2D89]">Dashboard Superadmin</h1>
+    <p class="text-[#64748B] text-sm mt-1">Overview platform KomunaID</p>
 </div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    @php $metrics = [
+        ['key' => 'total_members', 'label' => 'Total Members', 'color' => '#126BFF', 'bg' => '#EEF7FF'],
+        ['key' => 'total_active_members', 'label' => 'Active Members', 'color' => '#16A34A', 'bg' => '#F0FDF4'],
+        ['key' => 'total_banned_members', 'label' => 'Banned Members', 'color' => '#DC2626', 'bg' => '#FEF2F2'],
+        ['key' => 'total_community_owners', 'label' => 'Community Owners', 'color' => '#0B2D89', 'bg' => '#EEF7FF'],
+        ['key' => 'total_brand_owners', 'label' => 'Brand Owners', 'color' => '#F59E0B', 'bg' => '#FFFBEB'],
+        ['key' => 'total_company_owners', 'label' => 'Company Owners', 'color' => '#64748B', 'bg' => '#F8FAFC'],
+        ['key' => 'total_communities', 'label' => 'Total Communities', 'color' => '#126BFF', 'bg' => '#EEF7FF'],
+        ['key' => 'total_active_communities', 'label' => 'Active Communities', 'color' => '#16A34A', 'bg' => '#F0FDF4'],
+        ['key' => 'total_events', 'label' => 'Total Events', 'color' => '#25B9F2', 'bg' => '#ECFEFF'],
+        ['key' => 'total_published_events', 'label' => 'Published Events', 'color' => '#16A34A', 'bg' => '#F0FDF4'],
+        ['key' => 'total_upcoming_events', 'label' => 'Upcoming Events', 'color' => '#F59E0B', 'bg' => '#FFFBEB'],
+        ['key' => 'total_brands', 'label' => 'Total Brands', 'color' => '#126BFF', 'bg' => '#EEF7FF'],
+        ['key' => 'total_companies', 'label' => 'Total Companies', 'color' => '#64748B', 'bg' => '#F8FAFC'],
+        ['key' => 'pending_role_requests', 'label' => 'Pending Role Requests', 'color' => '#F59E0B', 'bg' => '#FFFBEB'],
+        ['key' => 'total_login_today', 'label' => 'Logins Today', 'color' => '#126BFF', 'bg' => '#EEF7FF'],
+        ['key' => 'total_audit_today', 'label' => 'Audit Logs Today', 'color' => '#25B9F2', 'bg' => '#ECFEFF'],
+    ]; @endphp
+    @foreach($metrics as $metric)
+        <div class="bg-white rounded-xl shadow-sm border border-[#E2E8F0] p-5 hover:shadow-md transition">
+            <div class="flex items-center justify-between">
+                <div><p class="text-xs font-medium text-[#64748B]">{{ $metric["label"] }}</p>
+                    <p class="text-2xl font-bold mt-1" style="color:{{ $metric["color"] }}">{{ $stats[$metric["key"]] ?? 0 }}</p></div>
+                <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background:{{ $metric["bg"] }}">
+                    <span class="text-sm font-bold" style="color:{{ $metric["color"] }}">{{ strtoupper(substr($metric["label"],0,2)) }}</span>
+                </div></div></div>
+    @endforeach</div>
 
-<div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
-    <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
-        <div class="flex items-center justify-between">
-            <div>
-                <p class="text-sm font-medium text-gray-500">Total Members</p>
-                <p class="text-3xl font-bold text-indigo-600 mt-1">{{ $stats['total_members'] }}</p>
-            </div>
-            <div class="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
-                <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-            </div>
-        </div>
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+    <div class="bg-gradient-to-br from-[#0B2D89] to-[#126BFF] rounded-xl shadow-sm p-5 text-white">
+        <p class="text-xs font-medium text-blue-200">Platform Revenue</p>
+        <p class="text-2xl font-bold mt-1">Rp {{ number_format($platformRevenue, 0, ",", ".") }}</p>
     </div>
-    <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
-        <div class="flex items-center justify-between">
-            <div>
-                <p class="text-sm font-medium text-gray-500">Community Owners</p>
-                <p class="text-3xl font-bold text-emerald-600 mt-1">{{ $stats['total_community_owners'] }}</p>
-            </div>
-            <div class="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
-                <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
-            </div>
-        </div>
-    </div>
-    <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
-        <div class="flex items-center justify-between">
-            <div>
-                <p class="text-sm font-medium text-gray-500">Brand Owners</p>
-                <p class="text-3xl font-bold text-purple-600 mt-1">{{ $stats['total_brand_owners'] }}</p>
-            </div>
-            <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
-            </div>
-        </div>
-    </div>
-    <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
-        <div class="flex items-center justify-between">
-            <div>
-                <p class="text-sm font-medium text-gray-500">Communities</p>
-                <p class="text-3xl font-bold text-blue-600 mt-1">{{ $stats['total_communities'] }}</p>
-            </div>
-            <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-3-3h-1m-5 5v-2a3 3 0 00-3-3H4a3 3 0 00-3 3v2h14z"/></svg>
-            </div>
-        </div>
-    </div>
-    <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
-        <div class="flex items-center justify-between">
-            <div>
-                <p class="text-sm font-medium text-gray-500">Brands</p>
-                <p class="text-3xl font-bold text-orange-600 mt-1">{{ $stats['total_brands'] }}</p>
-            </div>
-            <div class="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>
-            </div>
-        </div>
-    </div>
-    <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
-        <div class="flex items-center justify-between">
-            <div>
-                <p class="text-sm font-medium text-gray-500">Events</p>
-                <p class="text-3xl font-bold text-pink-600 mt-1">{{ $stats['total_events'] }}</p>
-            </div>
-            <div class="w-10 h-10 bg-pink-100 rounded-lg flex items-center justify-center">
-                <svg class="w-5 h-5 text-pink-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-            </div>
-        </div>
-    </div>
-    <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
-        <div class="flex items-center justify-between">
-            <div>
-                <p class="text-sm font-medium text-gray-500">Collaborations</p>
-                <p class="text-3xl font-bold text-teal-600 mt-1">{{ $stats['total_collaborations'] }}</p>
-            </div>
-            <div class="w-10 h-10 bg-teal-100 rounded-lg flex items-center justify-center">
-                <svg class="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
-            </div>
-        </div>
-    </div>
-    <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
-        <div class="flex items-center justify-between">
-            <div>
-                <p class="text-sm font-medium text-gray-500">Donations</p>
-                <p class="text-3xl font-bold text-red-600 mt-1">{{ $stats['total_donations'] }}</p>
-                <p class="text-xs text-gray-400 mt-1">Rp {{ number_format($stats['total_donation_amount'] ?? 0, 0, ',', '.') }}</p>
-            </div>
-            <div class="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
-                <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
-            </div>
-        </div>
-    </div>
-    <div class="bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl shadow-sm p-5 text-white">
-        <div>
-            <p class="text-sm font-medium text-emerald-100">Platform Revenue</p>
-            <p class="text-2xl font-bold mt-1">Rp {{ number_format($platformRevenue, 0, ',', '.') }}</p>
-        </div>
-    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-[#E2E8F0] p-5"><div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-[#16A34A]/10 rounded-lg flex items-center justify-center"><svg class="w-5 h-5 text-[#16A34A]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg></div>
+        <div><p class="text-xs text-[#64748B]">New Users / Month</p><p class="text-xl font-bold text-[#0B2D89]">{{ $newUsersThisMonth }}</p></div>
+    </div></div>
+    <div class="bg-white rounded-xl shadow-sm border border-[#E2E8F0] p-5"><div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-[#126BFF]/10 rounded-lg flex items-center justify-center"><svg class="w-5 h-5 text-[#126BFF]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg></div>
+        <div><p class="text-xs text-[#64748B]">New Communities / Month</p><p class="text-xl font-bold text-[#0B2D89]">{{ $newCommunitiesThisMonth }}</p></div>
+    </div></div>
+    <div class="bg-white rounded-xl shadow-sm border border-[#E2E8F0] p-5"><div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-[#25B9F2]/10 rounded-lg flex items-center justify-center"><svg class="w-5 h-5 text-[#25B9F2]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg></div>
+        <div><p class="text-xs text-[#64748B]">New Events / Month</p><p class="text-xl font-bold text-[#0B2D89]">{{ $newEventsThisMonth }}</p></div>
+    </div></div>
 </div>
-
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-    <div class="bg-white rounded-xl shadow-sm p-6">
-        <div class="flex justify-between items-center mb-4">
-            <h2 class="text-lg font-semibold text-gray-900">Pending Approvals</h2>
-            <a href="{{ route('superadmin.approval-center.index') }}" class="text-sm text-emerald-600 hover:text-emerald-800">Lihat Semua</a>
-        </div>
-        <div class="space-y-3">
-            <a href="{{ route('superadmin.approval-center.index', ['tab' => 'role-requests']) }}" class="flex items-center justify-between p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition">
-                <span class="text-sm text-gray-700">Role Requests</span>
-                @if($stats['pending_role_requests'] > 0)
-                    <span class="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs font-medium rounded-full">{{ $stats['pending_role_requests'] }}</span>
-                @else
-                    <span class="text-xs text-gray-400">0</span>
-                @endif
-            </a>
-            <a href="{{ route('superadmin.approval-center.index', ['tab' => 'communities']) }}" class="flex items-center justify-between p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition">
-                <span class="text-sm text-gray-700">Community Approvals</span>
-                @if($stats['pending_community_approvals'] > 0)
-                    <span class="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs font-medium rounded-full">{{ $stats['pending_community_approvals'] }}</span>
-                @else
-                    <span class="text-xs text-gray-400">0</span>
-                @endif
-            </a>
-            <a href="{{ route('superadmin.approval-center.index', ['tab' => 'brands']) }}" class="flex items-center justify-between p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition">
-                <span class="text-sm text-gray-700">Brand Approvals</span>
-                @if($stats['pending_brand_approvals'] > 0)
-                    <span class="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs font-medium rounded-full">{{ $stats['pending_brand_approvals'] }}</span>
-                @else
-                    <span class="text-xs text-gray-400">0</span>
-                @endif
-            </a>
-        </div>
-    </div>
-
-    <div class="bg-white rounded-xl shadow-sm p-6">
-        <div class="flex justify-between items-center mb-4">
-            <h2 class="text-lg font-semibold text-gray-900">Recent Role Requests</h2>
-        </div>
-        @if($recentRoleRequests->isEmpty())
-            <p class="text-gray-500 text-center py-4">Tidak ada role request pending.</p>
-        @else
-            <div class="space-y-3">
-                @foreach($recentRoleRequests as $req)
-                    <div class="flex items-center justify-between p-3 rounded-lg bg-gray-50">
-                        <div>
-                            <p class="text-sm font-medium text-gray-900">{{ $req->user->name }}</p>
-                            <p class="text-xs text-gray-500">{{ ucfirst(str_replace('_', ' ', $req->requested_role)) }}</p>
-                        </div>
-                        <span class="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs font-medium rounded-full">Pending</span>
-                    </div>
-                @endforeach
-            </div>
-        @endif
-    </div>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+    <div class="bg-white rounded-xl shadow-sm border border-[#E2E8F0]">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-[#E2E8F0]">
+            <h2 class="text-sm font-semibold text-[#0B2D89]">Pending Role Requests</h2>
+            <a href="{{ route("superadmin.role-requests.index") }}" class="text-xs text-[#126BFF] hover:underline">Lihat Semua</a>
+        </div><div class="overflow-x-auto"><table class="min-w-full divide-y divide-[#E2E8F0]">
+            <thead class="bg-[#EEF7FF]"><tr>
+                <th class="px-4 py-2.5 text-left text-xs font-semibold text-[#64748B] uppercase">User</th>
+                <th class="px-4 py-2.5 text-left text-xs font-semibold text-[#64748B] uppercase">Role</th>
+                <th class="px-4 py-2.5 text-left text-xs font-semibold text-[#64748B] uppercase">Status</th>
+                <th class="px-4 py-2.5 text-left text-xs font-semibold text-[#64748B] uppercase">Date</th>
+                <th class="px-4 py-2.5 text-left text-xs font-semibold text-[#64748B] uppercase">Action</th>
+            </tr></thead><tbody class="divide-y divide-[#E2E8F0]">
+                @forelse($recentRoleRequests->take(5) as $req)
+                    <tr class="hover:bg-[#EEF7FF]/50 transition">
+                        <td class="px-4 py-3 text-sm font-medium text-[#0F172A]">{{ $req->user->name ?? "-" }}</td>
+                        <td class="px-4 py-3 text-sm text-[#64748B]">{{ ucfirst(str_replace("_", " ", $req->requested_role)) }}</td>
+                        <td class="px-4 py-3">@include("superadmin.partials.status-badge", ["status" => $req->status])</td>
+                        <td class="px-4 py-3 text-sm text-[#64748B]">{{ $req->created_at->format("d M Y") }}</td>
+                        <td class="px-4 py-3"><a href="{{ route("superadmin.role-requests.show", $req) }}" class="text-xs font-medium text-[#126BFF] hover:underline">View</a></td>
+                    </tr>
+                @empty<tr><td colspan="5" class="px-4 py-8 text-center text-sm text-[#64748B]">Tidak ada role request pending</td></tr>
+                @endforelse
+            </tbody></table></div></div>
+    <div class="bg-white rounded-xl shadow-sm border border-[#E2E8F0]">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-[#E2E8F0]">
+            <h2 class="text-sm font-semibold text-[#0B2D89]">Latest Users</h2>
+            <a href="{{ route("superadmin.members.index") }}" class="text-xs text-[#126BFF] hover:underline">Lihat Semua</a>
+        </div><div class="overflow-x-auto"><table class="min-w-full divide-y divide-[#E2E8F0]">
+            <thead class="bg-[#EEF7FF]"><tr>
+                <th class="px-4 py-2.5 text-left text-xs font-semibold text-[#64748B] uppercase">Name</th>
+                <th class="px-4 py-2.5 text-left text-xs font-semibold text-[#64748B] uppercase">Email</th>
+                <th class="px-4 py-2.5 text-left text-xs font-semibold text-[#64748B] uppercase">Status</th>
+                <th class="px-4 py-2.5 text-left text-xs font-semibold text-[#64748B] uppercase">Date</th>
+            </tr></thead><tbody class="divide-y divide-[#E2E8F0]">
+                @forelse($latestUsers->take(5) as $user)
+                    <tr class="hover:bg-[#EEF7FF]/50 transition">
+                        <td class="px-4 py-3 text-sm font-medium text-[#0F172A]">{{ $user->name }}</td>
+                        <td class="px-4 py-3 text-sm text-[#64748B]">{{ $user->email }}</td>
+                        <td class="px-4 py-3">@if($user->banned_at)@include("superadmin.partials.status-badge", ["status" => "banned"])@else@include("superadmin.partials.status-badge", ["status" => "active"])@endif</td>
+                        <td class="px-4 py-3 text-sm text-[#64748B]">{{ $user->created_at->format("d M Y") }}</td>
+                    </tr>
+                @empty<tr><td colspan="4" class="px-4 py-8 text-center text-sm text-[#64748B]">Belum ada user</td></tr>
+                @endforelse
+            </tbody></table></div></div>
 </div>
-
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-    <a href="{{ route('superadmin.wallets.index') }}" class="bg-white rounded-xl shadow-sm p-5 border border-gray-100 hover:shadow-md transition">
-        <div class="flex items-center gap-3">
-            <div class="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
-                <span class="text-xl">💰</span>
-            </div>
-            <div>
-                <p class="text-sm font-medium text-gray-900">Wallet Management</p>
-                <p class="text-xs text-gray-500">Kelola saldo semua user</p>
-            </div>
-        </div>
-    </a>
-    <a href="{{ route('superadmin.donations.index') }}" class="bg-white rounded-xl shadow-sm p-5 border border-gray-100 hover:shadow-md transition">
-        <div class="flex items-center gap-3">
-            <div class="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
-                <span class="text-xl">❤️</span>
-            </div>
-            <div>
-                <p class="text-sm font-medium text-gray-900">Donation Management</p>
-                <p class="text-xs text-gray-500">Kelola donasi platform</p>
-            </div>
-        </div>
-    </a>
-    <a href="{{ route('superadmin.platform-fees.index') }}" class="bg-white rounded-xl shadow-sm p-5 border border-gray-100 hover:shadow-md transition">
-        <div class="flex items-center gap-3">
-            <div class="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
-                <span class="text-xl">📊</span>
-            </div>
-            <div>
-                <p class="text-sm font-medium text-gray-900">Platform Fee Reports</p>
-                <p class="text-xs text-gray-500">Laporan pendapatan platform</p>
-            </div>
-        </div>
-    </a>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+    <div class="bg-white rounded-xl shadow-sm border border-[#E2E8F0]">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-[#E2E8F0]">
+            <h2 class="text-sm font-semibold text-[#0B2D89]">Latest Communities</h2>
+            <a href="{{ route("superadmin.communities.index") }}" class="text-xs text-[#126BFF] hover:underline">Lihat Semua</a>
+        </div><div class="overflow-x-auto"><table class="min-w-full divide-y divide-[#E2E8F0]">
+            <thead class="bg-[#EEF7FF]"><tr>
+                <th class="px-4 py-2.5 text-left text-xs font-semibold text-[#64748B] uppercase">Name</th>
+                <th class="px-4 py-2.5 text-left text-xs font-semibold text-[#64748B] uppercase">Owner</th>
+                <th class="px-4 py-2.5 text-left text-xs font-semibold text-[#64748B] uppercase">Status</th>
+                <th class="px-4 py-2.5 text-left text-xs font-semibold text-[#64748B] uppercase">Date</th>
+            </tr></thead><tbody class="divide-y divide-[#E2E8F0]">
+                @forelse($latestCommunities->take(5) as $community)
+                    <tr class="hover:bg-[#EEF7FF]/50 transition">
+                        <td class="px-4 py-3 text-sm font-medium text-[#0F172A]">{{ $community->name }}</td>
+                        <td class="px-4 py-3 text-sm text-[#64748B]">{{ $community->owner->name ?? "-" }}</td>
+                        <td class="px-4 py-3">@include("superadmin.partials.status-badge", ["status" => $community->status])</td>
+                        <td class="px-4 py-3 text-sm text-[#64748B]">{{ $community->created_at->format("d M Y") }}</td>
+                    </tr>
+                @empty<tr><td colspan="4" class="px-4 py-8 text-center text-sm text-[#64748B]">Belum ada komunitas</td></tr>
+                @endforelse
+            </tbody></table></div></div>
+    <div class="bg-white rounded-xl shadow-sm border border-[#E2E8F0]">
+        <div class="px-5 py-4 border-b border-[#E2E8F0]">
+            <h2 class="text-sm font-semibold text-[#0B2D89]">Latest Activities</h2>
+        </div><div class="overflow-x-auto"><table class="min-w-full divide-y divide-[#E2E8F0]">
+            <thead class="bg-[#EEF7FF]"><tr>
+                <th class="px-4 py-2.5 text-left text-xs font-semibold text-[#64748B] uppercase">User</th>
+                <th class="px-4 py-2.5 text-left text-xs font-semibold text-[#64748B] uppercase">Action</th>
+                <th class="px-4 py-2.5 text-left text-xs font-semibold text-[#64748B] uppercase">Description</th>
+                <th class="px-4 py-2.5 text-left text-xs font-semibold text-[#64748B] uppercase">Date</th>
+            </tr></thead><tbody class="divide-y divide-[#E2E8F0]">
+                @forelse($latestActivities->take(10) as $activity)
+                    <tr class="hover:bg-[#EEF7FF]/50 transition">
+                        <td class="px-4 py-3 text-sm font-medium text-[#0F172A]">{{ $activity->user->name ?? "-" }}</td>
+                        <td class="px-4 py-3"><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-[#126BFF]/10 text-[#126BFF]">{{ $activity->action }}</span></td>
+                        <td class="px-4 py-3 text-sm text-[#64748B] max-w-[200px] truncate">{{ $activity->description ?? "-" }}</td>
+                        <td class="px-4 py-3 text-sm text-[#64748B]">{{ $activity->created_at->format("d M Y H:i") }}</td>
+                    </tr>
+                @empty<tr><td colspan="4" class="px-4 py-8 text-center text-sm text-[#64748B]">Belum ada aktivitas</td></tr>
+                @endforelse
+            </tbody></table></div></div>
 </div>
 @endsection

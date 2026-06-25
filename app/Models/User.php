@@ -3,18 +3,26 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable, HasRoles;
+    use HasFactory, Notifiable, HasRoles, SoftDeletes;
 
     protected $fillable = [
         'name',
+        'username',
         'email',
         'password',
+        'phone',
+        'avatar',
+        'status',
+        'last_login_at',
+        'last_login_ip',
+        'banned_at',
     ];
 
     protected $hidden = [
@@ -27,12 +35,18 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'last_login_at' => 'datetime',
         ];
     }
 
     public function profile()
     {
         return $this->hasOne(Profile::class);
+    }
+
+    public function loginLogs()
+    {
+        return $this->hasMany(LoginLog::class);
     }
 
     public function roleRequests()
@@ -48,18 +62,25 @@ class User extends Authenticatable
             ->exists();
     }
 
+    public function interests()
+    {
+        return $this->belongsToMany(Interest::class, 'interest_user');
+    }
+
+    public function isBannedOrSuspended(): bool
+    {
+        return $this->banned_at !== null
+            || in_array($this->status, ['suspended', 'banned']);
+    }
+
     public function getDashboardRoute(): string
     {
-        if ($this->hasRole('superadmin')) {
-            return route('superadmin.dashboard');
+        if ($this->isBannedOrSuspended()) {
+            return route('account.restricted');
         }
-        if ($this->hasRole('community_owner')) {
-            return route('community.dashboard');
-        }
-        if ($this->hasRole('brand_owner')) {
-            return route('brand.dashboard');
-        }
-        return route('member.dashboard');
+
+        $redirectService = app(\App\Services\Auth\RedirectByRoleService::class);
+        return $redirectService->getRedirectPath($this);
     }
 
     public function ownedCommunities()
@@ -179,6 +200,21 @@ class User extends Authenticatable
         return $this->hasMany(EventGallery::class, 'uploaded_by');
     }
 
+    public function eventVolunteerApplications()
+    {
+        return $this->hasMany(EventVolunteerApplication::class);
+    }
+
+    public function eventVolunteers()
+    {
+        return $this->hasMany(EventVolunteer::class);
+    }
+
+    public function eventDonations()
+    {
+        return $this->hasMany(EventDonation::class, 'donor_user_id');
+    }
+
     public function wallet()
     {
         return $this->hasOne(Wallet::class);
@@ -192,5 +228,71 @@ class User extends Authenticatable
     public function ownedEvents()
     {
         return $this->hasManyThrough(Event::class, Community::class, 'owner_id', 'community_id');
+    }
+
+    public function ownedCompanies()
+    {
+        return $this->hasMany(Company::class, 'owner_id');
+    }
+
+    public function sentFriendships()
+    {
+        return $this->hasMany(Friendship::class, 'requester_id');
+    }
+
+    public function receivedFriendships()
+    {
+        return $this->hasMany(Friendship::class, 'addressee_id');
+    }
+
+    public function memberGalleries()
+    {
+        return $this->hasMany(MemberGallery::class);
+    }
+
+    public function memberHistories()
+    {
+        return $this->hasMany(MemberHistory::class);
+    }
+
+    public function customNotifications()
+    {
+        return $this->hasMany(CustomNotification::class);
+    }
+
+    public function subscriptions()
+    {
+        return $this->hasMany(Subscription::class);
+    }
+
+    public function featureUsages()
+    {
+        return $this->hasMany(FeatureUsage::class);
+    }
+
+    public function communityBookmarks()
+    {
+        return $this->hasMany(CommunityBookmark::class);
+    }
+
+    public function suggestions()
+    {
+        return $this->hasMany(Suggestion::class);
+    }
+
+    public function adminConversationParticipants()
+    {
+        return $this->hasMany(AdminConversationParticipant::class);
+    }
+
+    public function adminConversations()
+    {
+        return $this->belongsToMany(AdminConversation::class, 'admin_conversation_participants', 'user_id', 'conversation_id')
+            ->withTimestamps();
+    }
+
+    public function adminMessages()
+    {
+        return $this->hasMany(AdminMessage::class, 'sender_id');
     }
 }

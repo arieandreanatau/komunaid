@@ -11,16 +11,20 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // Behind Vercel's proxy: trust X-Forwarded-* so generated URLs use https.
+        $middleware->trustProxies(at: '*');
+
         $middleware->alias([
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
             'admin' => \App\Http\Middleware\EnsureSuperadmin::class,
             'not.superadmin' => \App\Http\Middleware\EnsureNotSuperadmin::class,
+            'active_user' => \App\Http\Middleware\ActiveUser::class,
         ]);
 
         $middleware->redirectGuestsTo(function () {
-            if (request()->is('admin/*') || request()->is('admin')) {
+            if (request()->is('admin/*') || request()->is('admin') || request()->is('superadmin/*') || request()->is('superadmin')) {
                 return route('admin.login');
             }
             return route('login');

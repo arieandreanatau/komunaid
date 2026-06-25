@@ -48,8 +48,6 @@ class RegionController extends Controller
             abort(404);
         }
 
-        $region->load('members.user.profile');
-
         return view('community.regions.show', compact('community', 'region'));
     }
 

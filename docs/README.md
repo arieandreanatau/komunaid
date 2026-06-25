@@ -15,6 +15,7 @@
 | [08-ui-ux-design.md](08-ui-ux-design.md) | Wireframe, color system, layout patterns |
 | [09-module-checklist.md](09-module-checklist.md) | Checklist per modul |
 | [10-seed-data.md](10-seed-data.md) | Seed data plan |
+| [user-guide.md](user-guide.md) | Panduan pengguna (Member, CO, BO, Superadmin) |
 | [05-deployment/Runbook.md](05-deployment/Runbook.md) | Deployment runbook & production guide |
 | [05-deployment/Troubleshooting.md](05-deployment/Troubleshooting.md) | Troubleshooting guide |
 

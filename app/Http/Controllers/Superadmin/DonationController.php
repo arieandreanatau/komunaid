@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Superadmin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Donation;
+use App\Models\ApprovalLog;
+use App\Models\AuditLog;
 use Illuminate\Http\Request;
 
 class DonationController extends Controller
@@ -60,6 +62,17 @@ class DonationController extends Controller
             );
         }
 
+        ApprovalLog::create([
+            'reviewed_by' => auth()->id(),
+            'type' => 'donation',
+            'approvable_id' => $donation->id,
+            'approvable_type' => Donation::class,
+            'action' => 'confirmed',
+            'notes' => 'Donasi dikonfirmasi.',
+        ]);
+
+        AuditLog::log('donation_confirmed', $donation, 'Donasi berhasil dikonfirmasi: Rp ' . number_format($donation->amount, 0, ',', '.'));
+
         return back()->with('success', 'Donasi berhasil dikonfirmasi.');
     }
 
@@ -73,6 +86,17 @@ class DonationController extends Controller
             'status' => 'rejected',
             'admin_notes' => request('admin_notes', 'Donasi ditolak oleh superadmin.'),
         ]);
+
+        ApprovalLog::create([
+            'reviewed_by' => auth()->id(),
+            'type' => 'donation',
+            'approvable_id' => $donation->id,
+            'approvable_type' => Donation::class,
+            'action' => 'rejected',
+            'notes' => 'Donasi ditolak.',
+        ]);
+
+        AuditLog::log('donation_rejected', $donation, 'Donasi ditolak: Rp ' . number_format($donation->amount, 0, ',', '.'));
 
         return back()->with('success', 'Donasi ditolak.');
     }

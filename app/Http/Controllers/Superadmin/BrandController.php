@@ -78,22 +78,97 @@ class BrandController extends Controller
         return back()->with('success', 'Brand berhasil ditolak.');
     }
 
-    public function suspend(Brand $brand)
+    public function suspend(Request $request, Brand $brand)
     {
-        $old = ['status' => $brand->status];
-        $brand->update(['status' => 'archived']);
+        $request->validate([
+            'reason' => 'required|string|max:1000',
+        ]);
 
-        AuditLog::log('brand_suspended', $brand, 'Brand disuspend: ' . $brand->name, $old, ['status' => 'archived']);
+        $old = ['status' => $brand->status];
+        $brand->update(['status' => 'suspended']);
+
+        AuditLog::log('brand_suspended', $brand, 'Brand disuspend: ' . $brand->name . '. Alasan: ' . $request->reason, $old, ['status' => 'suspended']);
 
         return back()->with('success', 'Brand berhasil disuspend.');
     }
 
+    public function ban(Request $request, Brand $brand)
+    {
+        $request->validate([
+            'reason' => 'required|string|max:1000',
+        ]);
+
+        $old = ['status' => $brand->status];
+        $brand->update(['status' => 'banned']);
+
+        AuditLog::log('brand_banned', $brand, 'Brand dibanned: ' . $brand->name . '. Alasan: ' . $request->reason, $old, ['status' => 'banned']);
+
+        return back()->with('success', 'Brand berhasil dibanned.');
+    }
+
+    public function verify(Brand $brand)
+    {
+        $old = ['is_verified' => $brand->is_verified, 'status' => $brand->status];
+        $brand->update(['is_verified' => true, 'status' => 'active']);
+
+        AuditLog::log('brand_verified', $brand, 'Brand diverifikasi: ' . $brand->name, $old, ['is_verified' => true, 'status' => 'active']);
+
+        return back()->with('success', 'Brand berhasil diverifikasi.');
+    }
+
+    public function activate(Brand $brand)
+    {
+        $old = ['status' => $brand->status];
+        $brand->update(['status' => 'active']);
+
+        AuditLog::log('brand_activated', $brand, 'Brand diaktifkan: ' . $brand->name, $old, ['status' => 'active']);
+
+        return back()->with('success', 'Brand berhasil diaktifkan.');
+    }
+
     public function destroy(Brand $brand)
     {
-        $brand->delete();
+        $old = ['status' => $brand->status];
+        $brand->update(['status' => 'archived']);
 
-        AuditLog::log('brand_deleted', $brand, 'Brand dihapus (soft delete): ' . $brand->name);
+        AuditLog::log('brand_deleted', $brand, 'Brand dihapus (soft delete): ' . $brand->name, $old, ['status' => 'archived']);
 
         return redirect()->route('superadmin.brands.index')->with('success', 'Brand berhasil dihapus.');
+    }
+
+    public function export(Request $request)
+    {
+        $query = Brand::with('owner');
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        $brands = $query->latest()->get();
+
+        $filename = 'komunaid_brands_' . date('Ymd') . '.csv';
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ];
+
+        return response()->stream(function () use ($brands) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['ID', 'Name', 'Slug', 'Owner', 'Industry', 'Status', 'Created At']);
+
+            foreach ($brands as $brand) {
+                fputcsv($handle, [
+                    $brand->id,
+                    $brand->name,
+                    $brand->slug,
+                    $brand->owner->name ?? '-',
+                    $brand->industry ?? '-',
+                    $brand->status,
+                    $brand->created_at?->format('Y-m-d H:i'),
+                ]);
+            }
+
+            fclose($handle);
+        }, 200, $headers);
     }
 }

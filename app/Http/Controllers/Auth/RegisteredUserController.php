@@ -3,12 +3,11 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Auth\RegisterRequest;
 use App\Models\User;
 use App\Models\Profile;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\Rules;
 use Spatie\Permission\Models\Role;
 
 class RegisteredUserController extends Controller
@@ -18,23 +17,37 @@ class RegisteredUserController extends Controller
         return view('auth.register');
     }
 
-    public function store(Request $request)
+    public function store(RegisterRequest $request)
     {
-        $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:users'],
-            'password' => ['required', 'confirmed', Rules\Password::defaults()],
-        ]);
+        $validated = $request->validated();
+
+        $name = $validated['name'] ?? null;
+        $username = $validated['username'] ?? null;
+        $email = $validated['email'] ?? null;
+
+        if (!$name) {
+            if ($username) {
+                $name = $username;
+            } elseif ($email) {
+                $name = explode('@', $email)[0];
+            }
+        }
 
         $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
+            'name' => $name,
+            'username' => $username,
+            'email' => $email,
+            'password' => Hash::make($validated['password']),
+            'status' => 'active',
         ]);
 
-        $profile = Profile::create([
-            'user_id' => $user->id,
-        ]);
+        if (class_exists(Profile::class)) {
+            Profile::create([
+                'user_id' => $user->id,
+                'username' => $username,
+                'display_name' => $name,
+            ]);
+        }
 
         $role = Role::where('name', 'member')->first();
         if ($role) {
@@ -43,6 +56,6 @@ class RegisteredUserController extends Controller
 
         Auth::login($user);
 
-        return redirect()->route('member.dashboard');
+        return redirect()->route('onboarding');
     }
 }

@@ -61,8 +61,10 @@ class StaffController extends Controller
 
         $query = $request->input('q', '');
 
-        $users = User::where('name', 'like', "%{$query}%")
-            ->orWhere('email', 'like', "%{$query}%")
+        $users = User::where(function ($q) use ($query) {
+                $q->where('name', 'like', "%{$query}%")
+                  ->orWhere('email', 'like', "%{$query}%");
+            })
             ->where('id', '!=', $brand->owner_id)
             ->limit(10)
             ->get()

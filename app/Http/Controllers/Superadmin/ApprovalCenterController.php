@@ -12,6 +12,7 @@ use App\Models\EventPaymentConfirmation;
 use App\Models\ApprovalLog;
 use App\Models\AuditLog;
 use App\Services\PlatformFeeService;
+use App\Enums\ApprovalStatus;
 use Illuminate\Http\Request;
 use Spatie\Permission\Models\Role;
 
@@ -45,46 +46,68 @@ class ApprovalCenterController extends Controller
 
     public function approveRoleRequest(RoleRequest $roleRequest)
     {
-        if ($roleRequest->status !== 'pending') {
+        if ($roleRequest->user_id === auth()->id()) {
+            return back()->with('error', 'Anda tidak bisa approve request sendiri.');
+        }
+
+        if ($roleRequest->status !== ApprovalStatus::PENDING) {
             return back()->with('error', 'Request ini sudah diproses.');
         }
 
-        $roleRequest->update([
-            'status' => 'approved',
-            'reviewed_by' => auth()->id(),
-            'reviewed_at' => now(),
-        ]);
-
         $user = $roleRequest->user;
-        $role = Role::where('name', $roleRequest->requested_role)->first();
 
-        if ($role) {
-            $user->removeRole('member');
-            $user->assignRole($role);
+        if ($user->isBannedOrSuspended()) {
+            return back()->with('error', 'User ini sedang dibatasi.');
         }
 
-        ApprovalLog::create([
-            'reviewed_by' => auth()->id(),
-            'type' => 'role_request',
-            'approvable_id' => $roleRequest->id,
-            'approvable_type' => RoleRequest::class,
-            'action' => 'approved',
-            'notes' => 'Role request disetujui: ' . $roleRequest->requested_role,
-        ]);
+        $role = Role::where('name', $roleRequest->requested_role)->first();
+        if (!$role) {
+            return back()->with('error', 'Role ' . $roleRequest->requested_role . ' tidak ditemukan di sistem.');
+        }
 
-        AuditLog::log('role_request_approved', $roleRequest, 'Role request disetujui untuk user ' . $user->name);
+        \DB::beginTransaction();
 
-        return back()->with('success', 'Role request berhasil disetujui.');
+        try {
+            $roleRequest->update([
+                'status' => ApprovalStatus::APPROVED,
+                'reviewed_by' => auth()->id(),
+                'reviewed_at' => now(),
+            ]);
+
+            $user->assignRole($role);
+
+            ApprovalLog::create([
+                'reviewed_by' => auth()->id(),
+                'type' => 'role_request',
+                'approvable_id' => $roleRequest->id,
+                'approvable_type' => RoleRequest::class,
+                'action' => 'approved',
+                'notes' => 'Role request disetujui: ' . $roleRequest->requested_role,
+            ]);
+
+            AuditLog::log('role_request_approved', $roleRequest, 'Role request disetujui untuk user ' . $user->name);
+
+            \DB::commit();
+
+            return back()->with('success', 'Role request berhasil disetujui.');
+        } catch (\Exception $e) {
+            \DB::rollBack();
+            return back()->with('error', 'Terjadi kesalahan saat memproses approval.');
+        }
     }
 
     public function rejectRoleRequest(RoleRequest $roleRequest)
     {
-        if ($roleRequest->status !== 'pending') {
+        if ($roleRequest->user_id === auth()->id()) {
+            return back()->with('error', 'Anda tidak bisa reject request sendiri.');
+        }
+
+        if ($roleRequest->status !== ApprovalStatus::PENDING) {
             return back()->with('error', 'Request ini sudah diproses.');
         }
 
         $roleRequest->update([
-            'status' => 'rejected',
+            'status' => ApprovalStatus::REJECTED,
             'reviewed_by' => auth()->id(),
             'reviewed_at' => now(),
         ]);
@@ -270,6 +293,12 @@ class ApprovalCenterController extends Controller
 
     public function updateCollaborationStatus(CollaborationRequest $collaboration, string $status)
     {
+        $allowedStatuses = ['pending', 'approved', 'rejected', 'completed', 'cancelled'];
+
+        if (!in_array($status, $allowedStatuses)) {
+            return back()->with('error', 'Status tidak valid.');
+        }
+
         $old = ['status' => $collaboration->status];
         $collaboration->update(['status' => $status]);
 

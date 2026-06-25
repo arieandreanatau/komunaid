@@ -69,4 +69,68 @@ class EventPolicy
     {
         return $user->hasRole('superadmin');
     }
+
+    public function publish(User $user, Event $event): bool
+    {
+        if ($user->hasRole('superadmin')) {
+            return true;
+        }
+        return $user->id === $event->community->owner_id;
+    }
+
+    public function cancel(User $user, Event $event): bool
+    {
+        if ($user->hasRole('superadmin')) {
+            return true;
+        }
+        return $user->id === $event->community->owner_id;
+    }
+
+    public function archive(User $user, Event $event): bool
+    {
+        if ($user->hasRole('superadmin')) {
+            return true;
+        }
+        return $user->id === $event->community->owner_id;
+    }
+
+    public function manageVolunteerCampaign(User $user, Event $event): bool
+    {
+        if ($user->hasRole('superadmin')) {
+            return true;
+        }
+        return $user->id === $event->community->owner_id;
+    }
+
+    public function manageVolunteerApplications(User $user, Event $event): bool
+    {
+        if ($user->hasRole('superadmin')) {
+            return true;
+        }
+        return $user->id === $event->community->owner_id;
+    }
+
+    public function manageVolunteers(User $user, Event $event): bool
+    {
+        if ($user->hasRole('superadmin')) {
+            return true;
+        }
+        return $user->id === $event->community->owner_id;
+    }
+
+    public function manageDonations(User $user, Event $event): bool
+    {
+        if ($user->hasRole('superadmin')) {
+            return true;
+        }
+        return $user->id === $event->community->owner_id;
+    }
+
+    public function manageFinance(User $user, Event $event): bool
+    {
+        if ($user->hasRole('superadmin')) {
+            return true;
+        }
+        return $user->id === $event->community->owner_id;
+    }
 }

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Superadmin;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
+use App\Models\LoginLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -19,27 +21,58 @@ class LoginController extends Controller
 
     public function login(Request $request)
     {
-        $credentials = $request->validate([
-            'email' => ['required', 'string', 'email'],
+        $request->validate([
+            'login' => ['required', 'string'],
             'password' => ['required', 'string'],
+        ], [
+            'login.required' => 'Email atau username wajib diisi.',
+            'password.required' => 'Password wajib diisi.',
         ]);
 
-        if (Auth::attempt($credentials, $request->boolean('remember'))) {
-            $request->session()->regenerate();
+        $login = $request->input('login');
+        $password = $request->input('password');
 
-            if (!Auth::user()->hasRole('superadmin')) {
-                Auth::logout();
-                return back()->withErrors([
-                    'email' => 'Akun ini bukan akun superadmin.',
-                ])->onlyInput('email');
-            }
+        $user = User::where('email', $login)
+            ->orWhere('username', $login)
+            ->first();
 
-            return redirect()->intended(route('superadmin.dashboard'));
+        if (!$user || !Auth::attempt(['email' => $user->email, 'password' => $password], $request->boolean('remember'))) {
+            LoginLog::create([
+                'user_id' => null,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'success' => false,
+            ]);
+
+            return back()->withErrors([
+                'login' => 'Email atau password salah.',
+            ])->onlyInput('login');
         }
 
-        return back()->withErrors([
-            'email' => 'Email atau password salah.',
-        ])->onlyInput('email');
+        if (!$user->hasRole('superadmin')) {
+            Auth::logout();
+            return back()->withErrors([
+                'login' => 'Akun ini bukan akun superadmin.',
+            ])->onlyInput('login');
+        }
+
+        if ($user->banned_at !== null) {
+            Auth::logout();
+            return back()->withErrors([
+                'login' => 'Akun ini telah dibanned.',
+            ])->onlyInput('login');
+        }
+
+        $request->session()->regenerate();
+
+        LoginLog::create([
+            'user_id' => $user->id,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'success' => true,
+        ]);
+
+        return redirect()->intended(route('superadmin.dashboard'));
     }
 
     public function logout(Request $request)

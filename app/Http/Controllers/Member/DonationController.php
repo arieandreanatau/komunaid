@@ -92,6 +92,10 @@ class DonationController extends Controller
 
     public function show(Donation $donation)
     {
+        if ($donation->donor_id !== auth()->id()) {
+            abort(403);
+        }
+
         $donation->load('event', 'community', 'brand', 'donor');
 
         return view('member.donations.show', compact('donation'));

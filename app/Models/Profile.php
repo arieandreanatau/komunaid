@@ -12,12 +12,30 @@ class Profile extends Model
     protected $fillable = [
         'user_id',
         'username',
+        'display_name',
         'bio',
         'phone',
         'city',
         'province',
+        'country',
+        'address',
         'profile_photo',
         'interest',
+        'date_of_birth',
+        'gender',
+        'social_links',
+        'skills',
+        'cover_photo',
+        'instagram_url',
+        'linkedin_url',
+        'website_url',
+        'privacy',
+    ];
+
+    protected $casts = [
+        'social_links' => 'array',
+        'skills' => 'array',
+        'date_of_birth' => 'date',
     ];
 
     public function user()

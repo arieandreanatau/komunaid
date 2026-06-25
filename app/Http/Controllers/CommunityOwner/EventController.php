@@ -56,6 +56,12 @@ class EventController extends Controller
         $data = $request->validated();
         $data['approval_status'] = 'approved';
         $data['slug'] = \Illuminate\Support\Str::slug($request->title);
+        $data['created_by'] = $user->id;
+        $data['status'] = $data['status'] ?? 'draft';
+
+        if ($request->hasFile('banner_path')) {
+            $data['banner_path'] = $request->file('banner_path')->store('events/banners', 'public');
+        }
 
         $event = Event::create($data);
 
@@ -67,14 +73,20 @@ class EventController extends Controller
     {
         $this->authorize('view', $event);
 
-        $event->load('community', 'registrations.user.profile', 'galleries.uploader', 'chats.creator');
+        $event->load('community', 'registrations.user.profile', 'galleries.uploader', 'chats.creator', 'volunteerCampaigns', 'volunteers', 'donations', 'financeTransactions', 'financeSummary');
 
         $stats = [
-            'total_registrations' => $event->registrations()->where('status', 'registered')->count(),
+            'total_registrations' => $event->registrations()->count(),
+            'total_active' => $event->registrations()->where('status', 'registered')->orWhere('status', 'approved')->count(),
+            'total_attended' => $event->registrations()->where('status', 'attended')->count(),
             'total_paid' => $event->registrations()->where('payment_status', 'paid')->count(),
             'total_waiting' => $event->registrations()->where('payment_status', 'waiting_confirmation')->count(),
             'total_gallery' => $event->galleries()->count(),
             'total_chats' => $event->chats()->count(),
+            'total_volunteers' => $event->volunteers()->where('status', 'active')->count(),
+            'total_campaigns' => $event->volunteerCampaigns()->count(),
+            'total_donations' => $event->donations()->where('status', 'verified')->sum('amount'),
+            'pending_donations' => $event->donations()->where('status', 'pending')->count(),
         ];
 
         return view('community.events.show', compact('event', 'stats'));
@@ -97,16 +109,79 @@ class EventController extends Controller
         $this->authorize('update', $event);
 
         $data = $request->validated();
+
+        if ($request->hasFile('banner_path')) {
+            if ($event->banner_path) {
+                Storage::disk('public')->delete($event->banner_path);
+            }
+            $data['banner_path'] = $request->file('banner_path')->store('events/banners', 'public');
+        }
+
         $event->update($data);
 
         return redirect()->route('community.events.show', $event)
             ->with('success', 'Event berhasil diperbarui.');
     }
 
+    public function publish(Event $event)
+    {
+        $this->authorize('publish', $event);
+
+        if ($event->isPublished()) {
+            return back()->with('error', 'Event sudah published.');
+        }
+
+        if ($event->isCancelled() || $event->isArchived()) {
+            return back()->with('error', 'Event yang sudah dibatalkan atau diarsipkan tidak bisa dipublish.');
+        }
+
+        $event->update([
+            'status' => 'published',
+            'approval_status' => 'approved',
+        ]);
+
+        return back()->with('success', 'Event berhasil dipublish.');
+    }
+
+    public function cancel(Request $request, Event $event)
+    {
+        $this->authorize('cancel', $event);
+
+        $request->validate([
+            'reason' => 'required|string|max:1000',
+        ]);
+
+        if ($event->isCancelled()) {
+            return back()->with('error', 'Event sudah dibatalkan.');
+        }
+
+        $event->update([
+            'status' => 'cancelled',
+        ]);
+
+        return back()->with('success', 'Event berhasil dibatalkan.');
+    }
+
+    public function archive(Event $event)
+    {
+        $this->authorize('archive', $event);
+
+        if ($event->isArchived()) {
+            return back()->with('error', 'Event sudah diarsipkan.');
+        }
+
+        $event->update([
+            'status' => 'archived',
+        ]);
+
+        return back()->with('success', 'Event berhasil diarsipkan.');
+    }
+
     public function destroy(Event $event)
     {
         $this->authorize('delete', $event);
 
+        $event->update(['status' => 'archived']);
         $event->delete();
 
         return redirect()->route('community.events.index')
