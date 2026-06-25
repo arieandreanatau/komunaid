@@ -27,7 +27,7 @@
     @endif
     @if($actionUrl)
         <div class="mt-4">
-            <a href="{{ $actionUrl }}" class="inline-flex items-center px-4 py-2 bg-komuna-blue text-white text-sm font-medium rounded-lg hover:bg-komuna-navy transition">
+            <a href="{{ $actionUrl }}" class="inline-flex items-center px-4 py-2 bg-komuna-coral text-white text-sm font-medium rounded-lg hover:bg-komuna-coral-dark transition">
                 {{ $actionLabel }}
             </a>
         </div>

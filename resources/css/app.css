@@ -7,6 +7,10 @@
     --color-komuna-blue-dark: #0E56CC;
     --color-komuna-cyan: #25B9F2;
     --color-komuna-cyan-dark: #1A9ED1;
+    --color-komuna-coral: #D94A3A;
+    --color-komuna-coral-dark: #B83A2C;
+    --color-komuna-coral-soft: #FDF0ED;
+    --color-komuna-coral-light: #FEF6F3;
     --color-komuna-light: #EEF7FF;
     --color-komuna-soft-cyan: #E6FAFF;
     --color-komuna-surface: #F8FAFC;
@@ -26,7 +30,7 @@
 
     --color-komuna-teal: #0B2D89;
     --color-komuna-green: #16A34A;
-    --color-komuna-orange: #126BFF;
+    --color-komuna-orange: #D94A3A;
     --color-komuna-soft: #EEF7FF;
 
     --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
@@ -40,3 +44,59 @@ body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 }
+.komuna-gradient-hero {
+    background: linear-gradient(135deg, #0B2D89 0%, #126BFF 50%, #25B9F2 100%);
+}
+
+.komuna-gradient-hero-warm {
+    background: linear-gradient(135deg, #0B2D89 0%, #D94A3A 50%, #126BFF 100%);
+}
+
+.komuna-gradient-primary {
+    background: linear-gradient(135deg, #0B2D89, #126BFF);
+}
+
+.komuna-gradient-cyan {
+    background: linear-gradient(135deg, #126BFF, #25B9F2);
+}
+
+.komuna-gradient-soft {
+    background: linear-gradient(135deg, #EEF7FF, #FFFFFF, #E6FAFF);
+}
+
+@keyframes fade-slide-up {
+    from {
+        opacity: 0;
+        transform: translateY(1.5rem);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.animate-fade-slide-up {
+    animation: fade-slide-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-fade-in {
+    animation: fade-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .animate-fade-slide-up,
+    .animate-fade-in {
+        animation: none;
+        opacity: 1;
+        transform: none;
+    }
+    html {
+        scroll-behavior: auto;
+    }
+}
+

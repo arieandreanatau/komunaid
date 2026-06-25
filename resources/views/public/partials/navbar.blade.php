@@ -30,8 +30,8 @@
                         </form>
                     </div>
                 @else
-                    <a href="{{ route('login') }}" class="text-sm font-medium text-komuna-text hover:text-komuna-blue">Login</a>
-                    <a href="{{ route('register') }}" class="bg-komuna-blue text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-komuna-navy transition">Gabung Sekarang</a>
+                    <a href="{{ route('login') }}" class="text-sm font-medium text-komuna-text hover:text-komuna-coral">Login</a>
+                    <a href="{{ route('register') }}" class="bg-komuna-coral text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-komuna-coral-dark transition">Gabung Sekarang</a>
                 @endauth
                 <button id="mobile-menu-btn" class="sm:hidden text-komuna-muted hover:text-komuna-blue" onclick="document.getElementById('mobile-menu').classList.toggle('hidden')">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
@@ -50,7 +50,7 @@
             @guest
                 <div class="border-t border-komuna-border pt-3 mt-3 space-y-2">
                     <a href="{{ route('login') }}" class="block px-3 py-2 rounded-lg text-sm font-medium text-komuna-text hover:bg-komuna-light/50">Login</a>
-                    <a href="{{ route('register') }}" class="block px-3 py-2 rounded-lg text-sm font-semibold text-white bg-komuna-blue hover:bg-komuna-navy text-center">Gabung Sekarang</a>
+                    <a href="{{ route('register') }}" class="block px-3 py-2 rounded-lg text-sm font-semibold text-white bg-komuna-coral hover:bg-komuna-coral-dark text-center">Gabung Sekarang</a>
                 </div>
             @else
                 <div class="border-t border-komuna-border pt-3 mt-3">
