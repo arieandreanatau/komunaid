@@ -8,41 +8,18 @@ use App\Models\Event;
 use App\Models\EventDonation;
 use App\Models\EventFinanceSummary;
 use App\Models\EventFinanceTransaction;
+use App\Services\Event\EventFinanceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class EventFinanceController extends Controller
 {
+    public function __construct(private readonly EventFinanceService $financeService) {}
+
     private function recalculateSummary(Event $event): void
     {
-        $totalDonation = EventDonation::where('event_id', $event->id)
-            ->where('status', 'verified')
-            ->sum('amount');
-
-        $totalIncome = EventFinanceTransaction::where('event_id', $event->id)
-            ->where('status', 'verified')
-            ->where('type', 'income')
-            ->sum('amount');
-
-        $totalExpense = EventFinanceTransaction::where('event_id', $event->id)
-            ->where('status', 'verified')
-            ->where('type', 'expense')
-            ->sum('amount');
-
-        $totalIncome = (float) $totalDonation + (float) $totalIncome;
-        $totalExpense = (float) $totalExpense;
-        $balance = $totalIncome - $totalExpense;
-
-        EventFinanceSummary::updateOrCreate(
-            ['event_id' => $event->id],
-            [
-                'total_income' => $totalIncome,
-                'total_expense' => $totalExpense,
-                'balance' => $balance,
-                'last_calculated_at' => now(),
-            ]
-        );
+        $this->financeService->recomputeSummary($event);
     }
 
     public function index(Event $event, Request $request)

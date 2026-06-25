@@ -3,6 +3,7 @@
 namespace App\Services\Event;
 
 use App\Models\Event;
+use App\Models\EventDonation;
 use App\Models\EventFinanceSummary;
 use App\Models\EventFinanceTransaction;
 use Illuminate\Support\Facades\DB;
@@ -12,39 +13,34 @@ class EventFinanceService
     public function recomputeSummary(Event $event): EventFinanceSummary
     {
         return DB::transaction(function () use ($event) {
-            $income = (float) EventFinanceTransaction::query()
+            $verifiedDonation = (float) EventDonation::query()
+                ->where('event_id', $event->id)
+                ->where('status', 'verified')
+                ->sum('amount');
+
+            $verifiedIncomeTx = (float) EventFinanceTransaction::query()
                 ->where('event_id', $event->id)
                 ->where('type', 'income')
                 ->where('status', 'verified')
                 ->sum('amount');
 
-            $expense = (float) EventFinanceTransaction::query()
+            $verifiedExpenseTx = (float) EventFinanceTransaction::query()
                 ->where('event_id', $event->id)
                 ->where('type', 'expense')
                 ->where('status', 'verified')
                 ->sum('amount');
 
-            $pendingIncome = (float) EventFinanceTransaction::query()
-                ->where('event_id', $event->id)
-                ->where('type', 'income')
-                ->where('status', 'pending')
-                ->sum('amount');
-
-            $pendingExpense = (float) EventFinanceTransaction::query()
-                ->where('event_id', $event->id)
-                ->where('type', 'expense')
-                ->where('status', 'pending')
-                ->sum('amount');
+            $totalIncome = $verifiedDonation + $verifiedIncomeTx;
+            $totalExpense = $verifiedExpenseTx;
+            $balance = $totalIncome - $totalExpense;
 
             return EventFinanceSummary::updateOrCreate(
                 ['event_id' => $event->id],
                 [
-                    'total_income' => $income,
-                    'total_expense' => $expense,
-                    'pending_income' => $pendingIncome,
-                    'pending_expense' => $pendingExpense,
-                    'net' => $income - $expense,
-                    'last_recomputed_at' => now(),
+                    'total_income' => $totalIncome,
+                    'total_expense' => $totalExpense,
+                    'balance' => $balance,
+                    'last_calculated_at' => now(),
                 ]
             );
         });
@@ -53,6 +49,6 @@ class EventFinanceService
     public function netBalance(Event $event): float
     {
         $summary = $this->recomputeSummary($event);
-        return (float) $summary->net;
+        return (float) $summary->balance;
     }
 }

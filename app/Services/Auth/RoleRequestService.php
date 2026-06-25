@@ -2,10 +2,10 @@
 
 namespace App\Services\Auth;
 
+use App\Enums\ApprovalStatus;
 use App\Models\ApprovalLog;
 use App\Models\RoleRequest;
 use App\Models\User;
-use App\Support\Enums\RoleRequestStatusEnum;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -13,37 +13,46 @@ class RoleRequestService
 {
     public function approve(RoleRequest $request, User $reviewer, ?string $note = null): bool
     {
-        if (!$request->status instanceof RoleRequestStatusEnum
-            ? !in_array($request->status, [RoleRequestStatusEnum::Pending->value], true)
-            : !$request->status === RoleRequestStatusEnum::Pending) {
+        if ($this->isTerminal($request->status)) {
             return false;
         }
 
         return DB::transaction(function () use ($request, $reviewer, $note) {
-            $request->update([
-                'status' => RoleRequestStatusEnum::Approved->value,
+            $locked = RoleRequest::where('id', $request->id)
+                ->where('status', ApprovalStatus::PENDING->value)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$locked) {
+                return false;
+            }
+
+            $locked->update([
+                'status' => ApprovalStatus::APPROVED->value,
                 'reviewed_by' => $reviewer->id,
                 'reviewed_at' => now(),
             ]);
 
-            $user = $request->user;
-            if ($user && !$user->hasRole($request->requested_role)) {
-                $user->assignRole($request->requested_role);
+            $user = $locked->user;
+            if ($user && method_exists($user, 'hasRole') && !$user->hasRole($locked->requested_role)) {
+                $user->assignRole($locked->requested_role);
             }
 
-            ApprovalLog::create([
-                'subject_type' => User::class,
-                'subject_id' => $user?->id,
-                'action' => 'role_request.approved',
-                'reviewer_id' => $reviewer->id,
-                'note' => $note,
-                'metadata' => ['requested_role' => $request->requested_role],
-            ]);
+            if (class_exists(ApprovalLog::class)) {
+                ApprovalLog::create([
+                    'reviewed_by' => $reviewer->id,
+                    'type' => 'role_request',
+                    'approvable_id' => $locked->id,
+                    'approvable_type' => RoleRequest::class,
+                    'action' => 'approved',
+                    'notes' => $note ?? 'Role request disetujui: ' . $locked->requested_role,
+                ]);
+            }
 
             Log::info('role_request.approved', [
-                'role_request_id' => $request->id,
+                'role_request_id' => $locked->id,
                 'user_id' => $user?->id,
-                'requested_role' => $request->requested_role,
+                'requested_role' => $locked->requested_role,
                 'reviewer_id' => $reviewer->id,
             ]);
 
@@ -53,32 +62,42 @@ class RoleRequestService
 
     public function reject(RoleRequest $request, User $reviewer, ?string $note = null): bool
     {
-        if ($request->status === RoleRequestStatusEnum::Approved->value
-            || $request->status === RoleRequestStatusEnum::Rejected->value
-            || $request->status === RoleRequestStatusEnum::Cancelled->value) {
+        if ($this->isTerminal($request->status)) {
             return false;
         }
 
         return DB::transaction(function () use ($request, $reviewer, $note) {
-            $request->update([
-                'status' => RoleRequestStatusEnum::Rejected->value,
+            $locked = RoleRequest::where('id', $request->id)
+                ->where('status', ApprovalStatus::PENDING->value)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$locked) {
+                return false;
+            }
+
+            $locked->update([
+                'status' => ApprovalStatus::REJECTED->value,
+                'reason' => $note,
                 'reviewed_by' => $reviewer->id,
                 'reviewed_at' => now(),
             ]);
 
-            ApprovalLog::create([
-                'subject_type' => User::class,
-                'subject_id' => $request->user_id,
-                'action' => 'role_request.rejected',
-                'reviewer_id' => $reviewer->id,
-                'note' => $note,
-                'metadata' => ['requested_role' => $request->requested_role],
-            ]);
+            if (class_exists(ApprovalLog::class)) {
+                ApprovalLog::create([
+                    'reviewed_by' => $reviewer->id,
+                    'type' => 'role_request',
+                    'approvable_id' => $locked->id,
+                    'approvable_type' => RoleRequest::class,
+                    'action' => 'rejected',
+                    'notes' => 'Role request ditolak: ' . ($note ?? 'tanpa alasan'),
+                ]);
+            }
 
             Log::info('role_request.rejected', [
-                'role_request_id' => $request->id,
-                'user_id' => $request->user_id,
-                'requested_role' => $request->requested_role,
+                'role_request_id' => $locked->id,
+                'user_id' => $locked->user_id,
+                'requested_role' => $locked->requested_role,
                 'reviewer_id' => $reviewer->id,
             ]);
 
@@ -91,11 +110,27 @@ class RoleRequestService
         if ($request->user_id !== $user->id) {
             return false;
         }
-        if ($request->status !== RoleRequestStatusEnum::Pending->value) {
+
+        if ($request->status !== ApprovalStatus::PENDING) {
             return false;
         }
 
-        $request->update(['status' => RoleRequestStatusEnum::Cancelled->value]);
+        $request->update(['status' => ApprovalStatus::CANCELLED->value]);
         return true;
+    }
+
+    private function isTerminal($status): bool
+    {
+        if ($status instanceof ApprovalStatus) {
+            return in_array($status, [ApprovalStatus::APPROVED, ApprovalStatus::REJECTED, ApprovalStatus::CANCELLED], true);
+        }
+        if (is_string($status)) {
+            return in_array($status, [
+                ApprovalStatus::APPROVED->value,
+                ApprovalStatus::REJECTED->value,
+                ApprovalStatus::CANCELLED->value,
+            ], true);
+        }
+        return false;
     }
 }

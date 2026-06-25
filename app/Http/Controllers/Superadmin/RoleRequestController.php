@@ -5,14 +5,14 @@ namespace App\Http\Controllers\Superadmin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\RoleRequest\RejectRoleRequestRequest;
 use App\Models\RoleRequest;
-use App\Models\ApprovalLog;
 use App\Models\AuditLog;
-use App\Enums\ApprovalStatus;
+use App\Services\Auth\RoleRequestService;
 use Illuminate\Http\Request;
-use Spatie\Permission\Models\Role;
 
 class RoleRequestController extends Controller
 {
+    public function __construct(private readonly RoleRequestService $service) {}
+
     public function index(Request $request)
     {
         $query = RoleRequest::with('user', 'reviewer');
@@ -58,56 +58,22 @@ class RoleRequestController extends Controller
             return back()->with('error', 'User ini sedang dibatasi.');
         }
 
-        $role = Role::where('name', $roleRequest->requested_role)->first();
-        if (!$role) {
+        if (!\Spatie\Permission\Models\Role::where('name', $roleRequest->requested_role)->exists()) {
             return back()->with('error', 'Role ' . $roleRequest->requested_role . ' tidak ditemukan di sistem.');
         }
 
-        \DB::beginTransaction();
+        $ok = $this->service->approve($roleRequest, $request->user());
 
-        try {
-            $locked = RoleRequest::where('id', $roleRequest->id)
-                ->where('status', ApprovalStatus::PENDING)
-                ->lockForUpdate()
-                ->first();
-
-            if (!$locked) {
-                \DB::rollBack();
-                return back()->with('error', 'Request ini sudah diproses.');
-            }
-
-            $locked->update([
-                'status' => ApprovalStatus::APPROVED,
-                'reviewed_by' => auth()->id(),
-                'reviewed_at' => now(),
-            ]);
-
-            $user->assignRole($role);
-
-            if (class_exists(ApprovalLog::class)) {
-                ApprovalLog::create([
-                    'reviewed_by' => auth()->id(),
-                    'type' => 'role_request',
-                    'approvable_id' => $locked->id,
-                    'approvable_type' => RoleRequest::class,
-                    'action' => 'approved',
-                    'notes' => 'Role request disetujui: ' . $locked->requested_role,
-                ]);
-            }
-
-            if (class_exists(AuditLog::class)) {
-                AuditLog::log('role_request_approved', $locked, 'Role request disetujui untuk user ' . $user->name);
-            }
-
-            \DB::commit();
-
-            return redirect()->route('superadmin.role-requests.index')
-                ->with('success', 'Role request berhasil disetujui. User sekarang memiliki role ' . $locked->requested_role . '.');
-
-        } catch (\Exception $e) {
-            \DB::rollBack();
-            return back()->with('error', 'Terjadi kesalahan saat memproses approval.');
+        if (!$ok) {
+            return back()->with('error', 'Request ini sudah diproses atau tidak dapat disetujui.');
         }
+
+        if (class_exists(AuditLog::class)) {
+            AuditLog::log('role_request_approved', $roleRequest, 'Role request disetujui untuk user ' . $user->name);
+        }
+
+        return redirect()->route('superadmin.role-requests.index')
+            ->with('success', 'Role request berhasil disetujui. User sekarang memiliki role ' . $roleRequest->requested_role . '.');
     }
 
     public function reject(RejectRoleRequestRequest $request, RoleRequest $roleRequest)
@@ -116,49 +82,17 @@ class RoleRequestController extends Controller
             return back()->with('error', 'Anda tidak bisa reject request sendiri.');
         }
 
-        \DB::beginTransaction();
+        $ok = $this->service->reject($roleRequest, $request->user(), $request->input('reason'));
 
-        try {
-            $locked = RoleRequest::where('id', $roleRequest->id)
-                ->where('status', ApprovalStatus::PENDING)
-                ->lockForUpdate()
-                ->first();
-
-            if (!$locked) {
-                \DB::rollBack();
-                return back()->with('error', 'Request ini sudah diproses.');
-            }
-
-            $locked->update([
-                'status' => ApprovalStatus::REJECTED,
-                'reason' => $request->input('reason'),
-                'reviewed_by' => auth()->id(),
-                'reviewed_at' => now(),
-            ]);
-
-            if (class_exists(ApprovalLog::class)) {
-                ApprovalLog::create([
-                    'reviewed_by' => auth()->id(),
-                    'type' => 'role_request',
-                    'approvable_id' => $locked->id,
-                    'approvable_type' => RoleRequest::class,
-                    'action' => 'rejected',
-                    'notes' => 'Role request ditolak: ' . $request->input('reason'),
-                ]);
-            }
-
-            if (class_exists(AuditLog::class)) {
-                AuditLog::log('role_request_rejected', $locked, 'Role request ditolak untuk user ' . $locked->user->name);
-            }
-
-            \DB::commit();
-
-            return redirect()->route('superadmin.role-requests.index')
-                ->with('success', 'Role request berhasil ditolak.');
-
-        } catch (\Exception $e) {
-            \DB::rollBack();
-            return back()->with('error', 'Terjadi kesalahan saat memproses penolakan.');
+        if (!$ok) {
+            return back()->with('error', 'Request ini sudah diproses atau tidak dapat ditolak.');
         }
+
+        if (class_exists(AuditLog::class)) {
+            AuditLog::log('role_request_rejected', $roleRequest, 'Role request ditolak untuk user ' . $roleRequest->user->name);
+        }
+
+        return redirect()->route('superadmin.role-requests.index')
+            ->with('success', 'Role request berhasil ditolak.');
     }
 }

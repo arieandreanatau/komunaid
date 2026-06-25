@@ -30,6 +30,7 @@ use App\Http\Controllers\Member\FriendController as MemberFriendController;
 use App\Http\Controllers\Member\BookmarkController as MemberBookmarkController;
 use App\Http\Controllers\Member\GalleryController as MemberGalleryController;
 use App\Http\Controllers\Member\HistoryController as MemberHistoryController;
+use App\Http\Controllers\Member\PremiumDemoController as MemberPremiumDemoController;
 use App\Http\Controllers\CommunityOwner\DashboardController as CommunityOwnerDashboardController;
 use App\Http\Controllers\CommunityOwner\CommunityController as CommunityOwnerCommunityController;
 use App\Http\Controllers\CommunityOwner\MemberController as CommunityOwnerMemberController;
@@ -166,6 +167,9 @@ Route::middleware(['auth'])->group(function () {
     Route::prefix('member')->name('member.')->middleware('active_user')->group(function () {
         // Dashboard
         Route::get('/dashboard', [MemberDashboardController::class, 'index'])->name('dashboard');
+
+        // Premium Demo (uses PremiumAccessService)
+        Route::get('/premium-demo', [MemberPremiumDemoController::class, 'show'])->name('premium-demo');
 
         // Profile
         Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
