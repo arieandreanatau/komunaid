@@ -1,7 +1,7 @@
 {
   "outputDirectory": "public",
   "framework": null,
-  "buildCommand": "echo 'No build step: assets via CDN'",
+  "buildCommand": "php artisan package:discover --ansi && php artisan optimize:clear --ansi",
   "installCommand": "echo 'Skip npm install'",
   "functions": {
     "api/index.php": {
