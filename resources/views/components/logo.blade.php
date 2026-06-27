@@ -3,16 +3,16 @@
 @php
     $logoPath = null;
     $paths = [
-        'public/assets/brand/komunaid-logo-full.png',
-        'public/images/logo.png',
-        'public/images/komunaid-logo.png',
-        'public/logo.png',
-        'public/logo/komunaid-logo.png',
-        'storage/app/public/logo/komunaid-logo.png',
+        'assets/brand/komunaid-logo-full.png',
+        'images/logo.png',
+        'images/komunaid-logo.png',
+        'logo.png',
+        'logo/komunaid-logo.png',
+        'storage/logo/komunaid-logo.png',
     ];
     foreach ($paths as $p) {
         if (file_exists(public_path($p))) {
-            $logoPath = '/' . $p;
+            $logoPath = asset($p);
             break;
         }
     }
