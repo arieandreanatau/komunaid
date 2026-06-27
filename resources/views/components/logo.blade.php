@@ -3,6 +3,7 @@
 @php
     $logoPath = null;
     $paths = [
+        'public/assets/brand/komunaid-logo-full.png',
         'public/images/logo.png',
         'public/images/komunaid-logo.png',
         'public/logo.png',

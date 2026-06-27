@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ $pageTitle ?? config('app.name', 'KomunaID') }}</title>
+    <link rel="icon" type="image/png" href="{{ asset('assets/brand/komunaid-logo-full.png') }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen flex items-center justify-center bg-gradient-to-br from-komuna-light via-white to-komuna-soft-cyan">

@@ -6,6 +6,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', config('app.name', 'KomunaID'))</title>
     @yield('meta_description')
+    <link rel="icon" type="image/png" href="{{ asset('assets/brand/komunaid-logo-full.png') }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="bg-komuna-surface min-h-screen">

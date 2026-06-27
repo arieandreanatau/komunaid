@@ -1,6 +1,5 @@
-@props(['status' => 'active'])
-
 @php
+    $status = $status ?? 'active';
     $styles = match($status) {
         'active', 'approved', 'confirmed', 'paid', 'completed' => 'bg-[#16A34A]/10 text-[#16A34A] border-[#16A34A]',
         'pending', 'waiting' => 'bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]',
@@ -11,5 +10,5 @@
     };
 @endphp
 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border {{ $styles }}">
-    {{ ucfirst($status) }}
+    {{ ucfirst((string) $status) }}
 </span>
