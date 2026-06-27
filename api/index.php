@@ -49,6 +49,65 @@ if (getenv('VERCEL') || getenv('VERCEL_ENV')) {
     error_reporting(E_ALL);
 }
 
+// Static file serving for Vercel PHP runtime
+// The Vercel PHP runtime does NOT serve files from public/build/ when
+// outputDirectory is set. We intercept /build/* requests here and serve
+// the files directly from public/build/. This must happen BEFORE Laravel
+// boots to avoid loading the full framework for static assets.
+if (getenv('VERCEL') || getenv('VERCEL_ENV')) {
+    $uri = urldecode(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/');
+
+    if (preg_match('#^/build/(.*)$#', $uri, $matches)) {
+        $path = $matches[1];
+        $fullPath = __DIR__ . '/../public/build/' . $path;
+
+        // Path traversal protection
+        $realBase = realpath(__DIR__ . '/../public/build');
+        $realPath = realpath($fullPath);
+
+        if (
+            $realPath !== false &&
+            $realBase !== false &&
+            str_starts_with($realPath, $realBase) &&
+            is_file($realPath)
+        ) {
+            $extension = strtolower(pathinfo($realPath, PATHINFO_EXTENSION));
+            $mimeTypes = [
+                'js'    => 'application/javascript; charset=utf-8',
+                'mjs'   => 'application/javascript; charset=utf-8',
+                'css'   => 'text/css; charset=utf-8',
+                'json'  => 'application/json; charset=utf-8',
+                'map'   => 'application/json; charset=utf-8',
+                'png'   => 'image/png',
+                'jpg'   => 'image/jpeg',
+                'jpeg'  => 'image/jpeg',
+                'gif'   => 'image/gif',
+                'svg'   => 'image/svg+xml',
+                'webp'  => 'image/webp',
+                'ico'   => 'image/x-icon',
+                'woff'  => 'font/woff',
+                'woff2' => 'font/woff2',
+                'ttf'   => 'font/ttf',
+                'otf'   => 'font/otf',
+                'eot'   => 'application/vnd.ms-fontobject',
+                'txt'   => 'text/plain; charset=utf-8',
+                'html'  => 'text/html; charset=utf-8',
+                'xml'   => 'application/xml; charset=utf-8',
+            ];
+            $contentType = $mimeTypes[$extension] ?? 'application/octet-stream';
+
+            header('Content-Type: ' . $contentType);
+            header('Content-Length: ' . filesize($realPath));
+            header('Cache-Control: public, max-age=31536000, immutable');
+            header('Access-Control-Allow-Origin: *');
+            header('X-Content-Type-Options: nosniff');
+
+            readfile($realPath);
+            exit;
+        }
+    }
+}
+
 $kernel = $app->make(Illuminate\Contracts\Http\Kernel::class);
 
 $response = $kernel->handle(
