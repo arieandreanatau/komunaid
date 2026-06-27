@@ -2,7 +2,7 @@
   "outputDirectory": "public",
   "framework": null,
   "buildCommand": "npm run build",
-  "installCommand": "sh vercel-install.sh",
+  "installCommand": "npx -p composer/composer@2.7.7 composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist && npx -p php/php -y php artisan view:cache && npx -p php/php -y php artisan config:cache && npx -p php/php -y php artisan route:cache",
   "functions": {
     "api/index.php": {
       "runtime": "vercel-php@0.8.0",
