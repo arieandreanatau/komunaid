@@ -7,11 +7,25 @@
       "runtime": "vercel-php@0.8.0",
       "maxDuration": 60
     },
+    "api/static.php": {
+      "runtime": "vercel-php@0.8.0",
+      "maxDuration": 10
+    },
     "api/cron/scheduler.php": {
       "runtime": "vercel-php@0.8.0",
       "maxDuration": 60
     }
   },
+  "routes": [
+    {
+      "src": "/build/(.*)",
+      "dest": "/api/static.php"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/api/index.php"
+    }
+  ],
   "crons": [
     {
       "path": "/api/cron/scheduler?token=__CRON_SECRET__",
