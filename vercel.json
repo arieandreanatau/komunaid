@@ -16,16 +16,6 @@
       "maxDuration": 60
     }
   },
-  "routes": [
-    {
-      "src": "/build/(.*)",
-      "dest": "/api/static.php"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/api/index.php"
-    }
-  ],
   "crons": [
     {
       "path": "/api/cron/scheduler?token=__CRON_SECRET__",
