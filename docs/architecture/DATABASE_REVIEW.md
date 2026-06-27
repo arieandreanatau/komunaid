@@ -1,199 +1,156 @@
-# KomunaID — Database Review
+# KomunaID Database Review (Data Dictionary)
 
-**Last updated:** 2026-06-25
-**Total migrations:** 99
-**Migrations run:** 99 (batch [1])
+## Total: 96 migrations (95 V1+V2 + 1 audit). 60+ tables.
 
----
+## V1 Tables (2024 batch — base domain)
 
-## 1. Migration Overview
+| Table | Description | Notable Columns |
+|---|---|---|
+| `users` | Core user table | id, name, email (nullable V2), username, password, banned_at, status, soft_deletes (V2) |
+| `password_reset_tokens` | Laravel default | email, token |
+| `sessions` | Laravel session (DB driver) | id, user_id, payload, last_activity |
+| `cache` | Laravel default | key, value, expiration |
+| `jobs` | Queue jobs | queue, payload, attempts |
+| `failed_jobs` | Failed queue jobs | uuid, queue, exception |
+| `personal_access_tokens` | Sanctum tokens | tokenable_id, name, token |
+| `profiles` | User profile | user_id, display_name, bio, city, province, country, privacy, V2 alters |
+| `role_requests` | Role upgrade requests | user_id, requested_role, status (V2 added `cancelled`), reviewer_id, reviewed_at |
+| `permission_tables` (Spatie) | permissions, roles, model_has_permissions, model_has_roles, role_has_permissions | |
+| `master_regions` | Indonesian region master | name, code, parent_id |
+| `audit_logs` | System audit log | user_id, action, auditable_type, auditable_id, description |
+| `approval_logs` | Approval workflow log | approvable_type, approvable_id, action, user_id |
+| `wallets` | User wallet | user_id, balance |
+| `wallet_transactions` | Wallet txns | wallet_id, type (credit/debit), amount, balance_before, balance_after, description, category, reference |
+| `donations` | Donations (V1) | donor_id, amount, donation_type, status, community_id, event_id, message, confirmed_at |
+| `platform_fees` | Platform fee rules | name, percentage, min_amount, max_amount |
+| `interests` | User interests master | name, slug, icon |
+| `community_categories` | Community category master | name, slug, icon |
+| `communities` | Community | owner_id, category_id, name, slug, description, about, region, city, status, is_public, V2 alters |
+| `community_member_roles` | Community member role enum | role (member/volunteer/admin), community_id |
+| `community_members` | Membership | community_id, user_id, role, status, joined_at, V2 alters |
+| `community_subgroups` | Subgroups | community_id, name, description |
+| `community_regions` | Community region scope | community_id, region_id |
+| `community_bans` | Ban list | community_id, user_id, reason, banned_at, banned_by |
+| `member_join_histories` | Join history log | community_id, user_id, action, acted_at |
+| `brands` | Brand | owner_id, name, slug, description, status, V2 alters |
+| `brand_members` | Brand staff | brand_id, user_id, role |
+| `campaigns` | Brand campaigns | brand_id, name, description, budget, start_date, end_date, status |
+| `collaboration_requests` | V1 collaboration system | sender_type, sender_id, receiver_type, receiver_id, message, status |
+| `events` | Community event | community_id, title, slug, description, start_at, end_at, location, status, event_type (V2), V2 alters |
+| `event_registrations` | Event registration | event_id, user_id, status, payment_status |
+| `event_payment_confirmations` | Payment proof | registration_id, amount, bank_name, account_name, transfer_proof_path, status |
+| `event_galleries` | Event gallery | event_id, user_id, image_path, caption |
+| `event_chats` | Event forum chats | event_id, user_id, message, parent_id |
+| `event_chat_threads` | Event chat reply threads | chat_id, user_id, message |
+| `cms_pages` | CMS pages | slug, title, body, status, V2 alters |
 
-| Batch | Date prefix | Purpose | Count |
-|---|---|---|---|
-| 1 | `2024_01_*` | V1 baseline | 36 |
-| 1 | `2026_06_24_*` | Laravel scaffolding (sessions, cache, jobs) | 4 |
-| 1 | `2026_06_25_*` | V2 enhancements | 59 |
+## V2 New Tables (2026-06-25 batch — enhancements)
 
-**Pattern observed:** V2 used **additive migrations** (ALTER + new tables) — no edits to old migrations. This is correct and safe.
+### Community enhancements
+| Table | Description |
+|---|---|
+| `community_internal_roles` | Granular internal roles |
+| `community_managements` | Management team records |
+| `community_volunteers` | Volunteer pool |
+| `community_campaigns` | Community campaigns |
+| `community_campaign_applications` | Volunteer applications to campaigns |
+| `community_ownership_transfers` | Ownership transfer requests |
+| `community_bookmarks` | Member bookmarks |
+| `friendships` | Member-to-member friend relations |
+| `member_galleries` | Member gallery images |
+| `member_histories` | Member activity history |
+| `regions` | Region taxonomy |
+| `event_types` | Event type taxonomy |
+| `collaboration_types` | Collaboration type taxonomy |
 
----
+### Event enhancements
+| Table | Description |
+|---|---|
+| `event_donations` | Event-level donations |
+| `event_finance_transactions` | Event finance ledger |
+| `event_finance_summaries` | Aggregated finance per event |
+| `event_volunteers` | Active volunteers per event |
+| `event_volunteer_campaigns` | Volunteer recruitment campaigns |
+| `event_volunteer_applications` | Volunteer applications |
 
-## 2. Tables (Conceptual Groups)
-
-### Identity & Auth
-- `users` (V1 + V2 alters: status, banned_at, soft_deletes, email nullable, status index)
-- `password_reset_tokens` (Breeze)
-- `sessions` (V2 scaffolding)
-- `personal_access_tokens` (Sanctum)
-- `profiles` (V1 + V2 expand)
-- `role_requests` (V1 + V2 status enum expand: cancelled)
-- `login_logs` (V1 + V2 user_id nullable)
-- `audit_logs`
-- `permission_tables` (Spatie)
-
-### Community
-- `community_categories` (V1 + V2 alter)
-- `communities` (V1 + V2 alter)
-- `community_members` (V1 + V2 alter)
-- `community_member_roles` (V1)
-- `community_regions` (V1 — per-community)
-- `community_subgroups` (V1)
-- `community_bans` (V1)
-- `community_internal_roles` (V2)
-- `community_managements` (V2)
-- `community_volunteers` (V2)
-- `community_ownership_transfers` (V2)
-- `community_campaigns` (V2)
-- `community_campaign_applications` (V2)
-- `member_join_histories` (V1)
-- `community_bookmarks` (V2)
-
-### Event
-- `events` (V1 + V2 alters: status, type)
-- `event_types` (V2 master)
-- `event_registrations` (V1 + V2 alter)
-- `event_payment_confirmations` (V1)
-- `event_galleries` (V1)
-- `event_chats` (V1)
-- `event_chat_threads` (V1)
-- `event_volunteer_campaigns` (V2)
-- `event_volunteer_applications` (V2)
-- `event_volunteers` (V2)
-- `event_donations` (V2)
-- `event_finance_transactions` (V2)
-- `event_finance_summaries` (V2)
-
-### Brand & Company
-- `brands` (V1 + V2 alter)
-- `brand_members` (V1)
-- `brand_ownership_transfers` (V2)
-- `companies` (V2)
-- `company_brand_members` (V2)
-
-### Collaboration
-- `collaboration_requests` (V1 — **DEPRECATED, kept for data integrity**)
-- `collaboration_proposals` (V2)
-- `collaboration_types` (V2 master)
-
-### Donation & Finance
-- `donations` (V1 — community-donation legacy, **kept**)
-- `wallets` (V1)
-- `wallet_transactions` (V1)
-- `platform_fees` (V1)
-
-### Premium
-- `premium_plans` (V2)
-- `subscriptions` (V2)
-- `feature_locks` (V2)
-- `feature_usages` (V2)
+### Brand/Company enhancements
+| Table | Description |
+|---|---|
+| `companies` | Company profile |
+| `company_brand_members` | Company ↔ Brand pivot |
+| `brand_ownership_transfers` | Brand ownership transfer requests |
+| `collaboration_proposals` | V2 collaboration system (replaces/augments `collaboration_requests`) |
 
 ### CMS
-- `cms_pages` (V1 + V2 alter)
-- `blogs` (V2)
-- `homepage_sections` (V2)
-- `contact_settings` (V2)
-- `suggestions` (V2)
-
-### Admin Chat
-- `admin_conversations` (V2 + chat alter)
-- `admin_conversation_participants` (V2)
-- `admin_messages` (V2 + rename message→body)
-
-### Documentation
-- `documentation_files` (V2)
-
-### Multilanguage / Region
-- `translations` (V2)
-- `regions` (V2 — canonical)
-- `master_regions` (V1 — **DEPRECATED, kept**)
-- `interests` (V2)
-- `campaigns` (V1 — brand-level, **kept, different scope from community_campaigns**)
-
-### System
-- `cache` (V2 scaffolding)
-- `jobs`, `failed_jobs` (V2 scaffolding)
-- `custom_notifications` (V2)
-- `friendships` (V2)
-- `member_galleries` (V2)
-- `member_histories` (V2)
-- `role_approvals` (V1)
-- `approval_logs` (V1)
-
----
-
-## 3. Deprecated Tables (Kept, No Data Migration)
-
-| Table | Reason | Action |
-|---|---|---|
-| `collaboration_requests` | Replaced by `collaboration_proposals` (V2) | Add `@deprecated` to model; no drop in this refactor |
-| `master_regions` | Replaced by `regions` (V2) | Add `@deprecated`; no drop |
-| `donations` (community) | Still used by `CommunityOwner\DonationController` for community donation confirm flow | No drop; scope different from `event_donations` |
-| `campaigns` (brand) | Different scope from `community_campaigns` | No drop |
-| `community_regions` | Per-community scope, NOT same as `regions` (master) | No drop |
-
----
-
-## 4. Indexes
-
-V2 added several useful indexes:
-- `users.status` index (V2.002)
-- FK indexes implicit on every FK
-
-**Phase 2:** Add explicit indexes for:
-- `community_members(community_id, user_id)` composite
-- `event_registrations(event_id, user_id)` composite
-- `event_donations(event_id, status)` composite
-- `collaboration_proposals(status, sender_id)` composite
-
----
-
-## 5. Foreign Key Cascade Rules
-
-Spot-checked: most FK use `onDelete('cascade')` for owned resources. Some use `restrict` (e.g. `roles` to prevent accidental Spatie role deletion).
-
----
-
-## 6. Data Dictionary (Selected)
-
-| Table | Key Columns | Notes |
-|---|---|---|
-| `users` | id, name, username, email (nullable), password, status (active/banned/suspended), banned_at, deleted_at | soft deletes added V2.49 |
-| `communities` | id, owner_id, name, slug, description, category_id, status, region_id, etc. | status enum (pending/active/banned/suspended/archived) |
-| `events` | id, community_id, owner_id, title, slug, event_type, status, start_at, end_at, location, etc. | status enum (draft/published/ongoing/completed/cancelled/archived) |
-| `brands` | id, owner_id, name, slug, industry, status, etc. | status enum |
-| `companies` | id, owner_id, name, slug, status, etc. | status enum |
-| `collaboration_proposals` | id, sender_type, sender_id, receiver_type, receiver_id, type, status, message, etc. | polymorphic |
-| `premium_plans` | id, name, slug, price, duration_days, features (json), is_active | |
-| `subscriptions` | id, user_id, plan_id, starts_at, ends_at, status | |
-| `feature_locks` | id, feature_key, role, plan_id, is_locked | controls access |
-| `feature_usages` | id, user_id, feature_key, period, count | rate tracking |
-| `admin_conversations` | id, subject, type, status, last_message_at | |
-| `admin_messages` | id, conversation_id, sender_id, body (renamed from `message`) | |
-| `documentation_files` | id, key, title, content, generated_at, format | |
-| `translations` | id, locale, key, value | |
-
----
-
-## 7. Soft Deletes
-
-| Table | Soft Deletes |
+| Table | Description |
 |---|---|
-| `users` | yes (V2.49) |
-| All other tables | no |
+| `blogs` | Blog posts |
+| `homepage_sections` | Homepage section config |
+| `contact_settings` | Contact form settings |
+| `suggestions` | Public suggestions inbox |
 
----
+### Admin chat
+| Table | Description |
+|---|---|
+| `admin_conversations` | Conversation thread |
+| `admin_conversation_participants` | Pivot with role/joined_at/last_read_at/archived_at |
+| `admin_messages` | Messages (body column was renamed from `message` in V2) |
 
-## 8. Recommendations (Phase 2)
+### Premium / Feature gating
+| Table | Description |
+|---|---|
+| `premium_plans` | Subscription plan catalog |
+| `subscriptions` | User subscription records |
+| `feature_locks` | Per-feature lock state |
+| `feature_usages` | Usage counters |
 
-1. Add composite indexes per §4.
-2. Add `event_finance_summaries` cache invalidation trigger on `event_finance_transactions` insert.
-3. Add fulltext index on `events(title, description)` and `communities(name, description)` for public search.
-4. Consider `notifications` table for unified in-app + email queue (current `custom_notifications` is custom; not Bell/Spatie notifiable).
-5. Add `password_reset_tokens` audit log (who reset, when, IP).
+### Other
+| Table | Description |
+|---|---|
+| `custom_notifications` | In-app notifications |
+| `translations` | Translation key-value store |
+| `login_logs` | Login audit log (V2 alters) |
+| `documentation_files` | Generated documentation artifacts |
 
----
+## V2 Audit (R5)
 
-## 9. No-Action Items (kept as-is)
+| Migration | Date | Purpose |
+|---|---|---|
+| `2026_06_27_000001_audit_v1_v2_alignment` | 2026-06-27 | No-op schema audit. Verifies presence of every V1+V2 table and key columns. Throws on MySQL if any are missing. |
 
-- V1 enum strings remain (e.g. `users.status = 'active'`). Migrating to lookup tables = too disruptive for MVP.
-- V1 + V2 schema coexist. Do not consolidate in this refactor.
+## V2 Alters (column-level changes, no destructive)
+
+V2 batch contains alters that:
+- Add `status` enum to `events` (draft/published/ongoing/done/cancelled)
+- Expand `event_type` column
+- Add `cancelled` to `role_requests.status` enum
+- Add soft deletes to `users`
+- Add `status` index to `users`
+- Add `region_id` columns where needed
+- Add nullable email to `users`
+- Add `body` rename to `admin_messages`
+- Various other additive changes
+
+## Critical Concerns
+
+1. **`community_members.role` migration** (`2024_01_03_000006_alter_community_members_role_enum_table.php`) uses MySQL `MODIFY COLUMN` syntax. **Will fail on sqlite.** Project defaults to `DB_CONNECTION=mysql` so this is not a blocker for production. **Documented in NON_VERCEL_FALLBACK.md if migrating to sqlite for local testing.**
+
+2. **No destructive migrations** in V2 batch. All V1 tables preserved. Safe to apply on existing data.
+
+3. **Spatie permission tables** are created by `2024_01_01_000002_create_permission_tables.php` and use standard Spatie schema. Compatible with Spatie 6.
+
+4. **Soft deletes** added to users only. Other models (Community, Event, Brand, etc.) use status enum + status_changed_at columns instead of soft_deletes. Acceptable since the application semantics are different.
+
+5. **No `drop table` migrations** found in the entire 95-file set.
+
+## Index Recommendations (Phase 2)
+
+- `community_members(community_id, user_id)` — composite index for membership lookups
+- `event_registrations(event_id, user_id)` — already has individual indexes
+- `event_finance_transactions(event_id, created_at)` — for finance aggregation
+- `collaboration_proposals(target_id, status)` — for proposal inbox queries
+- `audit_logs(auditable_type, auditable_id)` — for audit trail lookups
+
+## Migration Run Order
+
+The 95 migrations have date prefixes that ensure correct order. New audit migration `2026_06_27_000001_audit_v1_v2_alignment` runs last by design. `php artisan migrate` from scratch applies them in order; `php artisan migrate:status` shows all `[1] Ran` after a clean apply.

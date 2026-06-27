@@ -1,191 +1,273 @@
-# KomunaID — Module Structure
+# KomunaID Module Structure (Final)
 
-**Last updated:** 2026-06-25
-**Pattern:** Modular monolith (single Laravel app, controllers grouped by role/module)
+## App Layer
 
----
+```
+app/
+├── Http/
+│   ├── Controllers/
+│   │   ├── Auth/                         (5 controllers)
+│   │   │   ├── AccountRestrictedController.php
+│   │   │   ├── AuthenticatedSessionController.php
+│   │   │   ├── DashboardRedirectController.php
+│   │   │   ├── NewPasswordController.php
+│   │   │   ├── OnboardingController.php
+│   │   │   ├── PasswordResetLinkController.php
+│   │   │   └── RegisteredUserController.php
+│   │   ├── Member/                       (14 controllers)
+│   │   │   ├── BookmarkController.php
+│   │   │   ├── CommunityController.php   (= MyCommunityController)
+│   │   │   ├── DashboardController.php
+│   │   │   ├── DonationController.php
+│   │   │   ├── EventChatController.php
+│   │   │   ├── EventController.php
+│   │   │   ├── FriendController.php
+│   │   │   ├── GalleryController.php
+│   │   │   ├── HistoryController.php
+│   │   │   ├── InterestController.php
+│   │   │   ├── MyCommunityController.php
+│   │   │   ├── MyEventController.php
+│   │   │   ├── PremiumDemoController.php
+│   │   │   ├── ProfileController.php
+│   │   │   ├── RoleRequestController.php
+│   │   │   └── WalletController.php
+│   │   ├── CommunityOwner/               (20 controllers)
+│   │   │   ├── CommunityCollaborationController.php
+│   │   │   ├── CommunityController.php
+│   │   │   ├── CommunityWalletController.php
+│   │   │   ├── DashboardController.php
+│   │   │   ├── DonationController.php
+│   │   │   ├── EventChatController.php
+│   │   │   ├── EventController.php
+│   │   │   ├── EventDonationController.php
+│   │   │   ├── EventFinanceController.php
+│   │   │   ├── EventGalleryController.php
+│   │   │   ├── EventParticipantController.php
+│   │   │   ├── EventVolunteerApplicationController.php
+│   │   │   ├── EventVolunteerCampaignController.php
+│   │   │   ├── EventVolunteerController.php
+│   │   │   ├── MemberController.php
+│   │   │   ├── ProposalCollaborationController.php
+│   │   │   ├── RegionController.php
+│   │   │   └── SubgroupController.php
+│   │   ├── BrandOwner/                   (9 controllers)
+│   │   │   ├── BrandController.php
+│   │   │   ├── CampaignController.php
+│   │   │   ├── CollaborationController.php
+│   │   │   ├── CommunityDirectoryController.php
+│   │   │   ├── DashboardController.php
+│   │   │   ├── OwnershipTransferController.php
+│   │   │   ├── ProposalCollaborationController.php
+│   │   │   ├── SettingController.php
+│   │   │   └── StaffController.php
+│   │   ├── CompanyOwner/                 (5 controllers)
+│   │   │   ├── CompanyBrandController.php
+│   │   │   ├── CompanyController.php
+│   │   │   ├── DashboardController.php
+│   │   │   ├── ProposalCollaborationController.php
+│   │   │   └── SettingController.php
+│   │   ├── Public/                       (7 controllers)
+│   │   │   ├── PublicBlogController.php
+│   │   │   ├── PublicCommunityController.php
+│   │   │   ├── PublicContactController.php
+│   │   │   ├── PublicEventController.php
+│   │   │   ├── PublicHomeController.php
+│   │   │   ├── PublicPageController.php
+│   │   │   └── PublicSuggestionController.php
+│   │   ├── Superadmin/                   (25+ controllers)
+│   │   │   ├── AdminChatController.php
+│   │   │   ├── ApprovalCenterController.php
+│   │   │   ├── AuditLogController.php
+│   │   │   ├── BrandController.php
+│   │   │   ├── BrandOwnerController.php
+│   │   │   ├── CategoryController.php
+│   │   │   ├── CollaborationController.php
+│   │   │   ├── CommunityController.php
+│   │   │   ├── CommunityOwnerController.php
+│   │   │   ├── CompanyController.php
+│   │   │   ├── CmsController.php
+│   │   │   ├── DashboardController.php
+│   │   │   ├── DocumentationController.php
+│   │   │   ├── DonationController.php
+│   │   │   ├── EventController.php
+│   │   │   ├── EventTypeController.php
+│   │   │   ├── InterestController.php
+│   │   │   ├── LoginController.php
+│   │   │   ├── LoginLogController.php
+│   │   │   ├── MasterRegionController.php
+│   │   │   ├── MemberController.php
+│   │   │   ├── OwnershipTransferController.php
+│   │   │   ├── PlatformFeeController.php
+│   │   │   ├── RoleRequestController.php
+│   │   │   ├── SettingController.php
+│   │   │   ├── UserController.php
+│   │   │   ├── WalletController.php
+│   │   │   └── Cms/                      (subnamespace, 6 controllers)
+│   │   ├── Shared/
+│   │   │   └── CronController.php
+│   │   └── Controller.php                (base)
+│   ├── Middleware/                       (5 custom)
+│   │   ├── ActiveUser.php
+│   │   ├── EnsureNotBanned.php
+│   │   ├── EnsureNotSuperadmin.php
+│   │   ├── EnsureSuperadmin.php
+│   │   └── VerifyCronToken.php
+│   └── Requests/                         (50+ requests, see below)
+├── Models/                               (60+ models)
+├── Policies/                             (8 policies)
+├── Providers/
+│   ├── AppServiceProvider.php
+│   └── (route discovery only)
+├── Services/
+│   ├── AdminChat/
+│   │   └── AdminChatService.php          (moved from root in R7)
+│   ├── Auth/
+│   │   └── RedirectByRoleService.php
+│   ├── Brand/
+│   ├── Collaboration/
+│   ├── Company/
+│   ├── Documentation/
+│   │   └── DocumentationGeneratorService.php
+│   ├── Event/
+│   ├── Export/
+│   ├── Finance/
+│   │   ├── PlatformFeeService.php
+│   │   └── WalletService.php
+│   └── Premium/
+│       ├── PremiumAccessService.php
+│       └── SubscriptionService.php
+│   (root level, candidates for further organization)
+│   ├── EventFinanceService.php
+│   └── RoleRequestService.php
+└── Shims/
+    └── FactoryShimBootstrap.php          (pre-existing)
+```
 
-## 1. Top-Level Layout
+## Routes Layer
 
-| Layer | Path | Purpose |
-|---|---|---|
-| Controllers | `app/Http/Controllers/{Role}/` | HTTP entry per role |
-| Middleware | `app/Http/Middleware/` | Cross-cutting HTTP filters |
-| Requests | `app/Http/Requests/{Module}/` | Form validation per module |
-| Models | `app/Models/` | Eloquent models (root) |
-| Policies | `app/Policies/` | Authorization per resource |
-| Services | `app/Services/{Domain}/` | Business logic per domain |
-| Enums | `app/Support/Enums/` | String-backed enums for status/role |
-| Helpers | `app/Support/Helpers/` | Pure utility functions |
-| Migrations | `database/migrations/` | Schema versions |
-| Seeders | `database/seeders/{Master\|Demo}/` | Idempotent data |
-| Views | `resources/views/{role}/` | Blade per role |
-| Tests | `tests/{Feature,Unit}/` | Automated tests |
+```
+routes/
+├── web.php                               (35 lines, thin shell)
+├── console.php                           (default Laravel)
+└── modules/
+    ├── public.php                        (7 routes)
+    ├── auth.php                          (8 routes + onboarding + community actions)
+    ├── member.php                        (40+ routes)
+    ├── community-owner.php               (90+ routes)
+    ├── brand-owner.php                   (30+ routes)
+    ├── company-owner.php                 (15+ routes)
+    └── superadmin.php                    (150+ routes)
+```
 
----
+## Resources Layer
 
-## 2. Controller Modules
+```
+resources/
+├── views/
+│   ├── layouts/                          (7 layouts)
+│   ├── components/                       (9 components)
+│   ├── public/                           (public site views)
+│   ├── auth/                             (login, register, etc.)
+│   ├── superadmin/                       (superadmin dashboard, CMS, etc.)
+│   ├── member/                           (member dashboard, etc.)
+│   ├── community-owner/                  (community dashboard, etc.)
+│   ├── brand-owner/                      (brand dashboard, etc.)
+│   ├── company-owner/                    (company dashboard, etc.)
+│   ├── shared/                           (partials)
+│   └── form/                             (form layouts)
+├── css/
+└── js/
+```
 
-### Auth (`app/Http/Controllers/Auth/`)
-- `AuthenticatedSessionController` — login, logout
-- `RegisteredUserController` — register
-- `PasswordResetLinkController` — forgot
-- `NewPasswordController` — reset
-- `OnboardingController` — post-registration routing
-- `RoleRequestController` (if extracted from Onboarding) — role upgrade
-- `DashboardRedirectController` — `/dashboard` → role-specific URL
+## Database Layer
 
-### Public (`app/Http/Controllers/Public/`)
-- `PublicHomeController` — `/`
-- `PublicCommunityController` — `/komunitas`, `/komunitas/{slug}`
-- `PublicEventController` — `/events`, `/events/{slug}`
-- `PublicBlogController` — `/blogs`, `/blogs/{slug}`
-- `PublicPageController` — `/about`, `/contact`
-- `PublicContactController` — `/contact` form
-- `PublicSuggestionController` — `/contact/suggestions`
-- `LanguageController` — `/language/{locale}`
+```
+database/
+├── migrations/                           (96 files: 95 V1+V2 + 1 audit)
+├── seeders/
+│   ├── DatabaseSeeder.php
+│   ├── PermissionSeeder.php
+│   ├── Master/                           (always runs)
+│   │   ├── CmsPageSeeder.php
+│   │   ├── CollaborationTypeSeeder.php
+│   │   ├── CommunityCategorySeeder.php
+│   │   ├── CommunityOwnerSeeder.php
+│   │   ├── CommunitySeeder.php
+│   │   ├── ContactSettingSeeder.php
+│   │   ├── EventTypeSeeder.php
+│   │   ├── FeatureLockSeeder.php
+│   │   ├── HomepageSectionSeeder.php
+│   │   ├── InterestSeeder.php
+│   │   ├── PremiumPlanSeeder.php
+│   │   ├── RegionSeeder.php
+│   │   ├── RoleSeeder.php
+│   │   ├── SuperadminSeeder.php
+│   │   └── WalletTransactionSeeder.php
+│   └── Demo/                             (gated on local)
+│       ├── DemoAdminChatSeeder.php
+│       ├── DemoBrandCompanySeeder.php
+│       ├── DemoCmsContentSeeder.php
+│       ├── DemoCollaborationSeeder.php
+│       ├── DemoCommunitySeeder.php
+│       ├── DemoEventSeeder.php
+│       ├── DemoExtraDataSeeder.php
+│       ├── DemoPremiumTrialSeeder.php
+│       └── DemoUserSeeder.php
+└── factories/                            (9 factories)
+```
 
-### Member (`app/Http/Controllers/Member/`)
-- `DashboardController`
-- `ProfileController`
-- `InterestController`
-- `MyCommunityController`
-- `MyEventController`
-- `EventController` — register, cancel, donate, volunteer
-- `EventChatController`
-- `FriendController`
-- `BookmarkController`
-- `GalleryController`
-- `HistoryController`
-- `WalletController`
-- `DonationController`
-- `RoleRequestController`
+## Tests Layer
 
-### CommunityOwner (`app/Http/Controllers/CommunityOwner/`)
-- `DashboardController`
-- `CommunityController`
-- `MemberController`
-- `RegionController`
-- `SubgroupController`
-- `EventController` (rich: registrations, donations, finance, galleries, chats, volunteer-campaigns)
-- `EventRegistrationController` (or merged into Event)
-- `EventDonationController`
-- `EventFinanceController`
-- `EventGalleryController`
-- `EventChatController`
-- `EventVolunteerController`
-- `EventParticipantController`
-- `DonationController` (community donation confirm — legacy)
-- `CommunityWalletController`
-- `CommunityCollaborationController`
-- `ProposalCollaborationController`
+```
+tests/
+├── CreatesApplication.php
+├── TestCase.php
+├── Feature/                              (26 feature tests)
+│   ├── AdminChatTest.php
+│   ├── AuthTest.php
+│   ├── BannedAndSuspendedTest.php        (NEW in R10)
+│   ├── BrandCompanyCollaborationTest.php
+│   ├── CmsPolicyTest.php
+│   ├── CommunityModuleTest.php
+│   ├── CompanyPolicyTest.php
+│   ├── CronRouteTest.php
+│   ├── DocumentationGeneratorTest.php
+│   ├── DocumentationPolicyTest.php
+│   ├── EventFinanceServiceTest.php
+│   ├── EventModuleTest.php
+│   ├── HttpPolicyEnforcementTest.php
+│   ├── MemberModuleTest.php
+│   ├── MultilanguageTest.php
+│   ├── PremiumFeatureTest.php
+│   ├── PublicPageTest.php
+│   ├── RoleAccessTest.php
+│   ├── RouteNamingTest.php               (NEW in R10)
+│   ├── SecurityTest.php
+│   └── SuperadminDashboardTest.php
+└── Unit/                                 (1 unit test)
+    └── RedirectByRoleServiceTest.php
+```
 
-### BrandOwner (`app/Http/Controllers/BrandOwner/`)
-- `DashboardController`
-- `BrandController`
-- `StaffController`
-- `CampaignController`
-- `CollaborationController` (legacy)
-- `ProposalCollaborationController` (v2)
-- `CommunityDirectoryController`
-- `OwnershipTransferController`
-- `SettingController`
+## Docs Layer
 
-### CompanyOwner (`app/Http/Controllers/CompanyOwner/`)
-- `DashboardController`
-- `CompanyController`
-- `CompanyBrandController`
-- `ProposalCollaborationController`
-- `SettingController`
-
-### Superadmin (`app/Http/Controllers/Superadmin/`)
-- `DashboardController`
-- `UserController` — generic
-- `MemberController`
-- `CommunityOwnerController`
-- `BrandOwnerController`
-- `CommunityController`
-- `EventController`
-- `BrandController`
-- `CompanyController`
-- `CollaborationController` (v2 proposals)
-- `ApprovalCenterController` — central approve/reject hub
-- `RoleRequestController`
-- `CategoryController`
-- `MasterRegionController`
-- `EventTypeController`
-- `InterestController` (master data)
-- `AuditLogController`
-- `LoginLogController`
-- `WalletController` — adjust balances
-- `DonationController` — confirm
-- `PlatformFeeController`
-- `AdminChatController`
-- `DocumentationController`
-- `SettingController`
-- `Cms\SuperadminCmsDashboardController`
-- `Cms\SuperadminBlogController`
-- `Cms\SuperadminPageController`
-- `Cms\SuperadminContactSettingController`
-- `Cms\SuperadminHomepageSectionController`
-- `Cms\SuperadminSuggestionController`
-
-### Shared (`app/Http/Controllers/Shared/`) — NEW
-- `CronController` — `/api/cron/scheduler`
-
----
-
-## 3. Model Modules
-
-| Domain | Models |
-|---|---|
-| Identity | `User`, `Profile`, `RoleRequest`, `LoginLog`, `AuditLog` |
-| Community | `Community`, `CommunityCategory`, `CommunityMember`, `CommunityMemberRole`, `CommunityInternalRole`, `CommunityManagement`, `CommunityVolunteer`, `CommunityCampaign`, `CommunityCampaignApplication`, `CommunityRegion`, `CommunitySubgroup`, `CommunityBan`, `CommunityOwnershipTransfer`, `MemberJoinHistory` |
-| Event | `Event`, `EventType`, `EventRegistration`, `EventPaymentConfirmation`, `EventGallery`, `EventChat`, `EventChatThread`, `EventVolunteer`, `EventVolunteerCampaign`, `EventVolunteerApplication`, `EventDonation`, `EventFinanceTransaction`, `EventFinanceSummary` |
-| Brand | `Brand`, `BrandMember`, `BrandOwnershipTransfer` |
-| Company | `Company`, `CompanyBrandMember` |
-| Collaboration | `CollaborationRequest` (legacy V1), `CollaborationProposal` (v2), `CollaborationType` |
-| Donation/Finance | `Donation` (legacy V1), `Wallet`, `WalletTransaction`, `PlatformFee` |
-| Premium | `PremiumPlan`, `Subscription`, `FeatureLock`, `FeatureUsage` |
-| CMS | `CmsPage`, `Blog`, `HomepageSection`, `ContactSetting`, `Suggestion` |
-| Admin Chat | `AdminConversation`, `AdminConversationParticipant`, `AdminMessage` |
-| Documentation | `DocumentationFile` |
-| Multilanguage | `Translation`, `Region` (v2), `MasterRegion` (legacy V1) |
-| Member extras | `Friend` (Friendship), `CommunityBookmark`, `MemberGallery`, `MemberHistory`, `Interest` |
-| Misc | `ApprovalLog`, `CustomNotification`, `Campaign` (V1 brand-level) |
-
----
-
-## 4. Service Layer
-
-- `app/Services/Auth/RedirectByRoleService.php`
-- `app/Services/Auth/RoleRequestService.php` (NEW)
-- `app/Services/Documentation/DocumentationGeneratorService.php`
-- `app/Services/Premium/PremiumAccessService.php` (NEW)
-- `app/Services/Event/EventFinanceService.php` (NEW)
-
----
-
-## 5. Middleware
-
-| Alias | Class | Purpose |
-|---|---|---|
-| `role` | Spatie | role check |
-| `permission` | Spatie | permission check |
-| `role_or_permission` | Spatie | either |
-| `admin` | EnsureSuperadmin | superadmin OR admin_platform |
-| `not.superadmin` | EnsureNotSuperadmin | block superadmin from user auth flows |
-| `active_user` | ActiveUser | status = active |
-| `not.banned` | EnsureNotBanned | status != banned/suspended |
-| `cron.token` | VerifyCronToken (NEW) | match `?token=` to `CRON_SECRET` |
-
----
-
-## 6. Cross-Cutting Concerns
-
-- **Logging:** `storage/logs/laravel.log` locally; `LOG_CHANNEL=stderr` on Vercel.
-- **File upload:** local disk in dev; S3 (R2) in production.
-- **Multilanguage:** `setlocale` middleware; `trans()` helper; `translations` table fallback.
-- **Premium gating:** `FeatureLock::isLocked($featureKey)` consulted in controllers/views.
-- **Admin Chat:** RESTful POST + reload; no WebSocket.
-- **Documentation:** rendered from `routes/`, migrations, models → stored in `documentation_files` table.
+```
+docs/
+├── architecture/
+│   ├── ARCHITECTURE_AUDIT_V1_V2.md       (18-section audit)
+│   ├── BASELINE.md                       (R0 snapshot)
+│   ├── COVERAGE_MATRIX_V1_V2.md          (24-row module matrix)
+│   ├── DATABASE_REVIEW.md                (data dictionary)
+│   ├── HANDOVER_REFACTOR_SUMMARY.md      (exec summary)
+│   ├── MODULE_STRUCTURE.md               (this file)
+│   ├── REFACTOR_BLUEPRINT.md             (final blueprint)
+│   ├── REFACTOR_EXECUTION_REPORT.md      (what was changed)
+│   ├── REFACTOR_TEST_RESULT.md           (test result table)
+│   ├── ROLE_PERMISSION_REVIEW.md         (role × permission matrix)
+│   └── ROUTE_STRUCTURE.md                (final route table)
+├── deployment/
+│   ├── DEPLOYMENT_RECOMMENDATION.md      (final recommendation)
+│   ├── NON_VERCEL_FALLBACK.md            (Forge/Ploi/RunCloud/cPanel)
+│   └── VERCEL_HARDENING.md               (Vercel env checklist)
+└── qa/
+    └── REFACTOR_TEST_RESULT.md           (test result)
+```

@@ -1,110 +1,119 @@
-# KomunaID — Role & Permission Review
+# KomunaID Role & Permission Review
 
-**Last updated:** 2026-06-25
-**Source of truth:** Spatie Laravel Permission
+## Roles (defined via Spatie Permission)
 
----
+| Role | Created By | Permissions | Description |
+|---|---|---|---|
+| `superadmin` | SuperadminSeeder | All permissions via Gate | Platform-level administrator. Full access. |
+| `platform_admin` | (role not yet seeded) | TBD | Operational admin (mid-tier). Tested in RedirectByRoleServiceTest. |
+| `admin` | (alias for superadmin) | All | Legacy alias. |
+| `member` | RoleSeeder | Public + member features | Default role for new users. |
+| `community_owner` | RoleSeeder | Community owner features | Owner of a Community. |
+| `community_pengurus` | (role name) | TBD | Internal community management role. Defined in code; not actively seeded. |
+| `community_volunteer` | (role name) | TBD | Volunteer within a community. |
+| `brand_owner` | RoleSeeder | Brand owner features | Owner of a Brand. |
+| `brand_staff` | RoleSeeder | Limited brand features | Staff member of a Brand. |
+| `company_owner` | RoleSeeder | Company owner features | Owner of a Company. |
+| `event_volunteer` | (role name) | TBD | Volunteer for a specific event. |
 
-## 1. Roles
+## Permission Model
 
-| Role | Guard | Description |
+- **Library:** Spatie Laravel Permission 6.25.0
+- **Storage:** 5 Spatie tables (`permissions`, `roles`, `model_has_permissions`, `model_has_roles`, `role_has_permissions`)
+- **Default guard:** `web`
+- **Super admin:** Implicit (any user with `superadmin` role bypasses Gate checks)
+- **Custom middleware aliases** (in `bootstrap/app.php`):
+  - `role` → `Spatie\Permission\Middleware\RoleMiddleware`
+  - `permission` → `Spatie\Permission\Middleware\PermissionMiddleware`
+  - `role_or_permission` → `Spatie\Permission\Middleware\RoleOrPermissionMiddleware`
+
+## Custom Middleware (KomunaID-specific)
+
+| Alias | Class | Behavior |
 |---|---|---|
-| `superadmin` | web | Full access. Bypasses all policies. |
-| `admin_platform` | web | Operational admin (approval center, audit logs, login logs, master data). |
-| `member` | web | Default post-registration role. Access to member dashboard. |
-| `community_owner` | web | Owns one or more communities. Access to community-owner dashboard. |
-| `community_pengurus` | web | Community management role (internal structure). |
-| `community_volunteer` | web | Community-level volunteer. |
-| `brand_owner` | web | Owns one or more brands. Access to brand-owner dashboard. |
-| `company_owner` | web | Owns one or more companies. Access to company-owner dashboard. |
-| `event_volunteer` | web | Event-level volunteer. |
+| `admin` | `App\Http\Middleware\EnsureSuperadmin` | User must have `superadmin` role. |
+| `not.superadmin` | `App\Http\Middleware\EnsureNotSuperadmin` | User must NOT have `superadmin` role. |
+| `active_user` | `App\Http\Middleware\ActiveUser` | User authenticated, not banned (`banned_at` null, `status != 'banned'`, `status != 'suspended'`). |
+| `not.banned` | `App\Http\Middleware\EnsureNotBanned` | User authenticated and not banned/suspended. Redirects to `account.restricted` if banned. |
+| `cron.token` | `App\Http\Middleware\VerifyCronToken` | Validates `?token=` query param against `CRON_SECRET` env var. |
 
----
+## Route → Role → Middleware Matrix
 
-## 2. Account State (Custom `users.status`)
-
-| Status | Effect |
-|---|---|
-| `active` | Normal access |
-| `banned` | Blocked at login + middleware `not.banned` rejects. Logged in `login_logs`. |
-| `suspended` | Same as banned (shorter, time-bound in concept). |
-
----
-
-## 3. Middleware Enforcement
-
-| Alias | Class | Used For |
+| Route Group | Middleware | Required Role |
 |---|---|---|
-| `auth` | Laravel | All authenticated routes |
-| `guest` | Laravel | Login/register/forgot/reset |
-| `role:{name}` | Spatie | Single role |
-| `role:{r1}\|{r2}` | Spatie | Multiple roles (OR) |
-| `permission:{perm}` | Spatie | Single permission |
-| `admin` | EnsureSuperadmin | superadmin OR admin_platform |
-| `not.superadmin` | EnsureNotSuperadmin | Block superadmin from user auth |
-| `active_user` | ActiveUser | status = active |
-| `not.banned` | EnsureNotBanned | status != banned/suspended |
-| `cron.token` | VerifyCronToken (NEW) | Match `?token=` to `CRON_SECRET` |
+| `/` `/about` `/contact` `/blogs/*` `/komunitas` `/events` | web | (none) |
+| `/login` `/register` `/forgot-password` `/reset-password/*` | web, guest | (none) |
+| `/admin/login` | web, guest | (none) |
+| `/admin/logout` | web, auth | superadmin |
+| `/account-restricted` | web | (none) |
+| `/dashboard` | web, auth | any auth |
+| `/onboarding/*` | web, auth | any auth |
+| `/komunitas/{slug}/(join\|leave\|report)` | web, auth, active_user | any auth |
+| `/member/*` | web, auth, active_user | any auth (incl. member) |
+| `/community-own/*` | web, auth, active_user, not.banned, role:community_owner | community_owner |
+| `/brand/*` | web, auth, active_user, not.banned, role:brand_owner\|brand_staff | brand_owner OR brand_staff |
+| `/company-owner/*` | web, auth, active_user, not.banned, role:company_owner\|superadmin | company_owner OR superadmin |
+| `/superadmin/*` | web, auth, admin (EnsureSuperadmin) | superadmin |
+| `/api/cron/scheduler` | web, cron.token | (token in env) |
 
----
+## Policies (registered in `AppServiceProvider::boot()`)
 
-## 4. Route → Role Mapping
-
-| Route Group | Allowed Roles |
-|---|---|
-| `/` `/komunitas` `/events` `/blogs` `/about` `/contact` `/language/*` | (guest) |
-| `/login` `/register` `/forgot-password` `/reset-password/*` | (guest) |
-| `/dashboard` `/onboarding/*` | auth |
-| `/member/*` | `member` \| `admin_platform` \| `superadmin` |
-| `/community-own/*` | `community_owner` \| `admin_platform` \| `superadmin` |
-| `/brand/*` | `brand_owner` \| `admin_platform` \| `superadmin` |
-| `/company-owner/*` | `company_owner` \| `admin_platform` \| `superadmin` |
-| `/superadmin/*` | `superadmin` \| `admin_platform` |
-| `/api/cron/scheduler` | token-protected (any IP, valid token) |
-
----
-
-## 5. Policies
-
-| Policy | Resource | Used In |
+| Model | Policy | Notes |
 |---|---|---|
-| `CommunityPolicy` | `Community` | `CommunityController@update`, `MemberController`, `RegionController`, `SubgroupController`, `EventController` (community scope) |
-| `EventPolicy` | `Event` | `EventController` actions (publish, cancel, archive) |
-| `BrandPolicy` | `Brand` | `BrandController` actions (update, destroy, staff) |
-| `CollaborationRequestPolicy` | `CollaborationRequest` | V1 accept/reject/cancel/complete |
-| `AdminConversationPolicy` | `AdminConversation` | `AdminChatController` (superadmin only in practice) |
+| Community | CommunityPolicy | view, update, delete, manage-members |
+| Brand | BrandPolicy | view, update, delete, manage-staff |
+| Event | EventPolicy | view, register, cancel, manage |
+| CollaborationRequest | CollaborationRequestPolicy | accept, reject, complete |
+| Company | CompanyPolicy | view, update, manage-brands |
+| Blog | CmsPolicy | view, create, update, delete |
+| HomepageSection | CmsPolicy | manage |
+| ContactSetting | CmsPolicy | update |
+| Suggestion | CmsPolicy | review, archive |
+| DocumentationFile | DocumentationPolicy | view, generate, download, delete |
 
-**Missing (Phase 2 / optional):**
-- `CompanyPolicy` — currently role middleware only
-- `CmsPolicy` — superadmin only
-- `DocumentationPolicy` — superadmin only
-- `CollaborationProposalPolicy` — currently role middleware only
+## RedirectByRoleService Logic
 
----
+Priority (highest to lowest):
 
-## 6. Role Request Flow
+1. `banned_at` is set → `/account-restricted`
+2. `status == 'suspended' || 'banned'` → `/account-restricted`
+3. `superadmin` role → `/superadmin/dashboard`
+4. `platform_admin` role → `/superadmin/dashboard`
+5. `company_owner` role → `/company-owner/dashboard`
+6. `brand_owner` OR `brand_staff` role → `/brand/dashboard`
+7. `community_owner` role → `/community/dashboard` (note: community module is at `/community-own` URL, but route name is `community.dashboard`)
+8. `community_admin` OR `community_staff` role → `/member/dashboard`
+9. `community_volunteer` role → `/member/dashboard`
+10. `event_volunteer` role → `/member/dashboard`
+11. `member` role → `/member/dashboard`
+12. (no role) → `/onboarding`
 
-1. User registers → `member` role assigned (auto).
-2. User logs in → redirected to `/member/dashboard`.
-3. User visits `/onboarding/role-request` → chooses target role (`community_owner`, `brand_owner`, `company_owner`).
-4. POST `/onboarding/role-request` → `role_requests` row created with status `pending`.
-5. Superadmin visits `/superadmin/role-requests` → approve/reject.
-6. On approve → `RoleRequestService` (NEW) updates status, assigns Spatie role, logs to `approval_logs`.
-7. On reject → status `rejected` with note; user notified (Phase 2: email).
+## Role Request Flow
 
----
+1. User logs in with no role (or `member` role) → goes to `/onboarding`
+2. Submits a role request via `/onboarding/role-request` POST
+3. `RoleRequest` model row created with `status='pending'`
+4. Superadmin sees it in `/superadmin/approval-center` and `/superadmin/role-requests`
+5. Superadmin approves via POST `/superadmin/role-requests/{id}/approve`
+6. Service:
+   - Updates `RoleRequest.status = 'approved'`
+   - Calls `$user->assignRole($requestedRole)` (Spatie)
+   - Logs to `audit_logs` and `approval_logs`
+7. User redirected to `DashboardRedirectController` which uses `RedirectByRoleService` to land on the right dashboard
 
-## 7. Banned/Suspended Handling
+## Test Coverage
 
-- Login attempt → `EnsureNotBanned` blocks.
-- Authenticated request to dashboard → `not.banned` middleware redirects to `/account/restricted`.
-- Superadmin can change `users.status` from `/superadmin/members/{user}` (POST `ban`/`activate`/`suspend`).
+- `tests/Unit/RedirectByRoleServiceTest.php` — 9 tests covering all role branches
+- `tests/Feature/RoleAccessTest.php` — role-based route access
+- `tests/Feature/AuthTest.php` — register assigns `member` role automatically
+- `tests/Feature/HttpPolicyEnforcementTest.php` — superadmin can access any company
+- `tests/Feature/CmsPolicyTest.php` — CMS policy enforcement
+- `tests/Feature/CompanyPolicyTest.php` — company policy enforcement
+- `tests/Feature/DocumentationPolicyTest.php` — documentation policy
+- `tests/Feature/SecurityTest.php` — general security
+- `tests/Feature/BannedAndSuspendedTest.php` — banned user blocked (NEW in R10)
 
----
+## Known Issues / Phase 2
 
-## 8. Tests Covering Role Access
-
-- `Tests\Feature\RoleAccessTest` — 13 tests covering all role boundaries.
-- `Tests\Feature\SecurityTest` — 4 tests for banned/suspended.
-- `Tests\Feature\AuthTest` — banned cannot login, suspended cannot login.
-- `Tests\Feature\RedirectByRoleServiceTest` — 10 unit tests for redirect logic per role/status.
+- `platform_admin`, `community_pengurus`, `community_volunteer`, `event_volunteer` roles are referenced in code but not seeded in `Master/RoleSeeder.php`. New users cannot get these roles via the standard flow. Acceptable for MVP since the redirect service handles them gracefully.
+- Permission strings (not just role names) are not heavily used. Code mostly relies on `role:` middleware rather than granular `permission:` checks. Spatie infrastructure is in place but underutilized. **Phase 2:** add granular permissions for `create-community`, `manage-events`, `export-finance`, etc.
