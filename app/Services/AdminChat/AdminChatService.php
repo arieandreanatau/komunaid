@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\AdminChat;
 
 use App\Models\AdminConversation;
 use App\Models\AdminConversationParticipant;

@@ -126,65 +126,77 @@ class CommunityOwnerSeeder extends Seeder
         $member = User::where('email', 'member@komuna.id')->first();
         $superadmin = User::where('email', 'superadmin@komuna.id')->first();
 
-        // Member joins gaming community
-        $existingMember = CommunityMember::where('community_id', $gamingCommunity->id)
-            ->where('user_id', $member->id)
-            ->first();
-
-        if (!$existingMember) {
-            CommunityMember::create([
+        // Member joins gaming community (idempotent)
+        CommunityMember::firstOrCreate(
+            [
                 'community_id' => $gamingCommunity->id,
                 'user_id' => $member->id,
+            ],
+            [
                 'role' => 'volunteer',
                 'status' => 'active',
                 'joined_at' => Carbon::now()->subDays(30),
-            ]);
+            ]
+        );
 
-            CommunityMemberRole::create([
+        CommunityMemberRole::firstOrCreate(
+            [
                 'community_id' => $gamingCommunity->id,
                 'user_id' => $member->id,
                 'role' => 'volunteer',
+            ],
+            [
                 'assigned_by' => $owner2->id,
                 'assigned_at' => Carbon::now()->subDays(20),
-            ]);
+            ]
+        );
 
-            MemberJoinHistory::create([
+        MemberJoinHistory::firstOrCreate(
+            [
                 'community_id' => $gamingCommunity->id,
                 'user_id' => $member->id,
                 'action' => 'joined',
+            ],
+            [
                 'acted_at' => Carbon::now()->subDays(30),
-            ]);
-        }
+            ]
+        );
 
-        // Superadmin joins gaming community as admin
-        $existingAdmin = CommunityMember::where('community_id', $gamingCommunity->id)
-            ->where('user_id', $superadmin->id)
-            ->first();
-
-        if (!$existingAdmin) {
-            CommunityMember::create([
+        // Superadmin joins gaming community as admin (idempotent)
+        CommunityMember::firstOrCreate(
+            [
                 'community_id' => $gamingCommunity->id,
                 'user_id' => $superadmin->id,
+            ],
+            [
                 'role' => 'admin',
                 'status' => 'active',
                 'joined_at' => Carbon::now()->subDays(45),
-            ]);
+            ]
+        );
 
-            CommunityMemberRole::create([
+        CommunityMemberRole::firstOrCreate(
+            [
                 'community_id' => $gamingCommunity->id,
                 'user_id' => $superadmin->id,
                 'role' => 'admin',
+            ],
+            [
                 'assigned_by' => $owner2->id,
                 'assigned_at' => Carbon::now()->subDays(40),
-            ]);
+            ]
+        );
 
-            MemberJoinHistory::create([
+        MemberJoinHistory::firstOrCreate(
+            [
                 'community_id' => $gamingCommunity->id,
                 'user_id' => $superadmin->id,
                 'action' => 'joined',
+            ],
+            [
                 'acted_at' => Carbon::now()->subDays(45),
-            ]);
-        }
+            ]
+        );
 
         // Create rejected community
         Community::updateOrCreate(

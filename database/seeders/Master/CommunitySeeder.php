@@ -118,26 +118,28 @@ class CommunitySeeder extends Seeder
             );
 
             if ($index < 3 && $member) {
-                $existing = CommunityMember::where('community_id', $community->id)
-                    ->where('user_id', $member->id)
-                    ->first();
-
-                if (!$existing) {
-                    CommunityMember::create([
+                CommunityMember::firstOrCreate(
+                    [
                         'community_id' => $community->id,
                         'user_id' => $member->id,
+                    ],
+                    [
                         'role' => 'member',
                         'status' => 'active',
                         'joined_at' => Carbon::now()->subDays(rand(10, 60)),
-                    ]);
+                    ]
+                );
 
-                    MemberJoinHistory::create([
+                MemberJoinHistory::firstOrCreate(
+                    [
                         'community_id' => $community->id,
                         'user_id' => $member->id,
                         'action' => 'joined',
+                    ],
+                    [
                         'acted_at' => Carbon::now()->subDays(rand(10, 60)),
-                    ]);
-                }
+                    ]
+                );
             }
         }
     }
