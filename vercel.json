@@ -16,6 +16,19 @@
       "maxDuration": 60
     }
   },
+  "routes": [
+    {
+      "src": "/build/(.*)",
+      "headers": {
+        "Cache-Control": "public, max-age=31536000, immutable"
+      },
+      "dest": "/api/static.php"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/api/index.php"
+    }
+  ],
   "crons": [
     {
       "path": "/api/cron/scheduler?token=__CRON_SECRET__",
