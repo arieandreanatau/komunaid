@@ -59,4 +59,43 @@ class SettingController extends Controller
 
         return back()->with('success', 'Password berhasil diubah.');
     }
+
+    public function resetDemoPasswords(Request $request)
+    {
+        $request->validate([
+            'password' => 'required|string|min:4|max:255',
+        ]);
+
+        $demoEmails = [
+            'superadmin@komuna.test',
+            'admin@komuna.test',
+            'member@komuna.test',
+            'community.owner@komuna.test',
+            'brand.owner@komuna.test',
+            'company.owner@komuna.test',
+            'banned@komuna.test',
+            'suspended@komuna.test',
+        ];
+
+        $count = 0;
+        $emails = [];
+        foreach ($demoEmails as $email) {
+            $u = User::where('email', $email)->first();
+            if ($u) {
+                $u->update(['password' => Hash::make($request->input('password'))]);
+                $emails[] = $email;
+                $count++;
+            }
+        }
+
+        AuditLog::log(
+            'demo_passwords_reset',
+            auth()->user(),
+            'Password akun demo di-reset',
+            null,
+            ['emails' => $emails, 'count' => $count]
+        );
+
+        return back()->with('success', "Password {$count} akun demo berhasil direset.");
+    }
 }

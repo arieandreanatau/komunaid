@@ -205,6 +205,7 @@ Route::prefix('superadmin')->name('superadmin.')->middleware('admin')->group(fun
     Route::put('/settings/profile', [SuperadminSettingController::class, 'updateProfile'])->name('settings.profile.update');
     Route::get('/settings/password', [SuperadminSettingController::class, 'editPassword'])->name('settings.password');
     Route::put('/settings/password', [SuperadminSettingController::class, 'updatePassword'])->name('settings.password.update');
+    Route::post('/settings/reset-demo-passwords', [SuperadminSettingController::class, 'resetDemoPasswords'])->name('settings.reset-demo-passwords');
 
     // Master Data
     Route::get('/master-data', [SuperadminInterestController::class, 'masterDataIndex'])->name('master-data.index');
