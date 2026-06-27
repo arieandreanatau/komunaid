@@ -8,9 +8,15 @@ require __DIR__ . '/../vendor/autoload.php';
 
 // On Vercel the project filesystem is read-only; only /tmp is writable.
 // We redirect:
-//  - storage/             → /tmp/storage    (Laravel runtime writable paths)
-//  - bootstrap/cache/     → /tmp/bootcache  (Laravel writes services.php, packages.php,
-//                                            config.php, route-v7.php, view cache here)
+//  - storage/             → /tmp/storage         (Laravel runtime writable paths)
+//  - bootstrap/cache/     → /tmp/storage/bootstrap/cache/  (Laravel writes
+//                                                   services.php, packages.php,
+//                                                   config.php, route-v7.php,
+//                                                   view cache here)
+//
+// We do NOT call useCachePath() because it does not exist on
+// Illuminate\Foundation\Application (the Laravel team exposes
+// useBootstrapPath which covers the cache directory).
 if (getenv('VERCEL') || getenv('VERCEL_ENV')) {
     $storage = '/tmp/storage';
     foreach ([
@@ -19,24 +25,18 @@ if (getenv('VERCEL') || getenv('VERCEL_ENV')) {
         $storage . '/framework/sessions',
         $storage . '/logs',
         $storage . '/app/public',
+        $storage . '/bootstrap/cache', // services.php, packages.php, config.php, route-v7.php
     ] as $dir) {
         if (! is_dir($dir)) {
             @mkdir($dir, 0755, true);
         }
     }
 
-    $bootCache = '/tmp/bootcache';
-    if (! is_dir($bootCache)) {
-        @mkdir($bootCache, 0755, true);
-    }
-
-    // Override the framework cache path BEFORE the app boots so any
-    // Cache::store('file') or FileCache writes go to /tmp.
+    // Override the framework writable paths BEFORE the app boots.
     $app = require __DIR__ . '/../bootstrap/app.php';
 
     $app->useStoragePath($storage);
     $app->useBootstrapPath($storage . '/bootstrap');
-    $app->useCachePath($bootCache);
 } else {
     $app = require __DIR__ . '/../bootstrap/app.php';
 }
