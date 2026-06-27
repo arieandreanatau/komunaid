@@ -6,35 +6,32 @@ declare(strict_types=1);
 |--------------------------------------------------------------------------
 | Static Asset Server
 |--------------------------------------------------------------------------
-| The Vercel PHP runtime (vercel-php@0.8.0) does NOT serve files from
-| the outputDirectory (public/) for URLs that have a function registered.
-| Since api/index.php is registered as the default handler, every URL
-| gets routed to it - including /build/manifest.json, /build/assets/*.js
-| and /build/assets/*.css - which then return the full HTML page instead
-| of the JS/CSS the browser is asking for.
-|
-| This script acts as a manual static file server for /build/* paths:
-| - Strips the /build/ prefix
-| - Reads the file from public/build/<path>
-| - Sets the right Content-Type
-| - Sends a Cache-Control header for long-term caching
-|
-| It is wired up in vercel.json with a route that matches /build/(.*)
-| BEFORE the catch-all that routes to api/index.php.
-|
-| IMPORTANT: This file is ONLY loaded when the route matches. For
-| non-build paths, the normal api/index.php handles the request.
+| Vercel PHP runtime does not auto-serve /build/*, /assets/*, or
+| /favicon.ico from the outputDirectory (public/). This script serves
+| those paths directly from public/.
 */
 
 $uri = urldecode(
     parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/'
 );
 
-$path = preg_replace('#^/build/#', '', $uri);
-$fullPath = __DIR__ . '/../public/build/' . $path;
+if ($uri === '/favicon.ico') {
+    $base = __DIR__ . '/../public/assets';
+    $path = 'brand/komunaid-logo-full.png';
+} elseif (str_starts_with($uri, '/build/')) {
+    $base = __DIR__ . '/../public/build';
+    $path = preg_replace('#^/build/#', '', $uri);
+} elseif (str_starts_with($uri, '/assets/')) {
+    $base = __DIR__ . '/../public/assets';
+    $path = preg_replace('#^/assets/#', '', $uri);
+} else {
+    http_response_code(404);
+    echo "404 Not Found";
+    return;
+}
 
-// Path traversal protection
-$realBase = realpath(__DIR__ . '/../public/build');
+$fullPath = $base . '/' . $path;
+$realBase = realpath($base);
 $realPath = realpath($fullPath);
 
 if (
@@ -49,7 +46,6 @@ if (
     return;
 }
 
-// MIME type detection
 $extension = strtolower(pathinfo($realPath, PATHINFO_EXTENSION));
 $mimeTypes = [
     'js'    => 'application/javascript; charset=utf-8',

@@ -56,15 +56,21 @@ if (getenv('VERCEL') || getenv('VERCEL_ENV')) {
 // may place files at different paths depending on outputDirectory config.
 $uri = urldecode(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/');
 
-if (preg_match('#^/build/(.*)$#', $uri, $matches)) {
-    $path = $matches[1];
+if (preg_match('#^/build/(.*)$#', $uri, $matches) || preg_match('#^/assets/(.*)$#', $uri, $matches) || $uri === '/favicon.ico') {
+    if ($uri === '/favicon.ico') {
+        $path = 'brand/komunaid-logo-full.png';
+        $prefix = '/assets/';
+    } else {
+        $path = $matches[1];
+        $prefix = str_starts_with($uri, '/build/') ? '/build/' : '/assets/';
+    }
 
-    // Try multiple candidate locations for the build files
+    // Try multiple candidate locations for the build/assets files
     $candidates = [
-        __DIR__ . '/../public/build/' . $path,
-        __DIR__ . '/../build/' . $path,
-        __DIR__ . '/public/build/' . $path,
-        __DIR__ . '/build/' . $path,
+        __DIR__ . '/../public' . $prefix . $path,
+        __DIR__ . '/../' . ltrim($prefix, '/') . $path,
+        __DIR__ . '/public' . $prefix . $path,
+        __DIR__ . '/' . ltrim($prefix, '/') . $path,
     ];
 
     $resolved = null;
