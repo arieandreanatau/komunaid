@@ -6,11 +6,26 @@
 /bootstrap/cache/packages.php
 /bootstrap/cache/services.php
 # /vendor
+
+# Local development (XAMPP)
 .env
-.env.backup
+.env.local
+.env.*.local
+
+# Production / Hostinger
 .env.production
+.env.staging
+.env.*.production
+
+# Backups
+.env.backup
+.env.bak
+
+# PHP & tests
 .phpunit.result.cache
 /phpunit.xml
+
+# IDE / config
 Homestead.json
 Homestead.yaml
 auth.json
@@ -20,5 +35,7 @@ yarn-error.log
 /.idea
 /.vscode
 .vercel
-.env*
+
+# Dev tools
 /check_dup_routes.php
+/.kilo
