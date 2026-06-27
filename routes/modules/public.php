@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Public\LanguageController;
 use App\Http\Controllers\Public\PublicBlogController;
 use App\Http\Controllers\Public\PublicCommunityController;
 use App\Http\Controllers\Public\PublicContactController;
@@ -33,3 +34,6 @@ Route::get('/komunitas', [PublicCommunityController::class, 'index'])->name('com
 Route::get('/komunitas/{slug}', [PublicCommunityController::class, 'show'])->name('communities.detail');
 Route::get('/events', [PublicEventController::class, 'index'])->name('events.index');
 Route::get('/events/{slug}', [PublicEventController::class, 'show'])->name('events.show');
+
+// Language switcher
+Route::get('/language/{locale}', LanguageController::class)->name('language.switch');

@@ -10,6 +10,7 @@
 .env.backup
 .env.production
 .phpunit.result.cache
+/phpunit.xml
 Homestead.json
 Homestead.yaml
 auth.json
@@ -20,3 +21,4 @@ yarn-error.log
 /.vscode
 .vercel
 .env*
+/check_dup_routes.php

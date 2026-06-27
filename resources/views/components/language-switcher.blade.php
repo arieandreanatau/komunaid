@@ -1,6 +1,6 @@
 @php
     $current = app()->getLocale();
-    $available = ['id' => 'Indonesia', 'en' => 'English', 'sund' => 'Sunda'];
+    $available = ['id' => 'Bahasa Indonesia', 'en' => 'English'];
 @endphp
 
 <div class="relative inline-block text-left">

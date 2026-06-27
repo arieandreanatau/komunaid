@@ -15,6 +15,7 @@
                 </div>
             </div>
             <div class="flex items-center space-x-3">
+                <x-language-switcher />
                 @auth
                     <div class="hidden sm:flex items-center space-x-3">
                         @if(auth()->user()->hasRole('superadmin'))
@@ -51,6 +52,9 @@
                 <div class="border-t border-komuna-border pt-3 mt-3 space-y-2">
                     <a href="{{ route('login') }}" class="block px-3 py-2 rounded-lg text-sm font-medium text-komuna-text hover:bg-komuna-light/50">Login</a>
                     <a href="{{ route('register') }}" class="block px-3 py-2 rounded-lg text-sm font-semibold text-white bg-komuna-coral hover:bg-komuna-coral-dark text-center">Gabung Sekarang</a>
+                </div>
+                <div class="border-t border-komuna-border pt-3 mt-3">
+                    <x-language-switcher />
                 </div>
             @else
                 <div class="border-t border-komuna-border pt-3 mt-3">

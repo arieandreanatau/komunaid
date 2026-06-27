@@ -272,7 +272,7 @@ return array(
     'App\\Policies\\EventPolicy' => $baseDir . '/app/Policies/EventPolicy.php',
     'App\\Providers\\AppServiceProvider' => $baseDir . '/app/Providers/AppServiceProvider.php',
     'App\\Providers\\RouteServiceProvider' => $baseDir . '/app/Providers/RouteServiceProvider.php',
-    'App\\Services\\AdminChatService' => $baseDir . '/app/Services/AdminChatService.php',
+    'App\\Services\\AdminChat\\AdminChatService' => $baseDir . '/app/Services/AdminChat/AdminChatService.php',
     'App\\Services\\Auth\\RedirectByRoleService' => $baseDir . '/app/Services/Auth/RedirectByRoleService.php',
     'App\\Services\\Auth\\RoleRequestService' => $baseDir . '/app/Services/Auth/RoleRequestService.php',
     'App\\Services\\Brand\\BrandOwnershipService' => $baseDir . '/app/Services/Brand/BrandOwnershipService.php',

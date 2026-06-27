@@ -854,7 +854,7 @@ class ComposerStaticInitb765e422636d934cb75b47d036a889c4
         'App\\Policies\\EventPolicy' => __DIR__ . '/../..' . '/app/Policies/EventPolicy.php',
         'App\\Providers\\AppServiceProvider' => __DIR__ . '/../..' . '/app/Providers/AppServiceProvider.php',
         'App\\Providers\\RouteServiceProvider' => __DIR__ . '/../..' . '/app/Providers/RouteServiceProvider.php',
-        'App\\Services\\AdminChatService' => __DIR__ . '/../..' . '/app/Services/AdminChatService.php',
+        'App\\Services\\AdminChat\\AdminChatService' => __DIR__ . '/../..' . '/app/Services/AdminChat/AdminChatService.php',
         'App\\Services\\Auth\\RedirectByRoleService' => __DIR__ . '/../..' . '/app/Services/Auth/RedirectByRoleService.php',
         'App\\Services\\Auth\\RoleRequestService' => __DIR__ . '/../..' . '/app/Services/Auth/RoleRequestService.php',
         'App\\Services\\Brand\\BrandOwnershipService' => __DIR__ . '/../..' . '/app/Services/Brand/BrandOwnershipService.php',

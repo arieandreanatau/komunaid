@@ -17,6 +17,13 @@ return Application::configure(basePath: dirname(__DIR__))
         // Behind Vercel's proxy: trust X-Forwarded-* so generated URLs use https.
         $middleware->trustProxies(at: '*');
 
+        // Apply the locale from the session on every request. This must run
+        // AFTER the session middleware starts the session, so it lives in
+        // the 'web' group stack.
+        $middleware->web(append: [
+            \App\Http\Middleware\ApplySessionLocale::class,
+        ]);
+
         $middleware->alias([
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
