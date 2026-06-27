@@ -7,8 +7,8 @@ use App\Models\Donation;
 use App\Models\PlatformFee;
 use App\Models\User;
 use App\Models\Community;
-use App\Services\WalletService;
-use App\Services\PlatformFeeService;
+use App\Services\Finance\WalletService;
+use App\Services\Finance\PlatformFeeService;
 use Illuminate\Http\Request;
 
 class WalletController extends Controller

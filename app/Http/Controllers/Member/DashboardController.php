@@ -8,7 +8,7 @@ use App\Models\Friendship;
 use App\Models\CommunityBookmark;
 use App\Models\MemberGallery;
 use App\Models\Event;
-use App\Services\WalletService;
+use App\Services\Finance\WalletService;
 
 class DashboardController extends Controller
 {

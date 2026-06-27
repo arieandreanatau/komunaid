@@ -7,11 +7,16 @@ use App\Models\Blog;
 use App\Models\ContactSetting;
 use App\Models\HomepageSection;
 use App\Models\Suggestion;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
 class SuperadminCmsDashboardController extends Controller
 {
+    use AuthorizesRequests;
+
     public function index()
     {
+        $this->authorize('viewAny', Blog::class);
+
         $stats = [
             'total_blogs' => Blog::count(),
             'published_blogs' => Blog::where('status', 'published')->count(),

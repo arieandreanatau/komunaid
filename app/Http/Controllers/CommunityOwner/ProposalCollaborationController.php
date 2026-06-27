@@ -6,8 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\CommunityOwner\RejectCollaborationProposalRequest;
 use App\Models\CollaborationProposal;
 use App\Models\Community;
-use App\Services\CollaborationProposalService;
-use App\Services\CsvExportService;
+use App\Services\Collaboration\CollaborationProposalService;
+use App\Services\Export\CsvExportService;
 use Illuminate\Http\Request;
 
 class ProposalCollaborationController extends Controller

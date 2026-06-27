@@ -5,7 +5,7 @@ namespace App\Http\Controllers\CommunityOwner;
 use App\Http\Controllers\Controller;
 use App\Models\Community;
 use App\Models\Donation;
-use App\Services\WalletService;
+use App\Services\Finance\WalletService;
 use Illuminate\Http\Request;
 
 class DonationController extends Controller

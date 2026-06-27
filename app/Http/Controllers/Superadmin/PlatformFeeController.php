@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Superadmin;
 
 use App\Http\Controllers\Controller;
-use App\Services\PlatformFeeService;
+use App\Services\Finance\PlatformFeeService;
 use App\Models\PlatformFee;
 use Illuminate\Http\Request;
 

@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Superadmin;
 use App\Http\Controllers\Controller;
 use App\Models\CollaborationProposal;
 use App\Models\AuditLog;
-use App\Services\CsvExportService;
+use App\Services\Export\CsvExportService;
 use Illuminate\Http\Request;
 
 class CollaborationController extends Controller

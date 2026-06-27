@@ -5,12 +5,17 @@ namespace App\Http\Controllers\Superadmin;
 use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Models\AuditLog;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 
 class CompanyController extends Controller
 {
+    use AuthorizesRequests;
+
     public function index(Request $request)
     {
+        $this->authorize('viewAny', Company::class);
+
         $query = Company::with('owner');
 
         if ($request->filled('search')) {
@@ -33,6 +38,8 @@ class CompanyController extends Controller
 
     public function show(Company $company)
     {
+        $this->authorize('view', $company);
+
         $company->load(['owner', 'brands']);
         $brandsCount = $company->brands()->count();
 
@@ -41,6 +48,8 @@ class CompanyController extends Controller
 
     public function suspend(Request $request, Company $company)
     {
+        $this->authorize('update', $company);
+
         $request->validate([
             'reason' => 'required|string|max:1000',
         ]);
@@ -55,6 +64,8 @@ class CompanyController extends Controller
 
     public function ban(Request $request, Company $company)
     {
+        $this->authorize('update', $company);
+
         $request->validate([
             'reason' => 'required|string|max:1000',
         ]);
@@ -69,6 +80,8 @@ class CompanyController extends Controller
 
     public function activate(Company $company)
     {
+        $this->authorize('update', $company);
+
         $old = ['status' => $company->status];
         $company->update(['status' => 'active']);
 
@@ -79,6 +92,8 @@ class CompanyController extends Controller
 
     public function verify(Company $company)
     {
+        $this->authorize('approve', $company);
+
         $old = ['is_verified' => $company->is_verified, 'status' => $company->status];
         $company->update(['is_verified' => true, 'status' => 'active']);
 
@@ -89,6 +104,8 @@ class CompanyController extends Controller
 
     public function destroy(Company $company)
     {
+        $this->authorize('delete', $company);
+
         $old = ['status' => $company->status];
         $company->update(['status' => 'archived']);
 
@@ -99,6 +116,8 @@ class CompanyController extends Controller
 
     public function export(Request $request)
     {
+        $this->authorize('viewAny', Company::class);
+
         $query = Company::with('owner');
 
         if ($request->filled('status')) {

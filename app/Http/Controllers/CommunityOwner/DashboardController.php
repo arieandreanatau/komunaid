@@ -11,8 +11,8 @@ use App\Models\Donation;
 use App\Models\Event;
 use App\Models\EventRegistration;
 use App\Models\MemberJoinHistory;
-use App\Services\WalletService;
-use App\Services\PlatformFeeService;
+use App\Services\Finance\WalletService;
+use App\Services\Finance\PlatformFeeService;
 use Illuminate\Http\Request;
 
 class DashboardController extends Controller

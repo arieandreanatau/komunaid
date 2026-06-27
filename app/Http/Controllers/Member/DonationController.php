@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Donation;
 use App\Models\Event;
 use App\Models\Community;
-use App\Services\WalletService;
+use App\Services\Finance\WalletService;
 use Illuminate\Http\Request;
 
 class DonationController extends Controller

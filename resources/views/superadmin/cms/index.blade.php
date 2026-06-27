@@ -1,4 +1,4 @@
-﻿@extends('layouts.admin')
+@extends('layouts.admin')
 
 @php $pageTitle = 'CMS Dashboard' @endphp
 
@@ -7,7 +7,7 @@
     <p class="text-sm text-[#64748B] mb-6">Manage your website content from one place.</p>
 
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-        <a href="{{ route('superadmin.cms.homepage') }}"
+        <a href="{{ route('superadmin.cms.homepage.index') }}"
            class="group bg-white rounded-xl border border-[#E2E8F0] shadow-sm p-6 hover:shadow-md hover:border-[#126BFF]/30 transition">
             <div class="w-12 h-12 bg-[#0B2D89]/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-[#0B2D89]/20 transition">
                 <svg class="w-6 h-6 text-[#0B2D89]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -21,7 +21,7 @@
             </div>
         </a>
 
-        <a href="{{ route('superadmin.cms.blogs') }}"
+        <a href="{{ route('superadmin.cms.blogs.index') }}"
            class="group bg-white rounded-xl border border-[#E2E8F0] shadow-sm p-6 hover:shadow-md hover:border-[#16A34A]/30 transition">
             <div class="w-12 h-12 bg-[#16A34A]/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-[#16A34A]/20 transition">
                 <svg class="w-6 h-6 text-[#16A34A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -35,7 +35,7 @@
             </div>
         </a>
 
-        <a href="{{ route('superadmin.cms.contact') }}"
+        <a href="{{ route('superadmin.cms.contact.index') }}"
            class="group bg-white rounded-xl border border-[#E2E8F0] shadow-sm p-6 hover:shadow-md hover:border-[#F59E0B]/30 transition">
             <div class="w-12 h-12 bg-[#F59E0B]/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-[#F59E0B]/20 transition">
                 <svg class="w-6 h-6 text-[#F59E0B]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -49,7 +49,7 @@
             </div>
         </a>
 
-        <a href="{{ route('superadmin.cms.suggestions') }}"
+        <a href="{{ route('superadmin.cms.suggestions.index') }}"
            class="group bg-white rounded-xl border border-[#E2E8F0] shadow-sm p-6 hover:shadow-md hover:border-[#25B9F2]/30 transition">
             <div class="w-12 h-12 bg-[#25B9F2]/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-[#25B9F2]/20 transition">
                 <svg class="w-6 h-6 text-[#25B9F2]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -63,7 +63,7 @@
             </div>
         </a>
 
-        <a href="{{ route('superadmin.cms.pages') }}"
+        <a href="{{ route('superadmin.cms.pages.index') }}"
            class="group bg-white rounded-xl border border-[#E2E8F0] shadow-sm p-6 hover:shadow-md hover:border-[#DC2626]/30 transition">
             <div class="w-12 h-12 bg-[#DC2626]/10 rounded-xl flex items-center justify-center mb-4 group-hover:bg-[#DC2626]/20 transition">
                 <svg class="w-6 h-6 text-[#DC2626]" fill="none" stroke="currentColor" viewBox="0 0 24 24">

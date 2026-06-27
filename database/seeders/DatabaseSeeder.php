@@ -2,6 +2,30 @@
 
 namespace Database\Seeders;
 
+use Database\Seeders\Master\CmsPageSeeder;
+use Database\Seeders\Master\CollaborationTypeSeeder;
+use Database\Seeders\Master\CommunityCategorySeeder;
+use Database\Seeders\Master\CommunityOwnerSeeder;
+use Database\Seeders\Master\CommunitySeeder;
+use Database\Seeders\Master\ContactSettingSeeder;
+use Database\Seeders\Master\EventTypeSeeder;
+use Database\Seeders\Master\FeatureLockSeeder;
+use Database\Seeders\Master\HomepageSectionSeeder;
+use Database\Seeders\Master\InterestSeeder;
+use Database\Seeders\Master\PremiumPlanSeeder;
+use Database\Seeders\Master\RegionSeeder;
+use Database\Seeders\Master\RoleSeeder;
+use Database\Seeders\Master\SuperadminSeeder;
+use Database\Seeders\Master\WalletTransactionSeeder;
+use Database\Seeders\Demo\DemoAdminChatSeeder;
+use Database\Seeders\Demo\DemoBrandCompanySeeder;
+use Database\Seeders\Demo\DemoCmsContentSeeder;
+use Database\Seeders\Demo\DemoCollaborationSeeder;
+use Database\Seeders\Demo\DemoCommunitySeeder;
+use Database\Seeders\Demo\DemoEventSeeder;
+use Database\Seeders\Demo\DemoExtraDataSeeder;
+use Database\Seeders\Demo\DemoPremiumTrialSeeder;
+use Database\Seeders\Demo\DemoUserSeeder;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
@@ -21,6 +45,9 @@ class DatabaseSeeder extends Seeder
             PremiumPlanSeeder::class,
             CmsPageSeeder::class,
             HomepageSectionSeeder::class,
+            CommunityOwnerSeeder::class,
+            CommunitySeeder::class,
+            WalletTransactionSeeder::class,
         ]);
 
         if (app()->environment('local') || config('app.debug')) {

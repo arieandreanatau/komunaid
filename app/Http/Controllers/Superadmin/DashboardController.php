@@ -16,7 +16,7 @@ use App\Models\Donation;
 use App\Models\ApprovalLog;
 use App\Models\AuditLog;
 use App\Models\LoginLog;
-use App\Services\PlatformFeeService;
+use App\Services\Finance\PlatformFeeService;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller

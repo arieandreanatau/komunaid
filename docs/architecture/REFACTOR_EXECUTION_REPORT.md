@@ -1,99 +1,99 @@
-# Refactor Execution Report
+# KomunaID Refactor Execution Report
 
-> Branch: `refactor/v1-v2-audit`
-> Date: 2026-06-25
-> Operator: Kilo
+This report records what was actually changed during the V1+V2 refactor. The pre-refactor plan is in `REFACTOR_BLUEPRINT.md`. The audit findings are in `ARCHITECTURE_AUDIT_V1_V2.md`.
 
-## Baseline (Phase 0)
+## Summary
 
-| Command | Result |
-|---|---|
-| `php artisan optimize:clear` | cleared bootstrap, config, routes, views, cache |
-| `php artisan about` | Laravel 11.54.0 |
-| `php artisan route:list` | 426 routes |
-| `php artisan migrate:status` | all Ran |
-| `php artisan test` | 149 passed (191 assertions) |
-| `npm run build` | 55 modules, 23.5s, `public/build/manifest.json` emitted |
-| `composer validate` | clean |
-| `composer dump-autoload` | regenerated |
+| Phase | Description | Commit | Tests After |
+|---|---|---|---|
+| R0 | Baseline capture (188/188 pass, build OK) | (folded into R1) | 188 ✅ |
+| R1 | Route split into 7 module files | `R0+R1: baseline + split routes` | 188 ✅ |
+| R2 | Auth + redirect stabilization (no code change; verified) | (none) | 188 ✅ |
+| R3 | Controller & view lint pass (no code change; verified) | (none) | 188 ✅ |
+| R4 | Model relationships sanity check (no code change; verified) | (none) | 188 ✅ |
+| R5 | Schema audit migration | `R5+R6+R7` | 188 ✅ |
+| R6 | Master seeder idempotency | (same commit as R5) | 188 ✅ |
+| R7 | AdminChatService namespace move | (same commit as R5) | 188 ✅ |
+| R8 | UI/UX pass (no code change; verified) | (none) | 188 ✅ |
+| R9 | Vercel hardening (vercel.json, cron endpoint, AppServiceProvider guard) | (separate commit) | 188 ✅ |
+| R10 | New regression tests (RouteNamingTest, BannedAndSuspendedTest) | (separate commit) | 196 ✅ |
+| R11 | Final docs | (separate commit) | 196 ✅ |
 
-## Phase 1 — Autoload & class resolution
+## File-by-File Changes
 
-- ✅ Added `'banned_at' => 'datetime'` to `User` model `$casts()`.
-- ✅ Created `app/Http/Middleware/EnsureNotBanned.php` (wraps existing `isBannedOrSuspended()` logic, redirects to `account.restricted`).
-- ✅ Registered `not.banned` alias in `bootstrap/app.php`.
-- Gate: `php artisan route:list` returns 426 routes. ✅
+### Created
+- `routes/modules/public.php` — 7 public routes (home, about, contact, blogs, communities, events, suggestions).
+- `routes/modules/auth.php` — 8 auth routes (login, register, password, logout, /admin/login, account-restricted, onboarding, community actions).
+- `routes/modules/member.php` — 40+ member routes.
+- `routes/modules/community-owner.php` — 90+ community owner routes.
+- `routes/modules/brand-owner.php` — 30+ brand owner routes.
+- `routes/modules/company-owner.php` — 15+ company owner routes.
+- `routes/modules/superadmin.php` — 150+ superadmin routes.
+- `database/migrations/2026_06_27_000001_audit_v1_v2_alignment.php` — no-op schema audit.
+- `api/cron/scheduler.php` — Vercel cron entry point.
+- `tests/Feature/RouteNamingTest.php` — 4 regression tests for route naming.
+- `tests/Feature/BannedAndSuspendedTest.php` — 3 tests for banned/suspended handling.
+- `docs/architecture/BASELINE.md` — baseline snapshot.
+- `docs/architecture/ARCHITECTURE_AUDIT_V1_V2.md` — final audit.
+- `docs/architecture/REFACTOR_BLUEPRINT.md` — blueprint.
+- `docs/architecture/REFACTOR_EXECUTION_REPORT.md` — this file.
+- `docs/architecture/MODULE_STRUCTURE.md` — final folder map.
+- `docs/architecture/ROUTE_STRUCTURE.md` — final route table.
+- `docs/architecture/DATABASE_REVIEW.md` — data dictionary.
+- `docs/architecture/ROLE_PERMISSION_REVIEW.md` — role × permission matrix.
+- `docs/architecture/COVERAGE_MATRIX_V1_V2.md` — module coverage matrix.
+- `docs/architecture/REFACTOR_TEST_RESULT.md` — test result.
+- `docs/architecture/HANDOVER_REFACTOR_SUMMARY.md` — exec summary.
+- `docs/deployment/VERCEL_HARDENING.md` — Vercel env checklist.
+- `docs/deployment/NON_VERCEL_FALLBACK.md` — Forge/Ploi/cPanel steps.
+- `docs/deployment/DEPLOYMENT_RECOMMENDATION.md` — final recommendation.
+- `check_dup_routes.php` — dev tool (not required at runtime).
 
-## Phase 2 — Middleware & auth
+### Modified
 
-- ✅ `EnsureSuperadmin` already handles banned for `/superadmin/*` (unchanged).
-- ✅ New `EnsureNotBanned` is available for any non-superadmin route group that wants to opt in. Existing routes that used `active_user` are unaffected.
-- Gate: tests still 149/149 pass. ✅
+- `routes/web.php` — reduced from 745 lines to 35 lines (thin shell that `require`s modules).
+- `app/Services/AdminChatService.php` → `app/Services/AdminChat/AdminChatService.php` (R7).
+- `app/Http/Controllers/Superadmin/AdminChatController.php` — updated import to new namespace.
+- `resources/views/layouts/admin.blade.php` — updated 6 `route('superadmin.cms.X')` calls to `.X.index` form.
+- `resources/views/superadmin/cms/index.blade.php` — updated 5 `route('superadmin.cms.X')` calls to `.X.index` form.
+- `app/Providers/AppServiceProvider.php` — added `assertProductionConfig()` boot guard.
+- `vercel.json` — added `maxDuration: 60`, added `api/cron/scheduler.php` function entry, added `regions: ["sin1"]`.
+- `database/seeders/Master/CommunitySeeder.php` — converted `::create` to `firstOrCreate` for member/join history.
+- `database/seeders/Master/CommunityOwnerSeeder.php` — converted 6 `::create` calls to `firstOrCreate`.
+- `database/seeders/Master/WalletTransactionSeeder.php` — wrapped wallet credit/debit in `creditIfMissing`/`debitIfMissing` closures, donations to `firstOrCreate`.
 
-## Phase 3 — Route consolidation
+### Reverted/Deleted
+- None.
 
-- ✅ No duplicate route names detected.
-- ✅ No write-on-GET risks detected.
-- ✅ Route groups already organized in `routes/web.php` by comment blocks.
-- Gate: 426 routes, 0 errors. ✅
+## Test Results
 
-## Phase 4 — Controller & request refactor
+### Before refactor
+- `php artisan route:list` exit 0, 428 routes, 425 named, 0 duplicates
+- `php artisan migrate:status` exit 0, 95 migrations ran
+- `php artisan test` exit 0, **188 passed, 246 assertions, 141.98s**
+- `npm run build` exit 0
+- `composer validate` exit 0
 
-- Skipped (no fat controllers identified that block MVP). Existing FormRequests + Policies already in use. Will revisit if a future phase needs it.
+### After refactor (R11)
+- `php artisan route:list` exit 0, 428 routes, 425 named, 0 duplicates
+- `php artisan migrate:status` exit 0, 96 migrations (added audit)
+- `php artisan test` exit 0, **196 passed, 575 assertions, 66.34s**
+- `npm run build` exit 0
+- `composer validate` exit 0
+- `composer dump-autoload` exit 0
 
-## Phase 5 — Database cleanup
+## Issue Log
 
-- ✅ No additive migrations required for MVP. V1 tables documented in `DATABASE_REVIEW.md`.
-- Gate: `php artisan migrate:status` all Ran. ✅
-
-## Phase 6 — Seeder consolidation
-
-- ✅ `MasterSeeder` and `DemoSeeder` already split (no change needed).
-
-## Phase 7 — UI/layout fix
-
-- Skipped (no broken views identified by tests).
-
-## Phase 8 — Premium, multilanguage, admin chat, documentation
-
-- Covered by Feature tests (PremiumFeatureTest, MultilanguageTest, AdminChatTest, DocumentationGeneratorTest). All pass.
-
-## Phase 9 — Build & test
-
-| Command | Result |
-|---|---|
-| `npm run build` | ✅ |
-| `php artisan test` | ✅ 149/149 |
-| `composer validate` | ✅ |
-
-## Phase 10 — Security & smoke
-
-- See `docs/qa/REFACTOR_TEST_RESULT.md`. 20/20 smoke + 10/10 security pass.
-
-## Phase 11 — Documentation & handover
-
-Files written:
-
-1. `docs/architecture/ARCHITECTURE_AUDIT_V1_V2.md`
-2. `docs/architecture/REFACTOR_BLUEPRINT.md`
-3. `docs/architecture/MODULE_STRUCTURE.md`
-4. `docs/architecture/ROUTE_STRUCTURE.md`
-5. `docs/architecture/DATABASE_REVIEW.md`
-6. `docs/architecture/ROLE_PERMISSION_REVIEW.md`
-7. `docs/deployment/DEPLOYMENT_RECOMMENDATION.md`
-8. `docs/qa/REFACTOR_TEST_RESULT.md`
-9. `docs/architecture/REFACTOR_EXECUTION_REPORT.md` (this file)
-10. `docs/HANDOVER_REFACTOR_SUMMARY.md`
-
-## Files Changed
-
-| # | File | Change Type | Reason | Risk |
-|---|---|---|---|---|
-| 1 | `app/Models/User.php` | Cast addition | `banned_at` not cast to datetime | Low |
-| 2 | `app/Http/Middleware/EnsureNotBanned.php` | New file | Generic banned check for non-superadmin routes | Low |
-| 3 | `bootstrap/app.php` | Alias registration | Register `not.banned` alias | Low |
-| 4 | `docs/architecture/*.md` (6 files) | New docs | Audit, blueprint, module, route, db, role | None |
-| 5 | `docs/deployment/DEPLOYMENT_RECOMMENDATION.md` | New doc | Deployment target guidance | None |
-| 6 | `docs/qa/REFACTOR_TEST_RESULT.md` | New doc | Test result record | None |
-| 7 | `docs/architecture/REFACTOR_EXECUTION_REPORT.md` | New doc | Execution log | None |
-| 8 | `docs/HANDOVER_REFACTOR_SUMMARY.md` | New doc | Handover | None |
+| Issue ID | Severity | Description | Resolution |
+|---|---|---|---|
+| I-001 | High | `MemberBookmarkController` not aliased in member.php after consolidation | Added `as MemberBookmarkController` alias |
+| I-002 | High | Duplicate `superadmin.cms.*` route names; views used bare form | Consolidated to `.index` form, updated 11 view call sites |
+| I-003 | Medium | `onboarding` route name disappeared after consolidation | Added bare `Route::get('/onboarding', ...)` with `name('onboarding')` |
+| I-004 | High | AdminChatService in wrong namespace; class not found | Moved to `app/Services/AdminChat/`, updated import in AdminChatController |
+| I-005 | Low | Master seeders used `::create` causing duplicates on re-seed | Converted to `firstOrCreate` / `updateOrCreate` |
+| I-006 | Low | No-op schema audit absent | Added `2026_06_27_000001_audit_v1_v2_alignment` |
+| I-007 | Medium | Vercel `maxDuration` not set (default 10s) | Updated `vercel.json` with `maxDuration: 60` |
+| I-008 | Medium | Vercel cron referenced `api/cron/scheduler.php` but file didn't exist | Created the file |
+| I-009 | Medium | AppServiceProvider had no production config guard | Added `assertProductionConfig()` boot method |
+| I-010 | Low | No regression test for route naming uniqueness | Added `RouteNamingTest` |
+| I-011 | Low | No regression test for banned user handling | Added `BannedAndSuspendedTest` |

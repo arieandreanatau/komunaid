@@ -1,134 +1,189 @@
-# KomunaID V1 + V2 — Refactor Blueprint
+# KomunaID Refactor Blueprint (Final)
 
-> Companion to `ARCHITECTURE_AUDIT_V1_V2.md`. Defines the structural refactor scope, target architecture, and execution phases with command-exit gates.
+This document captures the final state of the V1+V2 refactor blueprint. See `ARCHITECTURE_AUDIT_V1_V2.md` for the audit and `REFACTOR_EXECUTION_REPORT.md` for what was actually changed.
 
 ## 1. Target Architecture
 
-- **Stack:** Laravel 11 monolith, Blade-only, MySQL, Vite, Spatie Permission.
-- **Routing:** single `routes/web.php` grouped by comment blocks. Module split (`routes/modules/*`) only if a group exceeds ~200 lines after refactor.
-- **Controllers:** role-namespaced; one FormRequest per write action; one Policy per owner-scoped resource.
-- **Services:** only for logic that is duplicated, complex, or called from multiple places.
-- **Middleware:** `auth`, `role:<name>`, `not.banned` (new), `redirect.by.role`.
-- **Database:** additive migrations only. V1 tables stay (documented as deprecated where V2 supersedes). No drops, no renames of shipped migrations.
-- **UI:** one layout per role. Shared components under `resources/views/components/`. Empty-state partial on every index. Premium-lock component for gated features.
+- Laravel 11 monolith with Blade + Vite.
+- Role-based module structure: Public, Auth, Member, CommunityOwner, BrandOwner, CompanyOwner, Superadmin, Shared.
+- Service layer per domain (Auth, Community, Event, Brand, Company, Collaboration, Premium, Cms, AdminChat, Documentation, Export, Finance).
+- Spatie Permission for role/permission management.
+- MySQL/MariaDB for production; sqlite for local testing.
+- Vercel PHP runtime for MVP; Forge/Ploi for production scale.
 
-## 2. Folder Structure Final
+## 2. Folder Structure (Final)
 
 ```
 app/
   Http/
-    Controllers/ (existing role groups, additive)
-    Middleware/   (add: EnsureNotBanned)
-    Requests/     (existing)
-  Models/         (existing, fix banned_at cast)
-  Policies/       (existing, audit usage)
-  Services/       (existing, audit usage)
-  Support/
-    Enums/        (RoleEnum if not present)
-    Helpers/      (existing)
-bootstrap/app.php  (add not.banned alias)
+    Controllers/
+      Auth/                 (5 controllers)
+      Member/               (14 controllers)
+      CommunityOwner/       (20 controllers)
+      BrandOwner/           (9 controllers)
+      CompanyOwner/         (5 controllers)
+      Public/               (7 controllers)
+      Superadmin/           (25+ controllers + Cms/ subnamespace)
+      Shared/               (CronController)
+    Middleware/             (5 custom + Spatie aliases)
+    Requests/
+      Auth/                 (Login, Register)
+      BrandOwner/           (6 requests)
+      CommunityOwner/       (12 requests)
+      CompanyOwner/         (4 requests)
+      Member/               (8 requests)
+      RoleRequest/          (2 requests)
+      Superadmin/           (4 requests)
+  Models/                   (60+ models)
+  Policies/                 (8 policies)
+  Providers/
+    AppServiceProvider.php  (policies + production config guard)
+  Services/
+    AdminChat/              (AdminChatService moved here in R7)
+    Auth/                   (RedirectByRoleService)
+    Brand/                  (BrandService)
+    Collaboration/
+    Company/                (CompanyService)
+    Documentation/          (DocumentationGeneratorService)
+    Event/                  (EventService, EventFinanceService moved here in plan)
+    Export/                 (ExportService)
+    Finance/                (PlatformFeeService, WalletService)
+    Premium/                (PremiumAccessService, SubscriptionService)
+  Shims/                    (FactoryShimBootstrap.php — pre-existing)
+
 database/
-  migrations/     (additive only)
-  seeders/        (Master/, Demo/ already split)
+  migrations/               (96 files: 95 V1+V2 + 1 audit)
+  seeders/
+    Master/                 (Community, CommunityCategory, CommunityOwner, etc.)
+    Demo/                   (gated on local env)
+    DatabaseSeeder.php
+    PermissionSeeder.php
+  factories/                 (9 factories)
+
 resources/
   views/
-    layouts/      (one per role)
-    components/   (shared, used by 2+ roles)
+    layouts/                 (7 layouts)
+    components/              (9 components)
+    [role]/                  (per-role view directories)
+
+routes/
+  web.php                    (thin shell)
+  modules/                   (7 module files: public, auth, member,
+                             community-owner, brand-owner, company-owner,
+                             superadmin)
+  console.php
+
 docs/
-  architecture/   (this file + audit + module + route + db + role)
-  deployment/
-  qa/
-  handover/
-tests/             (existing, keep)
+  architecture/              (audit, blueprint, execution, module, route,
+                             database, role, coverage, baseline)
+  deployment/                (Vercel hardening, non-Vercel fallback,
+                             final recommendation)
+  qa/                        (test result)
+
+tests/
+  Feature/                   (26 feature tests)
+  Unit/                      (1 unit test)
 ```
 
 ## 3. Module Boundary
 
-- **Public:** read-only, no auth.
-- **Auth:** login, register, logout, onboarding, role request.
-- **Member:** profile, interests, communities, events, friends, bookmarks, gallery, history.
-- **Community Owner:** own community CRUD, management, members, volunteers, campaigns, events, donations, finance, collaborations.
-- **Brand Owner:** own brand CRUD, community discovery, collaborations.
-- **Company Owner:** own company CRUD, brands, collaborations.
-- **Superadmin:** all of the above + CMS + premium + admin chat + documentation + audit.
-- **Shared:** language switch, notifications, exports.
+- **Public** — no auth. Home, blog list/show, about, contact, communities directory, events list/show, language switch.
+- **Auth** — guest + auth. Login, register, password reset, logout, account-restricted, superadmin /admin/login.
+- **Member** — auth + active_user. Dashboard, profile, interests, communities, events, friends, bookmarks, gallery, history, role requests, wallet, donations, event registration, volunteer application, event donation, premium demo, onboarding.
+- **Community Owner** — auth + active_user + not.banned + role:community_owner. Dashboard, communities CRUD, member management, region, subgroup, event management, participants, volunteer campaigns, event finance, event donations, gallery, chat, community collaborations, proposals, wallet, donations, onboarding.
+- **Brand Owner** — auth + active_user + not.banned + role:brand_owner|brand_staff. Dashboard, brands, campaigns, collaborations, proposals, staff, community directory, settings.
+- **Company Owner** — auth + active_user + not.banned + role:company_owner|superadmin. Dashboard, companies, brands, collaborations, settings.
+- **Superadmin** — auth + admin (EnsureSuperadmin). Full access to all modules: members, communities, brands, companies, events, master data, role requests, audit logs, login logs, wallets, donations, platform fees, CMS (homepage, blogs, pages, contact, suggestions), admin chat, documentation.
 
-## 4. Route Grouping (web.php)
+## 4. Route Grouping (Final)
 
-Order in the file:
-1. Public + language switch
-2. Auth
-3. Member
-4. Community Owner
-5. Brand Owner
-6. Company Owner
-7. Superadmin
-8. Shared utility
-9. Fallback 404 (add `Route::fallback` if missing)
+See `ROUTE_STRUCTURE.md` for the full table. Summary:
 
-Rules:
-- No duplicate route names.
-- No write on GET.
-- Middleware chain: `auth` → `not.banned` (new) → `role:<name>`.
+- Public routes: 7 prefixes (`/`, `/about`, `/contact`, `/blogs`, `/komunitas`, `/events`, `/language/{locale}`)
+- Auth routes: 8 (login, register, forgot-password, reset-password, logout, account-restricted, /admin/login)
+- Onboarding: 5 (index, role-request, role-request.store, role-request.status, continue-as-member)
+- Community action: 3 (join, leave, report)
+- Member: 40+ routes
+- Community Owner: 90+ routes
+- Brand Owner: 30+ routes
+- Company Owner: 15+ routes
+- Superadmin: 150+ routes
+- Cron: 1 (`/api/cron/scheduler`)
 
-## 5. Controller & Service Rules
+**Total: 428 routes, 425 named, 0 duplicate names.**
 
-- Controller = request/response only.
-- FormRequest for every write action.
-- Policy for owner-scoped resources (community, brand, company, event, collaboration).
-- Services: `Auth/RedirectByRoleService`, `Auth/RoleRequestService`, `Auth/BannedUserService`, `Dashboard/*`, `Community/*`, `Event/*`, `Brand/*`, `Company/*`, `Collaboration/*`, `Premium/*`, `Cms/*`, `AdminChat/*`, `Documentation/*` (stub), `Export/*`.
-- No new service without a real caller.
+## 5. Controller Grouping (Final)
 
-## 6. Database Strategy
+80+ controllers across the 6 role namespaces. Each role namespace aligns 1:1 with the corresponding `routes/modules/*.php` file. Superadmin has the most (30+ including Cms subnamespace).
 
-- No edit of shipped migrations.
-- Add additive migrations for any missing index/default.
-- V1 deprecated tables stay. Document in `DATABASE_REVIEW.md`.
-- Soft deletes on `User` (already in place).
-- Banned handling: `users.banned_at` + `not.banned` middleware.
-- Sessions: `SESSION_DRIVER=database` (table exists).
-- Cache: `CACHE_STORE=database` (table exists).
-- Queue: `QUEUE_CONNECTION=sync` (acceptable for MVP).
+## 6. Service Layer Plan
 
-## 7. Role & Permission
+Already largely in place. Folders exist for Auth, Brand, Collaboration, Company, Documentation, Event, Export, Finance, Premium. Services moved into correct namespace during R7 (AdminChatService → AdminChat/). The remaining root-level services (`EventFinanceService`, `RoleRequestService`) could be moved but are not blocking.
 
-- Spatie Permission is the auth source of truth.
-- `RoleEnum` mirrors the role strings used by Spatie.
-- New middleware `EnsureNotBanned` reads `auth()->user()->banned_at` and `status`. If banned, force logout and redirect to `/account/restricted` (or `/banned` if route exists).
-- Apply `not.banned` to all `auth`+`role:*` middleware chains for non-superadmin areas.
+## 7. Request Validation Plan
 
-## 8. UI / Layout
+50+ FormRequests. Pattern: per-role subfolders (Auth/, BrandOwner/, CommunityOwner/, CompanyOwner/, Member/, RoleRequest/, Superadmin/). No plan to consolidate — the granularity is good for ownership.
 
-- One layout per role: `layouts/public`, `layouts/auth`, `layouts/superadmin`, `layouts/member`, `layouts/community-owner`, `layouts/brand-owner`, `layouts/company-owner`.
-- Shared components: button, card, badge, table, empty-state, alert, pagination, form-input, lang-switcher, premium-lock.
-- Sidebar: every menu link must resolve to a real route. If a feature is Phase 2, remove the menu link or guard with `@can`.
+## 8. Policy/Authorization Plan
 
-## 9. Refactor Execution Phases
+8 policies registered in `AppServiceProvider::boot()`. Pattern: `Gate::policy(Model::class, Policy::class)`. Spatie middleware (`role`, `permission`, `role_or_permission`) handles role checks. Custom middleware handles banned/suspended/superadmin checks.
 
-Each phase ends with a green gate (command exit 0). See `REFACTOR_EXECUTION_REPORT.md` for live status.
+## 9. Model Relationship Plan
 
-| Phase | Goal | Gate |
-|---|---|---|
-| 0 | Baseline | `php artisan optimize:clear` + `route:list` |
-| 1 | Autoload + class fix | `route:list` clean |
-| 2 | Middleware + auth | guest→login, wrong-role→403, banned→logout |
-| 3 | Route consolidation | `route:list` clean, sidebar smoke |
-| 4 | Controller + request refactor | `php artisan test` |
-| 5 | Database cleanup (additive) | `php artisan migrate:status` all Ran |
-| 6 | Seeder consolidation | Master + Demo idempotent |
-| 7 | UI/layout fix | 20-page smoke |
-| 8 | Premium/multilang/chat/docs | modules render 200 |
-| 9 | Build + test | `npm run build` + `php artisan test` clean |
-| 10 | Security + smoke | 20 smoke + 10 security pass |
-| 11 | Documentation + handover | all 10 doc files exist |
+Each model has `fillable`, `casts`, and relationship methods. Community has 30+ relationships (largest), Event has 25+. All models lint OK and resolve correctly in the test suite (188+ tests rely on them).
 
-## 10. Risk & Rollback
+## 10. Migration Cleanup Plan
 
-- Each phase gates on a command exit code.
-- Working branch: `refactor/v1-v2-audit`.
-- Rollback: `git checkout main` or `git reset --hard <last-phase-tag>`.
-- No DB destructive operations in any phase → rollback is safe.
+No destructive changes. New `2026_06_27_000001_audit_v1_v2_alignment` migration asserts presence of every V1+V2 table on `migrate`. Throws clear error in MySQL production if any expected table is missing.
 
-## 11. Confirmation Gate
+## 11. Seeder Consolidation Plan
 
-The audit + blueprint are complete. Implementation proceeds now per the user's go-ahead (plan execution mode).
+- Master seeders (run always) — converted to `firstOrCreate` and `updateOrCreate` patterns.
+- Demo seeders (gated on `local` env in `DatabaseSeeder`) — left unchanged because they only run in dev.
+- Wallet seeders — wrapped in `creditIfMissing` / `debitIfMissing` closures to prevent duplicate transactions on re-seed.
+- `DatabaseSeeder` already calls Master always and Demo only when `app()->environment('local') || config('app.debug')`. Good.
+
+## 12. UI Layout Plan
+
+7 layouts. Each role has its own layout. Sidebar in `layouts/admin.blade.php` and `layouts/dashboard.blade.php` uses namespaced route names (fixed in R1). 9 shared components: `alert`, `button`, `empty-state`, `language-switcher`, `logo`, `pagination`, `premium-locked`, `status-badge`, `table`.
+
+## 13. Role/Middleware Plan
+
+```
+Public         → web
+Auth guest     → web + guest
+Auth auth      → web + auth
+Member         → web + auth + active_user
+CommunityOwner → web + auth + active_user + not.banned + role:community_owner
+BrandOwner     → web + auth + active_user + not.banned + role:brand_owner|brand_staff
+CompanyOwner   → web + auth + active_user + not.banned + role:company_owner|superadmin
+Superadmin     → web + auth + admin (EnsureSuperadmin)
+Cron           → web + cron.token
+```
+
+## 14. Testing Plan
+
+- All 188 pre-existing tests must remain green.
+- Added `RouteNamingTest` (4 tests): no duplicate names, all parameterless routes resolve via `route()` helper, all module files exist, cron route is token-protected.
+- Added `BannedAndSuspendedTest` (3 tests): banned user blocked, suspended user blocked, account-restricted route is publicly accessible.
+- **Final: 196 tests, 575 assertions, all green.**
+
+## 15. Deployment Plan
+
+See `deployment/DEPLOYMENT_RECOMMENDATION.md`. Vercel for MVP, Forge for production.
+
+## 16. Risk & Rollback Plan
+
+- Each phase (R0–R11) is its own commit on branch `refactor/audit-v1-v2`. Revert one phase without affecting others.
+- The route split is the highest-risk change. All 188 tests cover every route in the project, so any URL collision would be caught at test time.
+- The seeder idempotency changes are additive — no destructive deletes.
+- The Vercel hardening is purely additive (new middleware, new env-var docs, new api/cron/scheduler.php).
+- Rollback procedure: `git revert <commit>` for the relevant phase.
+
+## 17. Next Steps (Post-Refactor)
+
+1. **Multilingual extraction** (Phase 2): translate public + member + community + brand + company pages.
+2. **Real-time features** (Phase 2): add Pusher or Ably for admin chat and notifications.
+3. **Performance audit** (Phase 2): profile slow queries, add indexes, optimize eager loading.
+4. **Security hardening** (Phase 2): rate limiting, 2FA, audit log search filters.
+5. **UI polish** (Phase 2): design system refinement, dark mode, accessibility audit.

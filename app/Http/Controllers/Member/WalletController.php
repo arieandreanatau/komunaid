@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Member;
 
 use App\Http\Controllers\Controller;
-use App\Services\WalletService;
+use App\Services\Finance\WalletService;
 use Illuminate\Http\Request;
 
 class WalletController extends Controller

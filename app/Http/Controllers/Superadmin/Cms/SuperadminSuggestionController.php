@@ -4,12 +4,17 @@ namespace App\Http\Controllers\Superadmin\Cms;
 
 use App\Http\Controllers\Controller;
 use App\Models\Suggestion;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 
 class SuperadminSuggestionController extends Controller
 {
+    use AuthorizesRequests;
+
     public function index(Request $request)
     {
+        $this->authorize('viewAny', Suggestion::class);
+
         $query = Suggestion::with('user', 'reviewer');
 
         if ($request->filled('search')) {
@@ -27,18 +32,20 @@ class SuperadminSuggestionController extends Controller
         }
 
         $suggestions = $query->latest()->paginate(15)->withQueryString();
-
         return view('superadmin.cms.suggestions.index', compact('suggestions'));
     }
 
     public function show(Suggestion $suggestion)
     {
+        $this->authorize('view', $suggestion);
         $suggestion->load('user', 'reviewer');
         return view('superadmin.cms.suggestions.show', compact('suggestion'));
     }
 
     public function markReviewed(Suggestion $suggestion)
     {
+        $this->authorize('update', $suggestion);
+
         $suggestion->update([
             'status' => 'reviewed',
             'reviewed_by' => auth()->id(),
@@ -51,6 +58,8 @@ class SuperadminSuggestionController extends Controller
 
     public function archive(Suggestion $suggestion)
     {
+        $this->authorize('update', $suggestion);
+
         $suggestion->update([
             'status' => 'archived',
             'reviewed_by' => auth()->id(),

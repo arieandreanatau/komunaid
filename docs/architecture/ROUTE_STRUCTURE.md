@@ -1,113 +1,191 @@
-# Route Structure
+# KomunaID Route Structure (Final)
 
-> Snapshot of `routes/web.php` after audit. 426 routes, 423 unique named routes, 3 unnamed (`POST /login`, `POST /register`, `GET /up`).
+## Total: 428 routes, 425 named, 0 duplicate names
 
-## Public
+## Public Routes (`routes/modules/public.php`)
+
+| Method | URI | Name | Controller |
+|---|---|---|---|
+| GET | / | home | PublicHomeController@index |
+| GET | /about | about | PublicPageController@show (about) |
+| GET | /contact | contact | PublicContactController@index |
+| POST | /contact/suggestions | suggestions.store | PublicSuggestionController@store |
+| GET | /blogs | blogs.index | PublicBlogController@index |
+| GET | /blogs/{slug} | blogs.show | PublicBlogController@show |
+| GET | /komunitas | communities.directory | PublicCommunityController@index |
+| GET | /komunitas/{slug} | communities.detail | PublicCommunityController@show |
+| GET | /events | events.index | PublicEventController@index |
+| GET | /events/{slug} | events.show | PublicEventController@show |
+
+## Auth Routes (`routes/modules/auth.php`)
+
+### Superadmin auth (admin prefix)
+| Method | URI | Name | Middleware |
+|---|---|---|---|
+| GET | /admin/login | admin.login | guest |
+| POST | /admin/login | admin.login.submit | guest |
+| POST | /admin/logout | admin.logout | auth |
+
+### User auth
+| Method | URI | Name | Middleware |
+|---|---|---|---|
+| GET | /register | register | guest |
+| POST | /register | (no name) | guest |
+| GET | /login | login | guest |
+| POST | /login | (no name) | guest |
+| GET | /forgot-password | password.request | guest |
+| POST | /forgot-password | password.email | guest |
+| GET | /reset-password/{token} | password.reset | guest |
+| POST | /reset-password | password.store | guest |
+| POST | /logout | logout | auth |
+
+### Onboarding (auth)
+| Method | URI | Name |
+|---|---|---|
+| GET | /onboarding | onboarding |
+| GET | /onboarding/role-request | onboarding.role-request |
+| POST | /onboarding/role-request | onboarding.role-request.store |
+| GET | /onboarding/role-request/status/{roleRequest} | onboarding.role-request.status |
+| POST | /onboarding/continue-as-member | onboarding.continue-as-member |
+
+### Public + Dashboard
+| Method | URI | Name | Middleware |
+|---|---|---|---|
+| GET | /account-restricted | account.restricted | (none) |
+| GET | /dashboard | dashboard.redirect | auth |
+
+### Community actions (auth + active_user)
+| Method | URI | Name |
+|---|---|---|
+| POST | /komunitas/{community:slug}/join | community_action.join |
+| POST | /komunitas/{community:slug}/leave | community_action.leave |
+| POST | /komunitas/{community:slug}/report | community_action.report |
+
+## Member Routes (`routes/modules/member.php`) — 40+ routes
+
+Prefix: `/member`, name: `member.`, middleware: `auth`, `active_user`.
+
+Key routes:
+- `member.dashboard` (GET /member/dashboard)
+- `member.premium-demo` (GET /member/premium-demo)
+- `member.profile.edit/update/password.update/avatar.delete/destroy` (5 routes)
+- `member.interests.index/update` (2 routes)
+- `member.communities.index/export/show` (3 routes)
+- `member.events.index/export/register/upload-payment/cancel/my-registrations` (6 routes)
+- `member.friends.index/search/request/accept/reject/remove/communities` (7 routes)
+- `member.bookmarks.index/store/destroy` (3 routes)
+- `member.galleries.index/create/store/edit/update/destroy` (6 routes)
+- `member.history.index` (1 route)
+- `member.role-requests.index/create/store/show` (4 routes)
+- `member.events.chat.show/reply` (2 routes)
+- `member.events.volunteer.apply/apply.store/event-volunteer-applications.index` (3 routes)
+- `member.events.donate/donate.store` (2 routes)
+- `member.wallet.index/history` (2 routes)
+- `member.donations.index/show/create-event/store-event/create-community/store-community` (6 routes)
+
+## Community Owner Routes (`routes/modules/community-owner.php`) — 90+ routes
+
+Prefix: `/community-own`, name: `community.`, middleware: `auth`, `active_user`, `not.banned`, `role:community_owner`.
+
+Key route groups:
+- Community CRUD (7 routes)
+- Member management (6 routes)
+- Region management (4 routes)
+- Subgroup management (3 routes)
+- Event management (10 routes)
+- Event participants (5 routes)
+- Event volunteer campaigns (8 routes)
+- Event volunteer applications (3 routes)
+- Event volunteers (4 routes)
+- Event donations (4 routes)
+- Event finance (8 routes)
+- Event gallery (3 routes)
+- Event chat (6 routes)
+- Community collaborations (7 routes)
+- Collaboration proposals (8 routes)
+- Wallet (1 route)
+- Donations management (3 routes)
+
+Note: the URL prefix is `/community-own` (singular) and the name prefix is `community.` (no `-owner`). This is intentional from the original code and preserved to avoid breaking URLs.
+
+## Brand Owner Routes (`routes/modules/brand-owner.php`) — 30+ routes
+
+Prefix: `/brand`, name: `brand.`, middleware: `auth`, `active_user`, `not.banned`, `role:brand_owner|brand_staff`.
+
+Note: URL prefix `/brand` (not `/brand-owner`) and name prefix `brand.` (no `-owner`). Preserved for backward compat.
+
+## Company Owner Routes (`routes/modules/company-owner.php`) — 15+ routes
+
+Prefix: `/company-owner`, name: `company-owner.`, middleware: `auth`, `active_user`, `not.banned`, `role:company_owner|superadmin`.
+
+## Superadmin Routes (`routes/modules/superadmin.php`) — 150+ routes
+
+Prefix: `/superadmin`, name: `superadmin.`, middleware: `auth`, `admin` (EnsureSuperadmin).
+
+Key route groups:
+- Dashboard (1)
+- Approval Center (11)
+- Role Request Management (4)
+- User Management (5)
+- Community Management (7)
+- Brand Management (7)
+- Category Management (5)
+- Master Region Management (5)
+- Audit Logs (2)
+- Wallet Management (3)
+- Donation Management (4)
+- Platform Fee Reports (2)
+- Members (8)
+- Community Owners (7)
+- Brand Owners (7)
+- Companies (8)
+- Collaborations (4)
+- Communities (Enhanced) (5)
+- Brands (Enhanced) (5)
+- Events (6)
+- Login Logs (2)
+- Settings (4)
+- Master Data (8)
+- CMS Management — 5 submodules (homepage, blogs, pages, contact, suggestions) — 30+ routes
+- Admin Chat (10)
+- Documentation (10)
+
+## Cron Route (in `routes/web.php`)
 
 | Method | URI | Name | Middleware |
 |---|---|---|---|
-| GET | `/` | `home` | web |
-| GET | `/communities` | `public.communities.index` | web |
-| GET | `/events` | `public.events.index` | web |
-| GET | `/blogs` | `public.blogs.index` | web |
-| GET | `/about` | `public.about` | web |
-| GET | `/contact` | `public.contact` | web |
-| GET | `/language/{locale}` | `language.switch` | web |
-| POST | `/suggestions` | `public.suggestions.store` | web |
+| GET | /api/cron/scheduler | cron.scheduler | cron.token |
 
-## Auth
+## Stats
 
-| Method | URI | Name | Middleware |
-|---|---|---|---|
-| GET | `/login` | `login` | web, guest |
-| POST | `/login` | (unnamed) | web, guest |
-| GET | `/register` | `register` | web, guest |
-| POST | `/register` | (unnamed) | web, guest |
-| POST | `/logout` | `logout` | web, auth |
-| GET | `/onboarding` | `onboarding` | web, auth |
-| GET/POST | `/role-request` | `role-request.*` | web, auth |
+- Total routes: 428
+- Named: 425
+- Unnamed: 3 (POST register, POST login, plus the second webhook-style endpoint)
+- Duplicates: 0
+- File breakdown:
+  - `routes/web.php`: 2 routes (dashboard.redirect, cron.scheduler)
+  - `routes/modules/public.php`: 10 routes
+  - `routes/modules/auth.php`: 21 routes
+  - `routes/modules/member.php`: 50 routes
+  - `routes/modules/community-owner.php`: 95 routes
+  - `routes/modules/brand-owner.php`: 33 routes
+  - `routes/modules/company-owner.php`: 18 routes
+  - `routes/modules/superadmin.php`: 199 routes
 
-## Superadmin (excerpt — 100+ routes)
+## URL → Role Quick Reference
 
-| Method | URI | Name |
-|---|---|---|
-| GET | `/superadmin/login` | `admin.login` |
-| POST | `/superadmin/login` | `admin.login.attempt` |
-| POST | `/superadmin/logout` | `admin.logout` |
-| GET | `/superadmin/dashboard` | `superadmin.dashboard` |
-| GET | `/superadmin/members` | `superadmin.members.index` |
-| GET | `/superadmin/communities` | `superadmin.communities.index` |
-| GET | `/superadmin/events` | `superadmin.events.index` |
-| GET | `/superadmin/brands` | `superadmin.brands.index` |
-| GET | `/superadmin/companies` | `superadmin.companies.index` |
-| GET | `/superadmin/role-requests` | `superadmin.role-requests.index` |
-| GET | `/superadmin/cms` | `superadmin.cms.dashboard` |
-| GET | `/superadmin/cms/blogs` | `superadmin.cms.blogs.index` |
-| GET | `/superadmin/cms/pages` | `superadmin.cms.pages.index` |
-| GET | `/superadmin/cms/homepage` | `superadmin.cms.homepage.index` |
-| GET | `/superadmin/cms/contact` | `superadmin.cms.contact.edit` |
-| GET | `/superadmin/cms/suggestions` | `superadmin.cms.suggestions.index` |
-| GET | `/superadmin/premium` | `superadmin.premium.index` |
-| GET | `/superadmin/admin-chat` | `superadmin.admin-chat.index` |
-| GET | `/superadmin/documentation` | `superadmin.documentation.index` |
-| GET | `/superadmin/login-logs` | `superadmin.login-logs.index` |
-| GET | `/superadmin/audit-logs` | `superadmin.audit-logs.index` |
-| GET | `/superadmin/wallets` | `superadmin.wallets.index` |
-| GET | `/superadmin/platform-fees` | `superadmin.platform-fees.index` |
-| GET | `/superadmin/donations` | `superadmin.donations.index` |
-| GET | `/superadmin/collaborations` | `superadmin.collaborations.index` |
-| GET | `/superadmin/categories` | `superadmin.categories.index` |
-| GET | `/superadmin/regions` | `superadmin.regions.index` |
-| GET | `/superadmin/master-data` | `superadmin.master-data.index` |
-| GET | `/superadmin/approval` | `superadmin.approval.index` |
-| GET | `/superadmin/users` | `superadmin.users.index` |
-| GET | `/superadmin/settings/profile` | `superadmin.settings.profile` |
-| GET | `/superadmin/settings/password` | `superadmin.settings.password` |
-
-## Member
-
-| Method | URI | Name |
-|---|---|---|
-| GET | `/member/dashboard` | `member.dashboard` |
-| GET | `/member/profile` | `member.profile.*` |
-| GET | `/member/interests` | `member.interests.*` |
-| GET | `/member/communities` | `member.communities.*` |
-| GET | `/member/events` | `member.events.*` |
-| GET | `/member/friends` | `member.friends.*` |
-| GET | `/member/bookmarks` | `member.bookmarks.*` |
-| GET | `/member/gallery` | `member.gallery.*` |
-| GET | `/member/history` | `member.history.*` |
-
-## Community Owner
-
-| Method | URI | Name |
-|---|---|---|
-| GET | `/community-owner/dashboard` | `community-owner.dashboard` |
-| CRUD | `/community-owner/communities` | `community-owner.communities.*` |
-| CRUD | `/community-owner/events` | `community-owner.events.*` |
-| GET/POST | `/community-owner/collaborations` | `community-owner.collaborations.*` |
-
-## Brand Owner
-
-| Method | URI | Name |
-|---|---|---|
-| GET | `/brand-owner/dashboard` | `brand-owner.dashboard` |
-| CRUD | `/brand-owner/brands` | `brand-owner.brands.*` |
-| CRUD | `/brand-owner/collaborations` | `brand-owner.collaborations.*` |
-| GET | `/brand-owner/community-directory` | `brand-owner.community-directory.*` |
-
-## Company Owner
-
-| Method | URI | Name |
-|---|---|---|
-| GET | `/company-owner/dashboard` | `company-owner.dashboard` |
-| CRUD | `/company-owner/companies` | `company-owner.companies.*` |
-| GET | `/company-owner/companies/{company}/brands` | `company-owner.companies.brands.*` |
-| CRUD | `/company-owner/collaborations` | `company-owner.collaborations.*` |
-
-## Audit Notes
-
-- **Duplicate route names:** none detected.
-- **Write-on-GET risks:** none detected (all `*.ban`, `*.suspend`, `*.destroy` are POST/PUT/DELETE).
-- **Missing route:** none observed at audit time. Sidebar smoke test confirms.
-- **Unnamed routes:** `POST /login`, `POST /register` (auth), `GET /up` (health) — acceptable.
+| URL Pattern | Role |
+|---|---|
+| `/`, `/about`, `/contact`, `/blogs/*`, `/komunitas`, `/events` | public |
+| `/login`, `/register`, `/forgot-password`, `/reset-password/*`, `/logout` | guest/auth |
+| `/admin/login`, `/admin/logout` | superadmin auth |
+| `/account-restricted` | public |
+| `/dashboard` | any auth |
+| `/onboarding/*` | any auth |
+| `/komunitas/{slug}/join\|leave\|report` | any auth |
+| `/member/*` | member |
+| `/community-own/*` | community_owner |
+| `/brand/*` | brand_owner / brand_staff |
+| `/company-owner/*` | company_owner / superadmin |
+| `/superadmin/*` | superadmin |
+| `/api/cron/scheduler` | token |

@@ -1,11 +1,16 @@
 {
   "outputDirectory": "public",
   "framework": null,
-  "buildCommand": "php artisan package:discover --ansi && php artisan optimize:clear --ansi",
-  "installCommand": "echo 'Skip npm install'",
+  "buildCommand": "composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist && npm ci --no-audit --no-fund && npm run build && php artisan package:discover --ansi && php artisan storage:link --ansi || true && php artisan view:cache --ansi && php artisan config:cache --ansi && php artisan route:cache --ansi",
+  "installCommand": "echo 'composer install handled in buildCommand'",
   "functions": {
     "api/index.php": {
-      "runtime": "vercel-php@0.8.0"
+      "runtime": "vercel-php@0.8.0",
+      "maxDuration": 60
+    },
+    "api/cron/scheduler.php": {
+      "runtime": "vercel-php@0.8.0",
+      "maxDuration": 60
     }
   },
   "routes": [
@@ -13,5 +18,12 @@
       "src": "/(.*)",
       "dest": "/api/index.php"
     }
-  ]
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/scheduler?token=__CRON_SECRET__",
+      "schedule": "* * * * *"
+    }
+  ],
+  "regions": ["sin1"]
 }

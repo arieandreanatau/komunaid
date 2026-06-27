@@ -10,7 +10,7 @@ use App\Http\Requests\Superadmin\SearchAdminChatRequest;
 use App\Models\AdminConversation;
 use App\Models\AdminConversationParticipant;
 use App\Models\User;
-use App\Services\AdminChatService;
+use App\Services\AdminChat\AdminChatService;
 use Illuminate\Support\Facades\Auth;
 
 class AdminChatController extends Controller
