@@ -39,3 +39,4 @@ yarn-error.log
 # Dev tools
 /check_dup_routes.php
 /.kilo
+.env*
