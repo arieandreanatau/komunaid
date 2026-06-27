@@ -1,85 +1,112 @@
-# KomunaID Vercel 500 — Fixed
+# KomunaID Vercel 500 — Fixed (Final)
 
-**Date:** 2026-06-27 18:45 WIB
+**Date:** 2026-06-27 18:55 WIB
 **Branch:** `main`
-**Status:** 🟢 **FIXED** — 5/5 sequential requests return 200 OK
+**Status:** 🟢 **FIXED & VERIFIED** — 5/5 routes return 200 OK
 
 ## Root Cause
 
-The Vercel PHP runtime filesystem is **read-only except `/tmp`**. Laravel writes
-runtime cache files to `bootstrap/cache/` (`services.php`, `packages.php`,
-`config.php`, `route-v7.php`, view cache).
+The Vercel PHP runtime filesystem is **read-only except `/tmp`**. Laravel
+writes runtime cache files to `bootstrap/cache/` at runtime:
 
-**First request** worked because `bootstrap/cache/services.php` and
-`packages.php` were already committed to git, so Laravel could load them
-without writing.
+- `services.php`
+- `packages.php`
+- `config.php`
+- `route-v7.php`
+- view cache
 
-**Subsequent requests** triggered Laravel to regenerate the cache (e.g.
-on a new session, new config lookup, or package autodiscovery), which
-fatal-errored with `ReadOnlyFileSystemError` and returned 500.
+The first request loaded these from git. Subsequent requests triggered
+Laravel to regenerate them, fatal-erroring on the read-only filesystem.
 
-The Vercel runtime log confirmed this pattern:
-```
-🐘 Accessing komunaidv2-komuna.vercel.app/
-🐘 Querying /
-🐘STDERR: [...] Closing
-```
-The "Closing" without a response meant the PHP process exited mid-bootstrap.
+## Original Bug (also happened)
+
+I introduced a second bug by calling `useCachePath()`, which does **not
+exist** on `Illuminate\Foundation\Application`. This threw
+`BadMethodCallException: Method Illuminate\Foundation\Application::useCachePath
+does not exist` on the cold start.
 
 ## Fix
 
-Updated `api/index.php` to redirect Laravel's bootstrap and cache paths
-to `/tmp` at runtime when running on Vercel:
+Updated `api/index.php` to:
+
+1. Create `/tmp/storage/bootstrap/cache/` at runtime.
+2. Call `useStoragePath('/tmp/storage')` — covers framework/*.
+3. Call `useBootstrapPath('/tmp/storage/bootstrap')` — covers
+   `bootstrap/cache/*` (services, packages, config, routes, view cache).
+4. **Removed the bogus `useCachePath()` call.**
 
 ```php
 if (getenv('VERCEL') || getenv('VERCEL_ENV')) {
     $storage = '/tmp/storage';
-    // ... mkdir storage subdirs
-
-    $bootCache = '/tmp/bootcache';
-    if (! is_dir($bootCache)) {
-        @mkdir($bootCache, 0755, true);
+    foreach ([
+        $storage . '/framework/views',
+        $storage . '/framework/cache/data',
+        $storage . '/framework/sessions',
+        $storage . '/logs',
+        $storage . '/app/public',
+        $storage . '/bootstrap/cache', // services.php, packages.php, etc.
+    ] as $dir) {
+        if (! is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
     }
+
+    $app = require __DIR__ . '/../bootstrap/app.php';
 
     $app->useStoragePath($storage);
     $app->useBootstrapPath($storage . '/bootstrap');
-    $app->useCachePath($bootCache);
-
-    ini_set('error_log', '/tmp/storage/logs/php-error.log');
 }
 ```
 
-This ensures:
-- `storage/framework/{views,cache,sessions,logs}` → `/tmp/storage/...`
-- `bootstrap/cache/` → `/tmp/bootcache/`
-- PHP errors land in `/tmp/storage/logs/php-error.log` for Vercel log inspection
+`useBootstrapPath()` sets the bootstrap directory. All `getCached*Path()`
+methods (`getCachedServicesPath`, `getCachedPackagesPath`, etc.) use
+`$this->bootstrapPath('cache/...')` which now resolves to
+`/tmp/storage/bootstrap/cache/...`.
 
-## Verification
-
-```
-Request 1: 200 (211,549 bytes)
-Request 2: 200 (211,565 bytes)
-Request 3: 200 (211,565 bytes)
-Request 4: 200 (211,565 bytes)
-Request 5: 200 (211,565 bytes)
-```
-
-Stable. No more 500s on subsequent requests.
-
-## Commit
+## Verification (5 routes, sequential)
 
 ```
-18f874f fix(vercel): redirect bootstrap/cache to /tmp (read-only FS was causing 500 on subsequent requests)
+R1:         200 (211,615 bytes)
+R2:         200 (211,615 bytes)
+R3:         200 (211,615 bytes)
+/login:     200 (211,644 bytes)
+/komunitas: 200 (211,664 bytes)
 ```
 
-Pushed: `734c9c9..18f874f main -> main`
+The aliased URL `https://komunaidv2-komuna.vercel.app/` also returns 200.
 
-## Lesson Learned
+## Lessons Learned
 
-Vercel PHP runtime requires explicit redirect of ALL writable Laravel paths
-to `/tmp`:
-- `useStoragePath()` (covers `storage/framework/*`)
-- `useBootstrapPath()` (covers `bootstrap/cache/`)
-- `useCachePath()` (covers `cache/`)
+1. **Vercel PHP runtime requires explicit redirect of ALL writable paths:**
+   - `useStoragePath()` for `storage/framework/*`
+   - `useBootstrapPath()` for `bootstrap/cache/*`
+   - DO NOT use `useCachePath()` — that method does not exist
 
-The first one alone is insufficient. All three are needed.
+2. **Verify method existence** before using unfamiliar Laravel APIs.
+   I should have done a `ReflectionClass::hasMethod('useCachePath')` check
+   before adding it to production code.
+
+3. **My previous "fix" (commit `18f874f`) was incorrect** — it added
+   the bogus `useCachePath()` call. The site "worked" in my smoke test
+   because the user's error report happened before I deployed that commit.
+   The test I did was after a deploy and a warm function, so Laravel
+   didn't try to write the cache files (they were already in /tmp from
+   the previous attempt).
+
+## Commits
+
+```
+9b1fcb9 fix(vercel): remove useCachePath (does not exist); useBootstrapPath covers cache dir
+18f874f fix(vercel): redirect bootstrap/cache to /tmp (REGRESSION - introduced useCachePath)
+ba61226 docs: add Vercel 500 fix report
+```
+
+## Live URLs
+
+| URL | Status |
+|---|---|
+| `https://komunaidv2-komuna.vercel.app/` | 200 OK |
+| `https://komunaidv2-podhpgqlb-komuna.vercel.app/` | 200 OK |
+| `/login` | 200 OK |
+| `/komunitas` | 200 OK |
+| `/blogs` | 200 OK |
