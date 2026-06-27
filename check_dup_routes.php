@@ -1,17 +1,17 @@
 <?php
-chdir('C:\Xampp\htdocs\komunaid');
-require 'vendor/autoload.php';
-$app = require 'bootstrap/app.php';
-$kernel = $app->make(Illuminate\Contracts\Http\Kernel::class);
-$kernel->bootstrap();
-$names = [];
-foreach (Illuminate\Support\Facades\Route::getRoutes() as $r) {
-    $n = $r->getName();
-    if ($n) $names[] = $n;
+$raw = file_get_contents($argv[1] ?? 'php://stdin');
+$data = json_decode($raw, true);
+if (!is_array($data)) {
+    fwrite(STDERR, "not array\n");
+    exit(1);
 }
-$dups = array_count_values($names);
-ksort($dups);
-foreach ($dups as $name => $c) {
-    if ($c > 1) echo "$c× $name\n";
+$names = array_column($data, 'name');
+$named = array_filter($names);
+echo 'TOTAL: ' . count($data) . PHP_EOL;
+echo 'NAMED: ' . count($named) . PHP_EOL;
+$counts = array_count_values($named);
+$dups = array_filter($counts, fn($c) => $c > 1);
+echo 'DUPES: ' . count($dups) . PHP_EOL;
+foreach ($dups as $n => $c) {
+    echo "  $c x $n" . PHP_EOL;
 }
-echo 'TOTAL: '.count($names)." named routes\n";
