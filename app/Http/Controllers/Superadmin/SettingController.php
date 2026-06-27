@@ -62,9 +62,13 @@ class SettingController extends Controller
 
     public function resetDemoPasswords(Request $request)
     {
-        $request->validate([
-            'password' => 'required|string|min:4|max:255',
-        ]);
+        try {
+            $request->validate([
+                'password' => 'required|string|min:4|max:255',
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->errors())->withInput();
+        }
 
         $demoEmails = [
             'superadmin@komuna.test',
@@ -79,22 +83,28 @@ class SettingController extends Controller
 
         $count = 0;
         $emails = [];
+        $hash = Hash::make($request->input('password'));
         foreach ($demoEmails as $email) {
             $u = User::where('email', $email)->first();
             if ($u) {
-                $u->update(['password' => Hash::make($request->input('password'))]);
+                $u->password = $hash;
+                $u->save();
                 $emails[] = $email;
                 $count++;
             }
         }
 
-        AuditLog::log(
-            'demo_passwords_reset',
-            auth()->user(),
-            'Password akun demo di-reset',
-            null,
-            ['emails' => $emails, 'count' => $count]
-        );
+        try {
+            AuditLog::log(
+                'demo_passwords_reset',
+                auth()->user(),
+                'Password akun demo di-reset',
+                null,
+                ['emails' => $emails, 'count' => $count]
+            );
+        } catch (\Throwable $e) {
+            // never let audit log failure break the reset
+        }
 
         return back()->with('success', "Password {$count} akun demo berhasil direset.");
     }
