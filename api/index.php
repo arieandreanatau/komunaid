@@ -52,25 +52,38 @@ if (getenv('VERCEL') || getenv('VERCEL_ENV')) {
 // Static file serving for Vercel PHP runtime
 // The Vercel PHP runtime does NOT serve files from public/build/ when
 // outputDirectory is set. We intercept /build/* requests here and serve
-// the files directly from public/build/. This must happen BEFORE Laravel
-// boots to avoid loading the full framework for static assets.
+// the files directly. Try multiple locations because the Vercel build
+// may place files at different paths depending on outputDirectory config.
 $uri = urldecode(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/');
 
 if (preg_match('#^/build/(.*)$#', $uri, $matches)) {
     $path = $matches[1];
-    $fullPath = __DIR__ . '/../public/build/' . $path;
 
-    // Path traversal protection
-    $realBase = realpath(__DIR__ . '/../public/build');
-    $realPath = realpath($fullPath);
+    // Try multiple candidate locations for the build files
+    $candidates = [
+        __DIR__ . '/../public/build/' . $path,
+        __DIR__ . '/../build/' . $path,
+        __DIR__ . '/public/build/' . $path,
+        __DIR__ . '/build/' . $path,
+    ];
 
-    if (
-        $realPath !== false &&
-        $realBase !== false &&
-        str_starts_with($realPath, $realBase) &&
-        is_file($realPath)
-    ) {
-        $extension = strtolower(pathinfo($realPath, PATHINFO_EXTENSION));
+    $resolved = null;
+    foreach ($candidates as $candidate) {
+        $realBase = realpath(dirname($candidate) . '/..');
+        $realPath = realpath($candidate);
+        if (
+            $realPath !== false &&
+            $realBase !== false &&
+            str_starts_with($realPath, $realBase) &&
+            is_file($realPath)
+        ) {
+            $resolved = $realPath;
+            break;
+        }
+    }
+
+    if ($resolved !== null) {
+        $extension = strtolower(pathinfo($resolved, PATHINFO_EXTENSION));
         $mimeTypes = [
             'js'    => 'application/javascript; charset=utf-8',
             'mjs'   => 'application/javascript; charset=utf-8',
@@ -96,12 +109,12 @@ if (preg_match('#^/build/(.*)$#', $uri, $matches)) {
         $contentType = $mimeTypes[$extension] ?? 'application/octet-stream';
 
         header('Content-Type: ' . $contentType);
-        header('Content-Length: ' . filesize($realPath));
+        header('Content-Length: ' . filesize($resolved));
         header('Cache-Control: public, max-age=31536000, immutable');
         header('Access-Control-Allow-Origin: *');
         header('X-Content-Type-Options: nosniff');
 
-        readfile($realPath);
+        readfile($resolved);
         exit;
     }
 }
