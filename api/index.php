@@ -53,6 +53,14 @@ $kernel = $app->make(Illuminate\Contracts\Http\Kernel::class);
 
 $response = $kernel->handle(
     $request = Request::capture()
-)->send();
+);
+
+// Prevent Vercel CDN from caching stale or auth-protected responses
+// so logged-in Vercel users don't see SSO / login pages from a previous
+// session instead of the actual Laravel response.
+$response->headers->set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+$response->headers->set('Pragma', 'no-cache');
+
+$response->send();
 
 $kernel->terminate($request, $response);
