@@ -1,8 +1,8 @@
 {
   "outputDirectory": "public",
   "framework": null,
-  "buildCommand": "bash vercel-build.sh",
-  "installCommand": "echo 'composer install handled in buildCommand'",
+  "buildCommand": "npm run build",
+  "installCommand": "curl -sS https://getcomposer.org/installer | php -- --install-dir=/tmp --filename=composer && export PATH=\"/tmp:$PATH\" && composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist && php artisan package:discover --ansi && php artisan view:cache --ansi && php artisan config:cache --ansi && php artisan route:cache --ansi",
   "functions": {
     "api/index.php": {
       "runtime": "vercel-php@0.8.0",
