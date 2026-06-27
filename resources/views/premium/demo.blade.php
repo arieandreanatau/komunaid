@@ -29,7 +29,7 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach(\App\Support\Enums\FeatureKeyEnum::cases() as $feature)
+                @foreach(\App\Enums\FeatureKeyEnum::cases() as $feature)
                     @php $locked = $premium->isLockedByEnum(auth()->user(), $feature); @endphp
                     <tr class="border-b">
                         <td class="py-2">{{ $feature->value }}</td>
