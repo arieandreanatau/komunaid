@@ -29,9 +29,13 @@ Route::prefix('blogs')->name('blogs.')->group(function () {
     Route::get('/', [PublicBlogController::class, 'index'])->name('index');
     Route::get('/{slug}', [PublicBlogController::class, 'show'])->name('show');
 });
+Route::get('/blog', [PublicBlogController::class, 'index'])->name('blog.alias');
+Route::get('/blog/{slug}', [PublicBlogController::class, 'show'])->name('blog.alias.show');
 
 Route::get('/komunitas', [PublicCommunityController::class, 'index'])->name('communities.directory');
 Route::get('/komunitas/{slug}', [PublicCommunityController::class, 'show'])->name('communities.detail');
+Route::get('/communities', [PublicCommunityController::class, 'index'])->name('communities.directory.en');
+Route::get('/communities/{slug}', [PublicCommunityController::class, 'show'])->name('communities.detail.en');
 Route::get('/events', [PublicEventController::class, 'index'])->name('events.index');
 Route::get('/events/{slug}', [PublicEventController::class, 'show'])->name('events.show');
 

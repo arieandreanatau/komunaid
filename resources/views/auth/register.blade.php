@@ -13,6 +13,12 @@
         </div>
     @endif
 
+    @if($errors->any())
+        <div class="mb-4">
+            <x-alert type="error" :message="$errors->first()" />
+        </div>
+    @endif
+
     <form method="POST" action="{{ route('register') }}">
         @csrf
         <div class="space-y-4">

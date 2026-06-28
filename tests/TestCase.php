@@ -4,6 +4,7 @@ namespace Tests;
 
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\RateLimiter;
 use Spatie\Permission\Models\Role;
 
 abstract class TestCase extends BaseTestCase
@@ -16,6 +17,9 @@ abstract class TestCase extends BaseTestCase
         parent::setUp();
 
         $this->seedRolesIfNeeded();
+        RateLimiter::clear('login');
+        RateLimiter::clear('forgot-password');
+        RateLimiter::clear('register');
     }
 
     protected function seedRolesIfNeeded(): void

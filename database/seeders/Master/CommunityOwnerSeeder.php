@@ -34,6 +34,17 @@ class CommunityOwnerSeeder extends Seeder
         }
 
         $communityOwner = User::where('email', 'community@komuna.id')->first();
+        if (!$communityOwner) {
+            $communityOwner = User::updateOrCreate(
+                ['email' => 'community@komuna.id'],
+                [
+                    'name' => 'Community Demo Owner',
+                    'username' => 'community_owner',
+                    'password' => bcrypt('password'),
+                ]
+            );
+            $communityOwner->assignRole('community_owner');
+        }
 
         // Create pending community
         $pendingCommunity = Community::updateOrCreate(
@@ -124,7 +135,29 @@ class CommunityOwnerSeeder extends Seeder
 
         // Create members for gaming community
         $member = User::where('email', 'member@komuna.id')->first();
+        if (!$member) {
+            $member = User::updateOrCreate(
+                ['email' => 'member@komuna.id'],
+                [
+                    'name' => 'Demo Member',
+                    'username' => 'demo_member',
+                    'password' => bcrypt('password'),
+                ]
+            );
+            $member->assignRole('member');
+        }
         $superadmin = User::where('email', 'superadmin@komuna.id')->first();
+        if (!$superadmin) {
+            $superadmin = User::updateOrCreate(
+                ['email' => 'superadmin@komuna.id'],
+                [
+                    'name' => 'Demo Superadmin',
+                    'username' => 'demo_superadmin',
+                    'password' => bcrypt('password'),
+                ]
+            );
+            $superadmin->assignRole('superadmin');
+        }
 
         // Member joins gaming community (idempotent)
         CommunityMember::firstOrCreate(

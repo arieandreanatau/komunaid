@@ -1,0 +1,251 @@
+﻿
+   PASS  Tests\Unit\RedirectByRoleServiceTest
+  ✓ banned user redirected to account restricted                                                                 0.83s  
+  ✓ suspended user redirected to account restricted                                                              0.38s  
+  ✓ banned status user redirected to account restricted                                                          0.38s  
+  ✓ superadmin redirected to superadmin dashboard                                                                0.39s  
+  ✓ platform admin redirected to superadmin dashboard                                                            0.38s  
+  ✓ company owner redirected to company dashboard                                                                0.38s  
+  ✓ brand owner redirected to brand dashboard                                                                    0.39s  
+  ✓ community owner redirected to community dashboard                                                            0.40s  
+  ✓ member redirected to member dashboard                                                                        0.38s  
+  ✓ user without role redirected to onboarding                                                                   0.42s  
+
+   PASS  Tests\Feature\AdminChatTest
+  ✓ admin chat index loads                                                                                       2.53s  
+  ✓ admin chat create page loads                                                                                 0.43s  
+  ✓ admin chat search loads                                                                                      0.41s  
+  ✓ member cannot access admin chat                                                                              0.42s  
+  ✓ admin chat create conversation                                                                               0.44s  
+  ✓ admin chat show conversation                                                                                 0.66s  
+  ✓ admin chat send message                                                                                      0.43s  
+  ✓ admin chat message escapes html                                                                              0.41s  
+
+   PASS  Tests\Feature\AuthTest
+  ✓ login page loads                                                                                             0.48s  
+  ✓ register page loads                                                                                          0.49s  
+  ✓ register with email and password                                                                             0.45s  
+  ✓ register with username and password                                                                          0.42s  
+  ✓ register without email and username fails                                                                    0.11s  
+  ✓ register assigns member role                                                                                 0.41s  
+  ✓ login with email                                                                                             0.68s  
+  ✓ login with username                                                                                          0.70s  
+  ✓ login wrong password fails                                                                                   0.70s  
+  ✓ superadmin login via superadmin panel                                                                        0.74s  
+  ✓ member cannot login via superadmin panel                                                                     0.73s  
+  ✓ superadmin rejected from user login                                                                          0.71s  
+  ✓ banned user cannot login                                                                                     0.73s  
+  ✓ suspended user cannot login                                                                                  0.70s  
+  ✓ logout invalidates session                                                                                   0.40s  
+  ✓ superadmin logout redirects to admin login                                                                   0.41s  
+  ✓ register duplicate email fails                                                                               0.41s  
+  ✓ register duplicate username fails                                                                            0.43s  
+  ✓ forgot password page loads                                                                                   0.10s  
+
+   PASS  Tests\Feature\BannedAndSuspendedTest
+  ✓ banned user blocked from member dashboard                                                                    0.42s  
+  ✓ suspended user blocked from member dashboard                                                                 0.41s  
+  ✓ banned user gets account restricted via direct route                                                         0.12s  
+  ✓ active user can access member dashboard                                                                      2.13s  
+
+   PASS  Tests\Feature\BrandCompanyCollaborationTest
+  ✓ brand owner dashboard loads                                                                                  1.06s  
+  ✓ brand owner brands index                                                                                     0.42s  
+  ✓ brand owner create brand form                                                                                0.41s  
+  ✓ brand owner campaigns index                                                                                  0.42s  
+  ✓ brand owner collaborations index                                                                             0.80s  
+  ✓ brand owner proposals index                                                                                  0.43s  
+  ✓ brand owner community directory                                                                              0.42s  
+  ✓ brand owner settings loads                                                                                   0.44s  
+  ✓ company owner dashboard loads                                                                                1.07s  
+  ✓ company owner companies index                                                                                0.44s  
+  ✓ company owner create company form                                                                            0.55s  
+  ✓ company owner collaborations index                                                                           0.44s  
+  ✓ company owner settings loads                                                                                 0.43s  
+  ✓ member cannot access brand routes                                                                            0.40s  
+  ✓ member cannot access company routes                                                                          0.41s  
+
+   PASS  Tests\Feature\CmsPolicyTest
+  ✓ superadmin can view any                                                                                      0.42s  
+  ✓ platform admin can view any                                                                                  0.39s  
+  ✓ member cannot view any                                                                                       0.38s  
+  ✓ superadmin can create                                                                                        0.39s  
+  ✓ member cannot create                                                                                         0.40s  
+  ✓ platform admin can publish                                                                                   0.69s  
+  ✓ only superadmin can delete                                                                                   0.98s  
+  ✓ member cannot update                                                                                         0.68s  
+
+   PASS  Tests\Feature\CommunityModuleTest
+  ✓ community owner dashboard loads                                                                              1.16s  
+  ✓ community owner communities index                                                                            0.43s  
+  ✓ community owner create community form                                                                        0.63s  
+  ✓ community owner events index                                                                                 0.75s  
+  ✓ community owner collaborations index                                                                         0.70s  
+  ✓ community owner proposals index                                                                              0.44s  
+  ✓ community owner wallet index                                                                                 0.59s  
+  ✓ community owner donations index                                                                              0.42s  
+  ✓ member cannot access community owner routes                                                                  0.41s  
+
+   PASS  Tests\Feature\CompanyPolicyTest
+  ✓ superadmin can view any company                                                                              0.72s  
+  ✓ owner can view own company                                                                                   0.42s  
+  ✓ non owner cannot view company                                                                                0.75s  
+  ✓ only company owner role can create                                                                           0.69s  
+  ✓ owner can update own company                                                                                 0.38s  
+  ✓ superadmin can update any company                                                                            0.71s  
+  ✓ non owner cannot update                                                                                      0.75s  
+  ✓ only superadmin can approve                                                                                  0.70s  
+
+   PASS  Tests\Feature\CronRouteTest
+  ✓ cron route without token returns 403                                                                         0.11s  
+  ✓ cron route with invalid token returns 403                                                                    0.09s  
+  ✓ cron route with bearer token returns 403 if wrong                                                            0.10s  
+  ✓ cron route returns 503 when secret not configured                                                            0.12s  
+  ✓ cron route with correct query token executes                                                                 0.30s  
+  ✓ cron route with correct bearer token executes                                                                0.10s  
+
+   PASS  Tests\Feature\DocumentationGeneratorTest
+  ✓ documentation dashboard loads                                                                                0.68s  
+  ✓ generate index page loads                                                                                    0.43s  
+  ✓ route inventory loads                                                                                        0.45s  
+  ✓ database inventory loads                                                                                     1.95s  
+  ✓ member cannot access documentation                                                                           0.44s  
+  ✓ documentation model factory works                                                                            0.40s  
+
+   PASS  Tests\Feature\DocumentationPolicyTest
+  ✓ superadmin can view any                                                                                      0.47s  
+  ✓ platform admin can view any                                                                                  0.42s  
+  ✓ member cannot view any                                                                                       0.40s  
+  ✓ platform admin can generate                                                                                  0.40s  
+  ✓ member cannot generate                                                                                       0.39s  
+  ✓ superadmin can download                                                                                      0.68s  
+  ✓ only superadmin can delete                                                                                   0.98s  
+  ✓ member cannot view specific file                                                                             0.72s  
+
+   PASS  Tests\Feature\EventFinanceServiceTest
+  ✓ recompute summary with no transactions                                                                       0.44s  
+  ✓ recompute summary counts only verified transactions                                                          0.42s  
+  ✓ net balance returns float                                                                                    0.42s  
+
+   PASS  Tests\Feature\EventModuleTest
+  ✓ community owner events index                                                                                 0.41s  
+  ✓ community owner create event form                                                                            0.72s  
+  ✓ public events index                                                                                          1.02s  
+  ✓ member events index                                                                                          0.66s  
+  ✓ member my registrations                                                                                      0.42s  
+
+   PASS  Tests\Feature\HttpPolicyEnforcementTest
+  ✓ company owner cannot edit other owners company via http                                                      0.71s  
+  ✓ superadmin can edit any company via http                                                                     0.72s  
+  ✓ member cannot create cms blog via http                                                                       0.43s  
+  ✓ platform admin can access cms via http                                                                       0.44s  
+  ✓ member cannot access documentation via http                                                                  0.42s  
+  ✓ platform admin can access documentation via http                                                             0.42s  
+
+   PASS  Tests\Feature\LanguageSwitcherTest
+  ✓ language switch route is registered                                                                          0.11s  
+  ✓ switching to id persists locale in session                                                                   0.10s  
+  ✓ switching to en persists locale in session                                                                   0.09s  
+  ✓ unsupported locale returns 404                                                                               0.10s  
+  ✓ translation files have matching keys                                                                         0.09s  
+
+   PASS  Tests\Feature\MemberModuleTest
+  ✓ member dashboard loads                                                                                       0.45s  
+  ✓ member profile loads                                                                                         1.12s  
+  ✓ member interests loads                                                                                       0.62s  
+  ✓ member communities loads                                                                                     0.84s  
+  ✓ member events loads                                                                                          0.40s  
+  ✓ member friends loads                                                                                         0.77s  
+  ✓ member bookmarks loads                                                                                       0.41s  
+  ✓ member gallery loads                                                                                         0.40s  
+  ✓ member history loads                                                                                         0.44s  
+  ✓ member wallet loads                                                                                          0.42s  
+  ✓ member role requests loads                                                                                   0.42s  
+  ✓ member donations loads                                                                                       0.45s  
+  ✓ member profile update                                                                                        0.43s  
+
+   PASS  Tests\Feature\MultilanguageTest
+  ✓ default locale is indonesian                                                                                 0.37s  
+  ✓ invalid locale does not cause 500                                                                            0.12s  
+  ✓ switch to english                                                                                            0.14s  
+  ✓ switch to sunda                                                                                              0.13s  
+  ✓ about page multilanguage                                                                                     0.12s  
+  ✓ contact page multilanguage                                                                                   0.12s  
+
+   PASS  Tests\Feature\PremiumFeatureTest
+  ✓ feature lock model can be created                                                                            0.11s  
+  ✓ feature lock factory works                                                                                   0.09s  
+  ✓ superadmin can access documentation                                                                          0.44s  
+  ✓ member cannot access documentation                                                                           0.41s  
+
+   PASS  Tests\Feature\PublicPageTest
+  ✓ homepage loads                                                                                               0.14s  
+  ✓ about page loads                                                                                             0.12s  
+  ✓ contact page loads                                                                                           0.12s  
+  ✓ blogs page loads                                                                                             0.11s  
+  ✓ communities page loads                                                                                       0.11s  
+  ✓ events page loads                                                                                            0.10s  
+  ✓ account restricted page loads                                                                                0.10s  
+  ✓ public pages not 500                                                                                         0.23s  
+
+   PASS  Tests\Feature\RoleAccessTest
+  ✓ guest redirected to login for member routes                                                                  0.10s  
+  ✓ guest redirected to admin login for superadmin routes                                                        0.10s  
+  ✓ member cannot access superadmin dashboard                                                                    0.39s  
+  ✓ member cannot access community owner dashboard                                                               0.41s  
+  ✓ community owner can access community dashboard                                                               0.43s  
+  ✓ community owner cannot access brand dashboard                                                                0.40s  
+  ✓ brand owner can access brand dashboard                                                                       0.41s  
+  ✓ brand owner cannot access company dashboard                                                                  0.40s  
+  ✓ company owner can access company dashboard                                                                   0.43s  
+  ✓ superadmin can access superadmin dashboard                                                                   0.83s  
+  ✓ platform admin can access superadmin dashboard                                                               0.45s  
+  ✓ member can access member dashboard                                                                           0.44s  
+  ✓ banned user redirected from member dashboard                                                                 0.41s  
+
+   PASS  Tests\Feature\RouteNamingTest
+  ✓ no duplicate route names                                                                                     0.13s  
+  ✓ all parameterless named routes resolve via route helper                                                      0.09s  
+  ✓ route modules split files exist                                                                              0.08s  
+  ✓ cron route is token protected                                                                                0.09s  
+
+   PASS  Tests\Feature\SecurityTest
+  ✓ guest cannot access member dashboard                                                                         0.11s  
+  ✓ guest cannot access superadmin dashboard                                                                     0.11s  
+  ✓ member cannot access superadmin panel                                                                        0.39s  
+  ✓ banned user cannot access member dashboard                                                                   0.39s  
+  ✓ suspended user cannot access member dashboard                                                                0.39s  
+  ✓ delete actions not via get                                                                                   0.41s  
+  ✓ csrf token required for post                                                                                 0.14s  
+  ✓ suggestion requires message                                                                                  0.11s  
+  ✓ export no password in response                                                                               0.41s  
+  ✓ export no remember token                                                                                     0.40s  
+  ✓ public no draft data                                                                                         0.11s  
+  ✓ invalid locale no 500                                                                                        0.12s  
+  ✓ superadmin export no password                                                                                0.43s  
+  ✓ superadmin export no remember token                                                                          0.42s  
+
+   PASS  Tests\Feature\SuperadminDashboardTest
+  ✓ superadmin dashboard loads                                                                                   0.47s  
+  ✓ members index loads                                                                                          0.60s  
+  ✓ communities index loads                                                                                      0.42s  
+  ✓ events index loads                                                                                           0.69s  
+  ✓ brands index loads                                                                                           0.44s  
+  ✓ companies index loads                                                                                        0.45s  
+  ✓ cms dashboard loads                                                                                          0.42s  
+  ✓ admin chat index loads                                                                                       0.43s  
+  ✓ documentation index loads                                                                                    0.43s  
+  ✓ approval center loads                                                                                        1.05s  
+  ✓ role requests index loads                                                                                    0.69s  
+  ✓ community owners index loads                                                                                 0.57s  
+  ✓ brand owners index loads                                                                                     0.54s  
+  ✓ login logs loads                                                                                             0.44s  
+  ✓ audit logs loads                                                                                             0.43s  
+  ✓ master data loads                                                                                            0.53s  
+  ✓ settings profile loads                                                                                       0.43s  
+  ✓ settings password loads                                                                                      0.46s  
+  ✓ non superadmin gets 403                                                                                      0.42s  
+
+  Tests:    201 passed (588 assertions)
+  Duration: 94.33s
+

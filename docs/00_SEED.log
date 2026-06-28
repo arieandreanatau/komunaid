@@ -1,0 +1,101 @@
+﻿
+   INFO  Seeding database.  
+
+  Database\Seeders\Master\RoleSeeder ......................................................................... RUNNING  
+  Database\Seeders\Master\RoleSeeder ...................................................................... 87 ms DONE  
+
+  Database\Seeders\Master\SuperadminSeeder ................................................................... RUNNING  
+  Database\Seeders\Master\SuperadminSeeder ............................................................... 317 ms DONE  
+
+  Database\Seeders\Master\CommunityCategorySeeder ............................................................ RUNNING  
+  Database\Seeders\Master\CommunityCategorySeeder ......................................................... 41 ms DONE  
+
+  Database\Seeders\Master\InterestSeeder ..................................................................... RUNNING  
+  Database\Seeders\Master\InterestSeeder .................................................................. 57 ms DONE  
+
+  Database\Seeders\Master\RegionSeeder ....................................................................... RUNNING  
+  Database\Seeders\Master\RegionSeeder .................................................................... 64 ms DONE  
+
+  Database\Seeders\Master\EventTypeSeeder .................................................................... RUNNING  
+  Database\Seeders\Master\EventTypeSeeder ................................................................. 34 ms DONE  
+
+  Database\Seeders\Master\CollaborationTypeSeeder ............................................................ RUNNING  
+  Database\Seeders\Master\CollaborationTypeSeeder ......................................................... 26 ms DONE  
+
+  Database\Seeders\Master\ContactSettingSeeder ............................................................... RUNNING  
+  Database\Seeders\Master\ContactSettingSeeder ............................................................ 12 ms DONE  
+
+  Database\Seeders\Master\FeatureLockSeeder .................................................................. RUNNING  
+  Database\Seeders\Master\FeatureLockSeeder ............................................................... 57 ms DONE  
+
+  Database\Seeders\Master\PremiumPlanSeeder .................................................................. RUNNING  
+  Database\Seeders\Master\PremiumPlanSeeder ............................................................... 16 ms DONE  
+
+  Database\Seeders\Master\CmsPageSeeder ...................................................................... RUNNING  
+  Database\Seeders\Master\CmsPageSeeder .................................................................... 6 ms DONE  
+
+  Database\Seeders\Master\HomepageSectionSeeder .............................................................. RUNNING  
+  Database\Seeders\Master\HomepageSectionSeeder ........................................................... 27 ms DONE  
+
+  Database\Seeders\Master\CommunityOwnerSeeder ............................................................... RUNNING  
+  Database\Seeders\Master\CommunityOwnerSeeder ........................................................... 981 ms DONE  
+
+  Database\Seeders\Master\CommunitySeeder .................................................................... RUNNING  
+  Database\Seeders\Master\CommunitySeeder ................................................................. 66 ms DONE  
+
+  Database\Seeders\Master\WalletTransactionSeeder ............................................................ RUNNING  
+Dummy wallet transactions seeder completed.
+  Database\Seeders\Master\WalletTransactionSeeder ........................................................ 139 ms DONE  
+
+  Database\Seeders\Demo\DemoUserSeeder ....................................................................... RUNNING  
+Demo users seeded successfully.
+  superadmin@komuna.test / password
+  admin@komuna.test / password
+  member@komuna.test / password
+  community.owner@komuna.test / password
+  brand.owner@komuna.test / password
+  company.owner@komuna.test / password
+  banned@komuna.test / password (banned)
+  suspended@komuna.test / password (suspended)
+  Database\Seeders\Demo\DemoUserSeeder ................................................................. 2,553 ms DONE  
+
+  Database\Seeders\Demo\DemoCommunitySeeder .................................................................. RUNNING  
+  Database\Seeders\Demo\DemoCommunitySeeder .............................................................. 173 ms DONE  
+
+  Database\Seeders\Demo\DemoEventSeeder ...................................................................... RUNNING  
+  Database\Seeders\Demo\DemoEventSeeder .................................................................. 216 ms DONE  
+
+  Database\Seeders\Demo\DemoBrandCompanySeeder ............................................................... RUNNING  
+  Database\Seeders\Demo\DemoBrandCompanySeeder ............................................................ 33 ms DONE  
+
+  Database\Seeders\Demo\DemoCollaborationSeeder .............................................................. RUNNING  
+  Database\Seeders\Demo\DemoCollaborationSeeder ........................................................... 30 ms DONE  
+
+  Database\Seeders\Demo\DemoPremiumTrialSeeder ............................................................... RUNNING  
+  Database\Seeders\Demo\DemoPremiumTrialSeeder ............................................................ 49 ms DONE  
+
+  Database\Seeders\Demo\DemoCmsContentSeeder ................................................................. RUNNING  
+  Database\Seeders\Demo\DemoCmsContentSeeder .............................................................. 56 ms DONE  
+
+  Database\Seeders\Demo\DemoAdminChatSeeder .................................................................. RUNNING  
+  Database\Seeders\Demo\DemoAdminChatSeeder ............................................................... 47 ms DONE  
+
+  Database\Seeders\Demo\DemoExtraDataSeeder .................................................................. RUNNING  
+Extra members seeded: 24
+Extra brands seeded: 6
+Extra companies seeded: 3
+Extra communities seeded: 5
+Extra events seeded: 6
+Brand members added: 12
+
+=== Demo Login Credentials (password: password) ===
+  superadmin@komuna.id / superadmin@komuna.test
+  admin@komuna.test (admin_platform)
+  member@komuna.test (member)
+  community.owner@komuna.test (community_owner)
+  brand.owner@komuna.test (brand_owner)
+  company.owner@komuna.test (company_owner)
+  Extra members: andi.pratama@komuna.test .. sasha.iskandar@komuna.test (24 users)
+==================================================
+  Database\Seeders\Demo\DemoExtraDataSeeder ............................................................ 7,896 ms DONE  
+
