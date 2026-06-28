@@ -46,7 +46,7 @@ class OnboardingController extends Controller
     {
         $user = auth()->user();
 
-        $request->validate([
+        $validated = $request->validate([
             'requested_role' => 'required|in:community_owner,brand_owner,company_owner',
             'motivation' => 'nullable|string|max:2000',
             'community_name' => 'nullable|string|max:255',
@@ -65,12 +65,12 @@ class OnboardingController extends Controller
         ]);
 
         $service = app(RoleRequestService::class);
-        $error = $service->canRequestRole($user, $request->input('requested_role'));
+        $error = $service->canRequestRole($user, $validated['requested_role']);
         if ($error) {
             return back()->withErrors(['requested_role' => $error]);
         }
 
-        $roleRequest = $service->createRequest($user, $request->validated());
+        $roleRequest = $service->createRequest($user, $validated);
 
         return redirect()->route('onboarding.role-request.status', ['roleRequest' => $roleRequest->id])
             ->with('success', 'Pengajuan role berhasil dikirim. Silakan menunggu persetujuan Superadmin.');

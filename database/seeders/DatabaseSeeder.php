@@ -45,10 +45,19 @@ class DatabaseSeeder extends Seeder
             PremiumPlanSeeder::class,
             CmsPageSeeder::class,
             HomepageSectionSeeder::class,
-            CommunityOwnerSeeder::class,
-            CommunitySeeder::class,
-            WalletTransactionSeeder::class,
         ]);
+
+        // Optional master seeders (only run if their class file exists)
+        $optionalMaster = [
+            \Database\Seeders\Master\CommunityOwnerSeeder::class,
+            \Database\Seeders\Master\CommunitySeeder::class,
+            \Database\Seeders\Master\WalletTransactionSeeder::class,
+        ];
+        foreach ($optionalMaster as $seeder) {
+            if (class_exists($seeder)) {
+                $this->call($seeder);
+            }
+        }
 
         if (app()->environment('local') || config('app.debug')) {
             $this->call([

@@ -14,7 +14,9 @@ class Company extends Model
     protected $fillable = [
         'owner_id', 'name', 'slug', 'legal_name', 'industry', 'description',
         'logo_path', 'website_url', 'email', 'phone', 'address', 'city',
-        'province', 'status', 'is_verified', 'created_by', 'updated_by',
+        'province', 'status', 'approved_by', 'approved_at', 'rejection_reason',
+        'revision_notes', 'submitted_at', 'tax_number', 'is_verified',
+        'created_by', 'updated_by',
     ];
 
     protected $casts = ['is_verified' => 'boolean'];

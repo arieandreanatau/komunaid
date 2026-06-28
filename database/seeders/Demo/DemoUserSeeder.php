@@ -93,8 +93,11 @@ class DemoUserSeeder extends Seeder
         foreach ($demoUsers as $data) {
             $status = $data['status'] ?? 'active';
 
-            $existing = User::where('username', $data['username'])->first();
+            $existing = User::withTrashed()->where('username', $data['username'])->first();
             if ($existing) {
+                if ($existing->trashed()) {
+                    $existing->restore();
+                }
                 $user = $existing;
                 $user->update([
                     'email' => $data['email'],

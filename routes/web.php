@@ -48,3 +48,6 @@ Route::middleware(['auth', 'admin'])->group(function () {
 Route::get('/api/cron/scheduler', [CronController::class, 'run'])
     ->middleware('cron.token')
     ->name('cron.scheduler');
+
+// Simplified auth + entity submission module (parallel to legacy flow)
+require __DIR__.'/modules/simplified.php';
