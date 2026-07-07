@@ -1,0 +1,16 @@
+{
+  "installCommand": "pnpm install",
+  "buildCommand": "pnpm --filter @komunaid/shared build && pnpm --filter @komunaid/database db:generate && pnpm --filter @komunaid/api build",
+  "outputDirectory": ".",
+  "framework": null,
+  "rewrites": [
+    { "source": "/api/v1/(.*)", "destination": "/apps/api/api/index.ts" },
+    { "source": "/api/(.*)", "destination": "/apps/api/api/index.ts" },
+    { "source": "/(api.*)", "destination": "/apps/api/api/index.ts" }
+  ],
+  "functions": {
+    "apps/api/api/index.ts": {
+      "maxDuration": 30
+    }
+  }
+}
