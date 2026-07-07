@@ -1,0 +1,36 @@
+FROM node:22-alpine AS base
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+FROM base AS builder
+WORKDIR /app
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/database/package.json ./packages/database/
+COPY apps/api/package.json ./apps/api/
+RUN pnpm install --frozen-lockfile
+
+COPY tsconfig.json ./
+COPY packages/shared/ ./packages/shared/
+COPY packages/database/ ./packages/database/
+COPY apps/api/ ./apps/api/
+RUN pnpm --filter @komunaid/shared build
+RUN pnpm --filter @komunaid/database db:generate
+RUN pnpm --filter @komunaid/api build
+
+FROM base AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+
+RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nestjs
+
+COPY --from=builder --chown=nestjs:nodejs /app/apps/api/dist ./dist
+COPY --from=builder --chown=nestjs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nestjs:nodejs /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder --chown=nestjs:nodejs /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=builder --chown=nestjs:nodejs /app/packages/database/prisma ./packages/database/prisma
+COPY --from=builder --chown=nestjs:nodejs /app/packages/database/src ./packages/database/src
+COPY --from=builder --chown=nestjs:nodejs /app/packages/database/package.json ./packages/database/package.json
+
+USER nestjs
+EXPOSE 4000
+CMD ["node", "dist/main.js"]

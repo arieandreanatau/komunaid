@@ -1,0 +1,51 @@
+{
+  "name": "@komunaid/shared",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.js"
+    },
+    "./types": {
+      "types": "./dist/types/index.d.ts",
+      "require": "./dist/types/index.js",
+      "import": "./dist/types/index.js"
+    },
+    "./constants": {
+      "types": "./dist/constants/index.d.ts",
+      "require": "./dist/constants/index.js",
+      "import": "./dist/constants/index.js"
+    },
+    "./validators": {
+      "types": "./dist/validators/index.d.ts",
+      "require": "./dist/validators/index.js",
+      "import": "./dist/validators/index.js"
+    },
+    "./utils": {
+      "types": "./dist/utils/index.d.ts",
+      "require": "./dist/utils/index.js",
+      "import": "./dist/utils/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix"
+  },
+  "dependencies": {
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^8.57.0",
+    "typescript": "^5.5.0"
+  }
+}

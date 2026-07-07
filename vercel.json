@@ -1,0 +1,9 @@
+{
+  "buildCommand": "pnpm install && pnpm --filter @komunaid/shared build && pnpm --filter @komunaid/web build",
+  "outputDirectory": "apps/web/.next",
+  "installCommand": "pnpm install",
+  "framework": "nextjs",
+  "env": {
+    "NODE_ENV": "production"
+  }
+}

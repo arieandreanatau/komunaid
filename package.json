@@ -1,0 +1,55 @@
+{
+  "name": "komunaid",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.33.4",
+  "description": "KomunaID - Platform - People - Community - Partnership",
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:web": "turbo run dev --filter=@komunaid/web",
+    "dev:api": "turbo run dev --filter=@komunaid/api",
+    "build": "turbo run build",
+    "build:web": "turbo run build --filter=@komunaid/web",
+    "build:api": "turbo run build --filter=@komunaid/api",
+    "start": "turbo run start",
+    "start:web": "turbo run start --filter=@komunaid/web",
+    "start:api": "turbo run start --filter=@komunaid/api",
+    "lint": "turbo run lint",
+    "lint:fix": "turbo run lint:fix",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "clean": "turbo run clean",
+    "db:migrate": "pnpm --filter @komunaid/database run db:migrate",
+    "db:seed": "pnpm --filter @komunaid/database run db:seed",
+    "db:reset": "pnpm --filter @komunaid/database run db:reset",
+    "db:studio": "pnpm --filter @komunaid/database run db:studio",
+    "db:generate": "pnpm --filter @komunaid/database run db:generate",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:build": "docker compose build",
+    "prepare": "husky"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "@prisma/client",
+      "@prisma/engines",
+      "@scarf/scarf",
+      "esbuild",
+      "prisma",
+      "sharp"
+    ]
+  },
+  "devDependencies": {
+    "husky": "^9.1.0",
+    "prettier": "^3.4.0",
+    "turbo": "^2.3.0",
+    "typescript": "^5.5.0"
+  }
+}
