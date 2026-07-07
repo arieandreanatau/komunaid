@@ -77,4 +77,4 @@ export { Tabs, TabsContent, TabsList, TabsTrigger } from './tabs';
 export { Toast } from './toast';
 export type { ToastProps } from './toast';
 
-export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip';
+export { Tooltip } from './tooltip';
