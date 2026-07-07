@@ -40,3 +40,6 @@ uploads/
 
 # Turbo
 .turbo/
+
+.vercel
+.env*
