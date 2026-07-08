@@ -43,3 +43,7 @@ uploads/
 
 .vercel
 .env*
+
+# TSC composite output in src
+packages/shared/src/**/*.js
+packages/shared/src/**/*.d.ts

@@ -12,11 +12,7 @@
     "strictPropertyInitialization": false,
     "noEmit": true,
     "paths": {
-      "@/*": ["./src/*"],
-      "@komunaid/shared": ["../../packages/shared/src"],
-      "@komunaid/shared/*": ["../../packages/shared/src/*"],
-      "@komunaid/database": ["../../packages/database/src"],
-      "@komunaid/database/*": ["../../packages/database/src/*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src/**/*"],
