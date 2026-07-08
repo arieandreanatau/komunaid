@@ -4,7 +4,7 @@ import serverlessExpress from '@vendia/serverless-express';
 import helmet from 'helmet';
 import compression from 'compression';
 import express from 'express';
-import { AppModule } from '../apps/api/src/app.module';
+import { AppModule } from '../src/app.module';
 
 let cachedHandler: any;
 
