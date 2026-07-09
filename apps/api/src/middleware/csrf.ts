@@ -30,6 +30,28 @@ export function csrfProtection() {
       return next();
     }
 
+    const origin = c.req.header("origin");
+    const referer = c.req.header("referer");
+    const host = c.req.header("host");
+
+    if (origin && host) {
+      try {
+        const originHost = new URL(origin).host;
+        if (originHost === host) {
+          return next();
+        }
+      } catch {}
+    }
+
+    if (referer && host) {
+      try {
+        const refererHost = new URL(referer).host;
+        if (refererHost === host) {
+          return next();
+        }
+      } catch {}
+    }
+
     const csrfHeader = c.req.header("x-csrf-token");
     const cookieHeader = c.req.header("Cookie");
 
