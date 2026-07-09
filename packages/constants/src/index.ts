@@ -1,0 +1,14 @@
+export const API_VERSION = "v1";
+export const API_PREFIX = `/api/${API_VERSION}`;
+export const DEFAULT_PAGE = 1;
+export const DEFAULT_LIMIT = 20;
+export const MAX_LIMIT = 100;
+export const APP_NAME = "KomunaID";
+export const APP_URL = "https://komuna.id";
+export const API_URL = "https://api.komuna.id";
+export const MAX_UPLOAD_SIZE = 10 * 1024 * 1024;
+export const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+export const ALLOWED_DOCUMENT_TYPES = ["application/pdf", "application/msword"];
+export const CACHE_TTL = 60 * 1000;
+export const RATE_LIMIT_WINDOW = 15 * 60 * 1000;
+export const RATE_LIMIT_MAX = 100;

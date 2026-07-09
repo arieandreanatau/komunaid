@@ -1,0 +1,490 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// USER & AUTH
+// ==========================================
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  password        String
+  name            String
+  avatar          String?
+  phone           String?
+  bio             String?
+  location        String?
+  emailVerifiedAt DateTime?
+  status          UserStatus @default(ACTIVE)
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  roles              UserRole[]
+  interests          UserInterest[]
+  joinedCommunities  CommunityMember[]
+  organizationMembers OrganizationMember[]
+  registeredEvents   EventRegistration[]
+  createdCommunities Community[]
+  createdOrganizations Organization[]
+  createdEvents      Event[]
+  auditLogs          AuditLog[]
+  reportedReports    Report[]  @relation("ReportReporter")
+  reviewedReports    Report[]  @relation("ReportReviewer")
+  joinRequests       JoinRequest[]
+  notifications      Notification[]
+  activityLogs       ActivityHistory[]
+
+  @@map("users")
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String
+  role      PlatformRole
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+  @@map("user_roles")
+}
+
+enum PlatformRole {
+  SUPER_ADMIN
+  PLATFORM_ADMIN
+  MEMBER
+}
+
+// ==========================================
+// COMMUNITY
+// ==========================================
+
+model Community {
+  id             String         @id @default(cuid())
+  name           String
+  slug           String         @unique
+  description    String?
+  coverImage     String?
+  logo           String?
+  location       String?
+  website        String?
+  membershipType MembershipType @default(OPEN)
+  status         CommunityStatus @default(PENDING)
+  deletedAt      DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  // Relations
+  ownerId    String
+  owner      User               @relation(fields: [ownerId], references: [id])
+  members    CommunityMember[]
+  events     Event[]
+  categories CommunityCategory[]
+  joinRequests JoinRequest[]
+
+  @@index([ownerId])
+  @@index([status])
+  @@map("communities")
+}
+
+enum MembershipType {
+  OPEN
+  RESTRICTED
+}
+
+enum CommunityStatus {
+  PENDING
+  APPROVED
+  SUSPENDED
+  ARCHIVED
+}
+
+model CommunityMember {
+  id          String        @id @default(cuid())
+  communityId String
+  userId      String
+  role        CommunityRole @default(MEMBER)
+  status      MembershipStatus @default(ACTIVE)
+  joinedAt    DateTime      @default(now())
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([communityId, userId])
+  @@index([communityId])
+  @@index([userId])
+  @@map("community_members")
+}
+
+enum CommunityRole {
+  OWNER
+  ADMIN
+  EVENT_MANAGER
+  MEMBER
+}
+
+enum MembershipStatus {
+  ACTIVE
+  PENDING
+  REJECTED
+  BANNED
+}
+
+model JoinRequest {
+  id          String             @id @default(cuid())
+  communityId String
+  userId      String
+  status      JoinRequestStatus  @default(PENDING)
+  message     String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([communityId, userId])
+  @@map("join_requests")
+}
+
+enum JoinRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model CommunityCategory {
+  id          String   @id @default(cuid())
+  communityId String
+  categoryId  String
+  createdAt   DateTime @default(now())
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  category  Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([communityId, categoryId])
+  @@map("community_categories")
+}
+
+// ==========================================
+// ORGANIZATION
+// ==========================================
+
+model Organization {
+  id          String             @id @default(cuid())
+  name        String
+  slug        String             @unique
+  description String?
+  logo        String?
+  website     String?
+  location    String?
+  industry    String?
+  status      OrganizationStatus @default(PENDING)
+  deletedAt   DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  ownerId String
+  owner   User                 @relation(fields: [ownerId], references: [id])
+  members OrganizationMember[]
+  events  Event[]
+
+  @@index([ownerId])
+  @@index([status])
+  @@map("organizations")
+}
+
+enum OrganizationStatus {
+  PENDING
+  APPROVED
+  SUSPENDED
+  ARCHIVED
+}
+
+model OrganizationMember {
+  id             String           @id @default(cuid())
+  organizationId String
+  userId         String
+  role           OrganizationRole @default(MEMBER)
+  status         MembershipStatus @default(ACTIVE)
+  joinedAt       DateTime         @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([organizationId])
+  @@index([userId])
+  @@map("organization_members")
+}
+
+enum OrganizationRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+// ==========================================
+// EVENT
+// ==========================================
+
+model Event {
+  id             String    @id @default(cuid())
+  title          String
+  slug           String    @unique
+  description    String?
+  coverImage     String?
+  location       String?
+  isOnline       Boolean   @default(false)
+  onlineUrl      String?
+  eventDate      DateTime
+  endDate        DateTime?
+  quota          Int
+  status         EventStatus @default(PENDING)
+  deletedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Relations
+  communityId    String?
+  organizationId String?
+  createdById    String
+
+  community      Community?       @relation(fields: [communityId], references: [id], onDelete: SetNull)
+  organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  createdBy      User             @relation(fields: [createdById], references: [id])
+  registrations  EventRegistration[]
+  categories     EventCategory[]
+
+  @@index([communityId])
+  @@index([organizationId])
+  @@index([createdById])
+  @@index([eventDate])
+  @@index([status])
+  @@map("events")
+}
+
+enum EventStatus {
+  PENDING
+  APPROVED
+  ONGOING
+  COMPLETED
+  CANCELLED
+  SUSPENDED
+}
+
+model EventRegistration {
+  id           String             @id @default(cuid())
+  eventId      String
+  userId       String
+  status       RegistrationStatus @default(CONFIRMED)
+  registeredAt DateTime           @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@index([userId])
+  @@map("event_registrations")
+}
+
+enum RegistrationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  WAITLISTED
+}
+
+model EventCategory {
+  id         String   @id @default(cuid())
+  eventId    String
+  categoryId String
+  createdAt  DateTime @default(now())
+
+  event    Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, categoryId])
+  @@map("event_categories")
+}
+
+// ==========================================
+// CATEGORY
+// ==========================================
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  icon        String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  communities CommunityCategory[]
+  events      EventCategory[]
+
+  @@map("categories")
+}
+
+// ==========================================
+// REPORT & MODERATION (polymorphic: targetType + targetId)
+// ==========================================
+
+model Report {
+  id          String         @id @default(cuid())
+  reporterId  String
+  targetType  ReportTargetType
+  targetId    String
+  reason      ReportReason
+  description String?
+  status      ReportStatus   @default(OPEN)
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  reporter User      @relation("ReportReporter", fields: [reporterId], references: [id])
+  reviewer User?     @relation("ReportReviewer", fields: [reviewedBy], references: [id])
+
+  @@index([status])
+  @@index([targetType, targetId])
+  @@map("reports")
+}
+
+enum ReportTargetType {
+  COMMUNITY
+  EVENT
+  USER
+  ORGANIZATION
+}
+
+enum ReportReason {
+  SPAM
+  HARASSMENT
+  INAPPROPRIATE_CONTENT
+  MISINFORMATION
+  COPYRIGHT_VIOLATION
+  OTHER
+}
+
+enum ReportStatus {
+  OPEN
+  UNDER_REVIEW
+  DISMISSED
+  SUSPENDED
+}
+
+// ==========================================
+// AUDIT LOG
+// ==========================================
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  userId       String
+  actionType   String
+  resourceName String
+  resourceId   String
+  beforeData   Json?
+  afterData    Json?
+  ipAddress    String?
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([resourceName, resourceId])
+  @@index([actionType])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ==========================================
+// NOTIFICATION
+// ==========================================
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      NotificationType
+  isRead    Boolean          @default(false)
+  link      String?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  SYSTEM
+  COMMUNITY
+  EVENT
+  REPORT
+  APPROVAL
+}
+
+// ==========================================
+// INTEREST
+// ==========================================
+
+model UserInterest {
+  id        String   @id @default(cuid())
+  userId    String
+  interest  String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, interest])
+  @@map("user_interests")
+}
+
+// ==========================================
+// ACTIVITY HISTORY
+// ==========================================
+
+model ActivityHistory {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  details   Json?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("activity_history")
+}
+
+// ==========================================
+// SETTINGS
+// ==========================================
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
