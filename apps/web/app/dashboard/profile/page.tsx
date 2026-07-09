@@ -81,7 +81,7 @@ export default function ProfilePage() {
             <label className="block text-sm font-medium text-gray-700">Nama Lengkap</label>
             <input {...register("name", { required: "Nama wajib diisi", minLength: { value: 2, message: "Minimal 2 karakter" } })}
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue" />
-            {errors.name && <p className="mt-1 text-sm text-red-500">{errors.name.message}</p>}
+            {errors.name && <p className="mt-1 text-sm text-red-500">{String(errors.name.message)}</p>}
           </div>
 
           <div>
