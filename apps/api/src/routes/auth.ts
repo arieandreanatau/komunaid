@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import bcrypt from "bcryptjs";
-import { SignJWT } from "jose";
+import { SignJWT, jwtVerify } from "jose";
 import { prisma } from "@komunaid/database";
 import { registerSchema, loginSchema, changePasswordSchema, forgotPasswordSchema, resetPasswordSchema } from "@komunaid/shared";
 import {
@@ -278,7 +278,7 @@ authRoutes.post("/logout", authMiddleware, async (c) => {
 
   await createAuditLog({
     userId: user.id,
-    actionType: AuditActions.USER_LOGOUT || "USER_LOGOUT",
+    actionType: AuditActions.USER_LOGOUT,
     resourceName: "User",
     resourceId: user.id,
   });
@@ -428,9 +428,7 @@ authRoutes.post("/reset-password", validate(resetPasswordSchema), async (c) => {
   const data = c.get("validated");
 
   try {
-    const { payload } = await import("jose").then((m) =>
-      m.jwtVerify(data.token, JWT_SECRET)
-    );
+    const { payload } = await jwtVerify(data.token, JWT_SECRET);
 
     if (payload.type !== "reset") {
       return c.json({ success: false, message: "Token tidak valid" }, 400);

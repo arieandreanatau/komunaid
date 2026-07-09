@@ -158,8 +158,10 @@ async function main() {
   // DEMO PENDING COMMUNITY
   // ==========================================
 
-  const pendingCommunity = await prisma.community.create({
-    data: {
+  const pendingCommunity = await prisma.community.upsert({
+    where: { slug: "komunitas-desain-bandung" },
+    update: {},
+    create: {
       name: "Komunitas Desain Bandung",
       slug: "komunitas-desain-bandung",
       description: "Komunitas desainer grafis dan UI/UX di Bandung.",
@@ -223,8 +225,10 @@ async function main() {
   // DEMO ORGANIZATION
   // ==========================================
 
-  const org = await prisma.organization.create({
-    data: {
+  const org = await prisma.organization.upsert({
+    where: { slug: "pt-teknologi-nusantara" },
+    update: {},
+    create: {
       name: "PT Teknologi Nusantara",
       slug: "pt-teknologi-nusantara",
       description: "Perusahaan teknologi yang berfokus pada solusi digital untuk UMKM.",
@@ -272,6 +276,15 @@ async function main() {
     create: {
       key: "registration_enabled",
       value: true,
+    },
+  });
+
+  await prisma.setting.upsert({
+    where: { key: "maintenance_mode" },
+    update: {},
+    create: {
+      key: "maintenance_mode",
+      value: false,
     },
   });
 

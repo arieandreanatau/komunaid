@@ -9,6 +9,10 @@ const COOKIE_SECRET = process.env.COOKIE_SECRET || "dev-cookie-secret-change-thi
 const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || "localhost";
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
+if (IS_PRODUCTION && (!process.env.JWT_SECRET || process.env.JWT_SECRET === "dev-secret-change-this")) {
+  throw new Error("JWT_SECRET must be set in production");
+}
+
 export interface AuthUser {
   id: string;
   email: string;
@@ -20,6 +24,7 @@ export interface JWTPayload {
   sub: string;
   email: string;
   name: string;
+  username: string;
   type: "access" | "refresh";
   iat: number;
   exp: number;
@@ -77,7 +82,8 @@ export function setTokenCookies(c: Context, accessToken: string, refreshToken: s
     domain: IS_PRODUCTION ? COOKIE_DOMAIN : undefined,
   });
 
-  c.header("Set-Cookie", [accessCookie, refreshCookie].join(", "));
+  c.header("Set-Cookie", accessCookie);
+  c.header("Set-Cookie", refreshCookie, { append: true });
 }
 
 export function clearTokenCookies(c: Context) {
@@ -99,7 +105,8 @@ export function clearTokenCookies(c: Context) {
     domain: IS_PRODUCTION ? COOKIE_DOMAIN : undefined,
   });
 
-  c.header("Set-Cookie", [accessCookie, refreshCookie].join(", "));
+  c.header("Set-Cookie", accessCookie);
+  c.header("Set-Cookie", refreshCookie, { append: true });
 }
 
 function getTokenFromCookies(c: Context): string | null {

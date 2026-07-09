@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { prisma } from "@komunaid/database";
-import { createCommunitySchema, updateCommunitySchema, paginationSchema } from "@komunaid/shared";
+import { createCommunitySchema, updateCommunitySchema, paginationSchema, joinCommunitySchema } from "@komunaid/shared";
 import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth";
 import { requireCommunityOwner, requireCommunityAdmin } from "../middleware/rbac";
 import { validate } from "../middleware/validate";
@@ -54,6 +54,7 @@ communityRoutes.get("/", optionalAuthMiddleware, async (c) => {
   ]);
 
   return c.json({
+    success: true,
     communities: communities.map((c) => ({
       id: c.id,
       name: c.name,
@@ -83,7 +84,7 @@ communityRoutes.get("/", optionalAuthMiddleware, async (c) => {
 // ==========================================
 
 communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
-  const slug = c.req.param("slug");
+  const slug = c.req.param("slug") as string;
 
   const community = await prisma.community.findUnique({
     where: { slug },
@@ -115,10 +116,11 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
   });
 
   if (!community || community.deletedAt) {
-    return c.json({ error: "Community not found" }, 404);
+    return c.json({ success: false, message: "Community not found" }, 404);
   }
 
   return c.json({
+    success: true,
     community: {
       ...community,
       members: undefined,
@@ -176,6 +178,7 @@ communityRoutes.post("/", authMiddleware, validate(createCommunitySchema), async
   });
 
   return c.json({
+    success: true,
     message: "Komunitas berhasil dibuat. Menunggu approval admin.",
     community: {
       id: community.id,
@@ -192,7 +195,7 @@ communityRoutes.post("/", authMiddleware, validate(createCommunitySchema), async
 
 communityRoutes.put("/:communityId", authMiddleware, requireCommunityAdmin, validate(updateCommunitySchema), async (c) => {
   const authUser = c.get("user");
-  const communityId = c.req.param("communityId");
+  const communityId = c.req.param("communityId") as string;
   const data = c.get("validated");
 
   const before = await prisma.community.findUnique({
@@ -214,6 +217,7 @@ communityRoutes.put("/:communityId", authMiddleware, requireCommunityAdmin, vali
   });
 
   return c.json({
+    success: true,
     message: "Komunitas berhasil diupdate",
     community: {
       id: community.id,
@@ -227,20 +231,20 @@ communityRoutes.put("/:communityId", authMiddleware, requireCommunityAdmin, vali
 // JOIN COMMUNITY
 // ==========================================
 
-communityRoutes.post("/:communityId/join", authMiddleware, async (c) => {
+communityRoutes.post("/:communityId/join", authMiddleware, validate(joinCommunitySchema), async (c) => {
   const authUser = c.get("user");
-  const communityId = c.req.param("communityId");
+  const communityId = c.req.param("communityId") as string;
 
   const community = await prisma.community.findUnique({
     where: { id: communityId },
   });
 
   if (!community || community.deletedAt) {
-    return c.json({ error: "Komunitas tidak ditemukan" }, 404);
+    return c.json({ success: false, message: "Komunitas tidak ditemukan" }, 404);
   }
 
   if (community.status !== "APPROVED") {
-    return c.json({ error: "Komunitas belum disetujui" }, 400);
+    return c.json({ success: false, message: "Komunitas belum disetujui" }, 400);
   }
 
   const existingMember = await prisma.communityMember.findUnique({
@@ -253,7 +257,7 @@ communityRoutes.post("/:communityId/join", authMiddleware, async (c) => {
   });
 
   if (existingMember) {
-    return c.json({ error: "Sudah menjadi anggota" }, 409);
+    return c.json({ success: false, message: "Sudah menjadi anggota" }, 409);
   }
 
   if (community.membershipType === "OPEN") {
@@ -273,7 +277,7 @@ communityRoutes.post("/:communityId/join", authMiddleware, async (c) => {
       resourceId: communityId,
     });
 
-    return c.json({ message: "Berhasil bergabung dengan komunitas" });
+    return c.json({ success: true, message: "Berhasil bergabung dengan komunitas" });
   } else {
     const existingRequest = await prisma.joinRequest.findUnique({
       where: {
@@ -285,7 +289,7 @@ communityRoutes.post("/:communityId/join", authMiddleware, async (c) => {
     });
 
     if (existingRequest && existingRequest.status === "PENDING") {
-      return c.json({ error: "Permintaan bergabung sudah ada" }, 409);
+      return c.json({ success: false, message: "Permintaan bergabung sudah ada" }, 409);
     }
 
     await prisma.joinRequest.create({
@@ -295,7 +299,7 @@ communityRoutes.post("/:communityId/join", authMiddleware, async (c) => {
       },
     });
 
-    return c.json({ message: "Permintaan bergabung dikirim. Menunggu persetujuan." });
+    return c.json({ success: true, message: "Permintaan bergabung dikirim. Menunggu persetujuan." });
   }
 });
 
@@ -305,7 +309,7 @@ communityRoutes.post("/:communityId/join", authMiddleware, async (c) => {
 
 communityRoutes.post("/:communityId/leave", authMiddleware, async (c) => {
   const authUser = c.get("user");
-  const communityId = c.req.param("communityId");
+  const communityId = c.req.param("communityId") as string;
 
   const membership = await prisma.communityMember.findUnique({
     where: {
@@ -317,11 +321,11 @@ communityRoutes.post("/:communityId/leave", authMiddleware, async (c) => {
   });
 
   if (!membership) {
-    return c.json({ error: "Bukan anggota komunitas" }, 400);
+    return c.json({ success: false, message: "Bukan anggota komunitas" }, 400);
   }
 
   if (membership.role === "OWNER") {
-    return c.json({ error: "Owner tidak bisa meninggalkan komunitas" }, 400);
+    return c.json({ success: false, message: "Owner tidak bisa meninggalkan komunitas" }, 400);
   }
 
   await prisma.communityMember.delete({
@@ -340,7 +344,7 @@ communityRoutes.post("/:communityId/leave", authMiddleware, async (c) => {
     resourceId: communityId,
   });
 
-  return c.json({ message: "Berhasil meninggalkan komunitas" });
+  return c.json({ success: true, message: "Berhasil meninggalkan komunitas" });
 });
 
 // ==========================================
@@ -348,7 +352,7 @@ communityRoutes.post("/:communityId/leave", authMiddleware, async (c) => {
 // ==========================================
 
 communityRoutes.get("/:communityId/join-requests", authMiddleware, requireCommunityAdmin, async (c) => {
-  const communityId = c.req.param("communityId");
+  const communityId = c.req.param("communityId") as string;
 
   const requests = await prisma.joinRequest.findMany({
     where: { communityId, status: "PENDING" },
@@ -360,7 +364,7 @@ communityRoutes.get("/:communityId/join-requests", authMiddleware, requireCommun
     orderBy: { createdAt: "desc" },
   });
 
-  return c.json({ requests });
+  return c.json({ success: true, requests });
 });
 
 // ==========================================
@@ -369,8 +373,8 @@ communityRoutes.get("/:communityId/join-requests", authMiddleware, requireCommun
 
 communityRoutes.put("/:communityId/join-requests/:requestId", authMiddleware, requireCommunityAdmin, async (c) => {
   const authUser = c.get("user");
-  const communityId = c.req.param("communityId");
-  const requestId = c.req.param("requestId");
+  const communityId = c.req.param("communityId") as string;
+  const requestId = c.req.param("requestId") as string;
   const body = await c.req.json();
 
   const { action } = body as { action: "approve" | "reject" };
@@ -380,11 +384,11 @@ communityRoutes.put("/:communityId/join-requests/:requestId", authMiddleware, re
   });
 
   if (!request || request.communityId !== communityId) {
-    return c.json({ error: "Request not found" }, 404);
+    return c.json({ success: false, message: "Request not found" }, 404);
   }
 
   if (request.status !== "PENDING") {
-    return c.json({ error: "Request sudah diproses" }, 400);
+    return c.json({ success: false, message: "Request sudah diproses" }, 400);
   }
 
   await prisma.joinRequest.update({
@@ -403,7 +407,7 @@ communityRoutes.put("/:communityId/join-requests/:requestId", authMiddleware, re
     });
   }
 
-  return c.json({ message: `Request ${action === "approve" ? "disetujui" : "ditolak"}` });
+  return c.json({ success: true, message: `Request ${action === "approve" ? "disetujui" : "ditolak"}` });
 });
 
 // ==========================================
@@ -411,7 +415,7 @@ communityRoutes.put("/:communityId/join-requests/:requestId", authMiddleware, re
 // ==========================================
 
 communityRoutes.get("/:communityId/members", async (c) => {
-  const communityId = c.req.param("communityId");
+  const communityId = c.req.param("communityId") as string;
   const url = new URL(c.req.url);
   const page = parseInt(url.searchParams.get("page") || "1");
   const limit = parseInt(url.searchParams.get("limit") || "20");
@@ -434,6 +438,7 @@ communityRoutes.get("/:communityId/members", async (c) => {
   ]);
 
   return c.json({
+    success: true,
     members: members.map((m) => ({
       id: m.user.id,
       name: m.user.name,

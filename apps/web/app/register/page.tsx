@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { registerSchema, type RegisterInput } from "@komunaid/shared";
@@ -12,6 +12,8 @@ import { useAuth } from "@/components/auth-provider";
 export default function RegisterPage() {
   const router = useRouter();
   const { setUser } = useAuth();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get("redirect") || "/dashboard";
   const [error, setError] = useState("");
 
   const {
@@ -28,7 +30,7 @@ export default function RegisterPage() {
       const res = await api.post("/auth/register", data);
       const userData = res.data.data?.user || res.data.user;
       setUser(userData);
-      router.push("/dashboard");
+      router.push(redirectTo);
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { message?: string; error?: string } } };
       setError(axiosErr.response?.data?.message || axiosErr.response?.data?.error || "Registrasi gagal");
@@ -141,6 +143,16 @@ export default function RegisterPage() {
             </div>
           </div>
 
+          <div className="flex items-start gap-2">
+            <input id="terms" type="checkbox" required className="mt-1 h-4 w-4 text-komuna-blue border-gray-300 rounded" />
+            <label htmlFor="terms" className="text-xs text-gray-500">
+              Saya menyetujui{" "}
+              <Link href="/terms" className="text-komuna-blue hover:underline">Syarat & Ketentuan</Link>{" "}
+              dan{" "}
+              <Link href="/privacy" className="text-komuna-blue hover:underline">Kebijakan Privasi</Link>
+            </label>
+          </div>
+
           <button
             type="submit"
             disabled={isSubmitting}
@@ -148,18 +160,6 @@ export default function RegisterPage() {
           >
             {isSubmitting ? "Mendaftar..." : "Daftar"}
           </button>
-
-          <p className="text-xs text-center text-gray-500">
-            Dengan mendaftar, Anda menyetujui{" "}
-            <Link href="/terms" className="text-komuna-blue hover:underline">
-              Syarat & Ketentuan
-            </Link>{" "}
-            dan{" "}
-            <Link href="/privacy" className="text-komuna-blue hover:underline">
-              Kebijakan Privasi
-            </Link>{" "}
-            kami.
-          </p>
         </form>
       </div>
     </div>

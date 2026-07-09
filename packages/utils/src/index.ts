@@ -51,13 +51,46 @@ export function isEmail(email: string): boolean {
 }
 
 export function isStrongPassword(password: string): boolean {
-  return password.length >= 8;
+  return (
+    password.length >= 8 &&
+    /[A-Z]/.test(password) &&
+    /[a-z]/.test(password) &&
+    /[0-9]/.test(password)
+  );
 }
 
 export function sanitizeInput(input: string): string {
-  return input
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#x27;");
+  let result = input;
+  result = result.replace(/&/g, "&amp;");
+  result = result.replace(/</g, "&lt;");
+  result = result.replace(/>/g, "&gt;");
+  result = result.replace(/"/g, "&quot;");
+  result = result.replace(/'/g, "&#x27;");
+  return result;
+}
+
+export function isValidUsername(username: string): boolean {
+  return /^[a-zA-Z0-9_]{3,30}$/.test(username);
+}
+
+export function timeAgo(date: Date | string): string {
+  const now = new Date();
+  const past = new Date(date);
+  const seconds = Math.floor((now.getTime() - past.getTime()) / 1000);
+  if (seconds < 60) return "baru saja";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} menit yang lalu`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} jam yang lalu`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} hari yang lalu`;
+  const months = Math.floor(days / 30);
+  return `${months} bulan yang lalu`;
+}
+
+export function maskEmail(email: string): string {
+  const [local, domain] = email.split("@");
+  if (!domain) return email;
+  if (local.length <= 2) return `${local[0]}***@${domain}`;
+  return `${local[0]}${"*".repeat(local.length - 2)}${local[local.length - 1]}@${domain}`;
 }

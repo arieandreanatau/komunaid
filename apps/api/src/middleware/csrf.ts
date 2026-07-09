@@ -1,5 +1,6 @@
 import { Context, Next } from "hono";
 import { serialize } from "cookie";
+import { parse } from "cookie";
 import { randomBytes } from "crypto";
 
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
@@ -36,9 +37,7 @@ export function csrfProtection() {
       return c.json({ success: false, message: "CSRF token missing" }, 403);
     }
 
-    const cookies = Object.fromEntries(
-      cookieHeader.split(";").map((c) => c.trim().split("=").map((s) => s.trim()))
-    );
+    const cookies = parse(cookieHeader);
 
     const csrfCookie = cookies["csrf_token"];
 

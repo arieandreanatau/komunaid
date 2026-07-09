@@ -146,6 +146,19 @@ export function Header() {
           <Link href="/organizations" className="block py-2 text-sm text-gray-600 hover:text-komuna-blue" onClick={() => setMenuOpen(false)}>
             Organisasi
           </Link>
+          {isAuthenticated && user && (
+            <>
+              <Link href="/dashboard" className="block py-2 text-sm text-gray-600 hover:text-komuna-blue" onClick={() => setMenuOpen(false)}>
+                Dashboard
+              </Link>
+              <Link href="/dashboard/profile" className="block py-2 text-sm text-gray-600 hover:text-komuna-blue" onClick={() => setMenuOpen(false)}>
+                Profile
+              </Link>
+              <button onClick={() => { setMenuOpen(false); handleLogout(); }} className="block py-2 text-sm text-red-600 hover:text-red-700 text-left w-full">
+                Keluar
+              </button>
+            </>
+          )}
         </div>
       )}
     </header>

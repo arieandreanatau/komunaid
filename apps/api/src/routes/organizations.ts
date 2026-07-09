@@ -49,6 +49,7 @@ organizationRoutes.get("/", optionalAuthMiddleware, async (c) => {
   ]);
 
   return c.json({
+    success: true,
     organizations: organizations.map((o) => ({
       id: o.id,
       name: o.name,
@@ -76,7 +77,7 @@ organizationRoutes.get("/", optionalAuthMiddleware, async (c) => {
 // ==========================================
 
 organizationRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
-  const slug = c.req.param("slug");
+  const slug = c.req.param("slug") as string;
 
   const organization = await prisma.organization.findUnique({
     where: { slug },
@@ -105,10 +106,11 @@ organizationRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
   });
 
   if (!organization || organization.deletedAt) {
-    return c.json({ error: "Organization not found" }, 404);
+    return c.json({ success: false, message: "Organization not found" }, 404);
   }
 
   return c.json({
+    success: true,
     organization: {
       ...organization,
       members: undefined,
@@ -165,6 +167,7 @@ organizationRoutes.post("/", authMiddleware, validate(createOrganizationSchema),
   });
 
   return c.json({
+    success: true,
     message: "Organisasi berhasil dibuat. Menunggu approval admin.",
     organization: {
       id: organization.id,
@@ -181,7 +184,7 @@ organizationRoutes.post("/", authMiddleware, validate(createOrganizationSchema),
 
 organizationRoutes.put("/:organizationId", authMiddleware, requireOrganizationOwner, validate(updateOrganizationSchema), async (c) => {
   const authUser = c.get("user");
-  const organizationId = c.req.param("organizationId");
+  const organizationId = c.req.param("organizationId") as string;
   const data = c.get("validated");
 
   const before = await prisma.organization.findUnique({
@@ -203,6 +206,7 @@ organizationRoutes.put("/:organizationId", authMiddleware, requireOrganizationOw
   });
 
   return c.json({
+    success: true,
     message: "Organisasi berhasil diupdate",
     organization: {
       id: organization.id,

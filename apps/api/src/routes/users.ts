@@ -233,8 +233,8 @@ userRoutes.put("/interests", authMiddleware, async (c) => {
 userRoutes.get("/notifications", authMiddleware, async (c) => {
   const authUser = c.get("user");
   const url = new URL(c.req.url);
-  const page = parseInt(url.searchParams.get("page") || "1");
-  const limit = parseInt(url.searchParams.get("limit") || "20");
+  const page = Math.max(1, parseInt(url.searchParams.get("page") || "1"));
+  const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") || "20")));
   const unreadOnly = url.searchParams.get("unread") === "true";
 
   const where: Record<string, unknown> = { userId: authUser.id };
@@ -310,8 +310,8 @@ userRoutes.put("/notifications/read-all", authMiddleware, async (c) => {
 userRoutes.get("/activity", authMiddleware, async (c) => {
   const authUser = c.get("user");
   const url = new URL(c.req.url);
-  const page = parseInt(url.searchParams.get("page") || "1");
-  const limit = parseInt(url.searchParams.get("limit") || "20");
+  const page = Math.max(1, parseInt(url.searchParams.get("page") || "1"));
+  const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") || "20")));
 
   const [activities, total] = await Promise.all([
     prisma.activityHistory.findMany({

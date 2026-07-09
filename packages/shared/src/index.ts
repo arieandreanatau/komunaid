@@ -32,7 +32,7 @@ export const forgotPasswordSchema = z.object({
 
 export const resetPasswordSchema = z
   .object({
-    token: z.string(),
+    token: z.string().min(1, "Token wajib diisi"),
     password: z.string().min(8, "Password minimal 8 karakter"),
     confirmPassword: z.string(),
   })
@@ -53,6 +53,43 @@ export const changePasswordSchema = z.object({
 export const updateInterestsSchema = z.object({
   interests: z.array(z.string().max(50)).max(20, "Maksimal 20 interests"),
 });
+
+// ==========================================
+// COMMUNITY MEMBER SCHEMAS
+// ==========================================
+
+export const joinCommunitySchema = z.object({
+  message: z.string().max(500).optional(),
+});
+
+export const handleJoinRequestSchema = z.object({
+  action: z.enum(["approve", "reject"]),
+});
+
+// ==========================================
+// REPORT SCHEMAS (Admin)
+// ==========================================
+
+export const reviewReportSchema = z.object({
+  action: z.enum(["SUSPENDED", "DISMISSED"]),
+  note: z.string().max(2000).optional(),
+});
+
+export const assignRoleSchema = z.object({
+  role: z.enum(["SUPER_ADMIN", "PLATFORM_ADMIN", "MEMBER"]),
+});
+
+// ==========================================
+// CATEGORY SCHEMAS
+// ==========================================
+
+export const createCategorySchema = z.object({
+  name: z.string().min(2, "Nama minimal 2 karakter").max(50),
+  description: z.string().max(500).optional(),
+  icon: z.string().max(100).optional(),
+});
+
+export const updateCategorySchema = createCategorySchema.partial();
 
 // ==========================================
 // USER SCHEMAS
@@ -167,3 +204,9 @@ export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 export type UpdateInterestsInput = z.infer<typeof updateInterestsSchema>;
+export type JoinCommunityInput = z.infer<typeof joinCommunitySchema>;
+export type HandleJoinRequestInput = z.infer<typeof handleJoinRequestSchema>;
+export type ReviewReportInput = z.infer<typeof reviewReportSchema>;
+export type AssignRoleInput = z.infer<typeof assignRoleSchema>;
+export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
+export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;

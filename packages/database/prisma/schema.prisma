@@ -43,6 +43,7 @@ model User {
   notifications      Notification[]
   activityLogs       ActivityHistory[]
 
+  @@index([status])
   @@map("users")
 }
 
@@ -158,6 +159,8 @@ model JoinRequest {
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([communityId, userId])
+  @@index([communityId])
+  @@index([userId])
   @@map("join_requests")
 }
 
@@ -177,6 +180,7 @@ model CommunityCategory {
   category  Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   @@unique([communityId, categoryId])
+  @@index([categoryId])
   @@map("community_categories")
 }
 
@@ -320,6 +324,7 @@ model EventCategory {
   category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   @@unique([eventId, categoryId])
+  @@index([categoryId])
   @@map("event_categories")
 }
 
@@ -364,6 +369,7 @@ model Report {
   reviewer User?     @relation("ReportReviewer", fields: [reviewedBy], references: [id])
 
   @@index([status])
+  @@index([reporterId])
   @@index([targetType, targetId])
   @@map("reports")
 }

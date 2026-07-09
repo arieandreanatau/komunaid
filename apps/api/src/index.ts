@@ -144,7 +144,7 @@ app.notFound((c) => {
 // SERVER
 // ==========================================
 
-const port = parseInt(process.env.API_PORT || "3001");
+const port = parseInt(process.env.API_PORT || "3001", 10);
 
 log.info(`KomunaID API running on port ${port}`);
 

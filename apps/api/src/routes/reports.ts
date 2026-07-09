@@ -28,7 +28,7 @@ reportRoutes.post("/", authMiddleware, validate(createReportSchema), async (c) =
   });
 
   if (existingReport) {
-    return c.json({ error: "Anda sudah melaporkan ini" }, 409);
+    return c.json({ success: false, message: "Anda sudah melaporkan ini" }, 409);
   }
 
   const report = await prisma.report.create({
@@ -50,6 +50,7 @@ reportRoutes.post("/", authMiddleware, validate(createReportSchema), async (c) =
   });
 
   return c.json({
+    success: true,
     message: "Laporan berhasil dikirim",
     report: {
       id: report.id,
@@ -79,6 +80,7 @@ reportRoutes.get("/my", authMiddleware, async (c) => {
   ]);
 
   return c.json({
+    success: true,
     reports,
     pagination: {
       page,

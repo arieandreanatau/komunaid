@@ -17,6 +17,9 @@ export const metadata: Metadata = {
   icons: {
     icon: "/favicon.png",
   },
+  other: {
+    "theme-color": "#0A1D4D",
+  },
   openGraph: {
     title: "KomunaID",
     description: "Terhubung. Berdaya. Berdampak.",

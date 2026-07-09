@@ -73,6 +73,7 @@ eventRoutes.get("/", optionalAuthMiddleware, async (c) => {
   ]);
 
   return c.json({
+    success: true,
     events: events.map((e) => ({
       id: e.id,
       title: e.title,
@@ -104,7 +105,7 @@ eventRoutes.get("/", optionalAuthMiddleware, async (c) => {
 // ==========================================
 
 eventRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
-  const slug = c.req.param("slug");
+  const slug = c.req.param("slug") as string;
 
   const event = await prisma.event.findUnique({
     where: { slug },
@@ -136,10 +137,11 @@ eventRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
   });
 
   if (!event || event.deletedAt) {
-    return c.json({ error: "Event not found" }, 404);
+    return c.json({ success: false, message: "Event not found" }, 404);
   }
 
   return c.json({
+    success: true,
     event: {
       ...event,
       registrations: undefined,
@@ -175,7 +177,7 @@ eventRoutes.post("/", authMiddleware, validate(createEventSchema), async (c) => 
     });
 
     if (!membership || !["OWNER", "ADMIN", "EVENT_MANAGER"].includes(membership.role)) {
-      return c.json({ error: "Tidak memiliki akses membuat event di komunitas ini" }, 403);
+      return c.json({ success: false, message: "Tidak memiliki akses membuat event di komunitas ini" }, 403);
     }
   }
 
@@ -190,7 +192,7 @@ eventRoutes.post("/", authMiddleware, validate(createEventSchema), async (c) => 
     });
 
     if (!membership || !["OWNER", "ADMIN"].includes(membership.role)) {
-      return c.json({ error: "Tidak memiliki akses membuat event di organisasi ini" }, 403);
+      return c.json({ success: false, message: "Tidak memiliki akses membuat event di organisasi ini" }, 403);
     }
   }
 
@@ -213,7 +215,7 @@ eventRoutes.post("/", authMiddleware, validate(createEventSchema), async (c) => 
       endDate: data.endDate ? new Date(data.endDate) : null,
       categories: categoryIds
         ? {
-            create: categoryIds.map((categoryId) => ({ categoryId })),
+            create: categoryIds.map((categoryId: string) => ({ categoryId })),
           }
         : undefined,
     },
@@ -228,6 +230,7 @@ eventRoutes.post("/", authMiddleware, validate(createEventSchema), async (c) => 
   });
 
   return c.json({
+    success: true,
     message: "Event berhasil dibuat",
     event: {
       id: event.id,
@@ -244,7 +247,7 @@ eventRoutes.post("/", authMiddleware, validate(createEventSchema), async (c) => 
 
 eventRoutes.post("/:eventId/register", authMiddleware, async (c) => {
   const authUser = c.get("user");
-  const eventId = c.req.param("eventId");
+  const eventId = c.req.param("eventId") as string;
 
   const event = await prisma.event.findUnique({
     where: { id: eventId },
@@ -254,19 +257,19 @@ eventRoutes.post("/:eventId/register", authMiddleware, async (c) => {
   });
 
   if (!event || event.deletedAt) {
-    return c.json({ error: "Event tidak ditemukan" }, 404);
+    return c.json({ success: false, message: "Event tidak ditemukan" }, 404);
   }
 
   if (event.status !== "APPROVED") {
-    return c.json({ error: "Event belum disetujui" }, 400);
+    return c.json({ success: false, message: "Event belum disetujui" }, 400);
   }
 
   if (new Date(event.eventDate) < new Date()) {
-    return c.json({ error: "Event sudah lewat" }, 400);
+    return c.json({ success: false, message: "Event sudah lewat" }, 400);
   }
 
   if (event._count.registrations >= event.quota) {
-    return c.json({ error: "Kuota event penuh" }, 400);
+    return c.json({ success: false, message: "Kuota event penuh" }, 400);
   }
 
   const existing = await prisma.eventRegistration.findUnique({
@@ -279,8 +282,12 @@ eventRoutes.post("/:eventId/register", authMiddleware, async (c) => {
   });
 
   if (existing) {
-    return c.json({ error: "Sudah terdaftar di event ini" }, 409);
+    return c.json({ success: false, message: "Sudah terdaftar di event ini" }, 409);
   }
+
+  await prisma.eventRegistration.deleteMany({
+    where: { eventId, userId: authUser.id, status: "CANCELLED" },
+  });
 
   await prisma.eventRegistration.create({
     data: {
@@ -297,7 +304,7 @@ eventRoutes.post("/:eventId/register", authMiddleware, async (c) => {
     resourceId: eventId,
   });
 
-  return c.json({ message: "Berhasil mendaftar event" });
+  return c.json({ success: true, message: "Berhasil mendaftar event" });
 });
 
 // ==========================================
@@ -306,7 +313,7 @@ eventRoutes.post("/:eventId/register", authMiddleware, async (c) => {
 
 eventRoutes.delete("/:eventId/register", authMiddleware, async (c) => {
   const authUser = c.get("user");
-  const eventId = c.req.param("eventId");
+  const eventId = c.req.param("eventId") as string;
 
   const registration = await prisma.eventRegistration.findUnique({
     where: {
@@ -318,7 +325,7 @@ eventRoutes.delete("/:eventId/register", authMiddleware, async (c) => {
   });
 
   if (!registration) {
-    return c.json({ error: "Tidak terdaftar di event ini" }, 404);
+    return c.json({ success: false, message: "Tidak terdaftar di event ini" }, 404);
   }
 
   await prisma.eventRegistration.update({
@@ -338,5 +345,5 @@ eventRoutes.delete("/:eventId/register", authMiddleware, async (c) => {
     resourceId: eventId,
   });
 
-  return c.json({ message: "Berhasil membatalkan pendaftaran" });
+  return c.json({ success: true, message: "Berhasil membatalkan pendaftaran" });
 });

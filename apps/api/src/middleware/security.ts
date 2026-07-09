@@ -53,10 +53,10 @@ export function rateLimiter(options?: { windowMs?: number; max?: number }) {
   const max = options?.max || 100;
 
   return async (c: Context, next: Next) => {
-    const ip =
-      c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
-      c.req.header("x-real-ip") ||
-      "unknown";
+    const isTrustedProxy = process.env.TRUSTED_PROXIES === "true";
+    const ip = isTrustedProxy
+      ? (c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || c.req.header("x-real-ip") || "unknown")
+      : (c.req.header("x-real-ip") || "unknown");
 
     const key = `rl:${ip}`;
     const redisClient = getRedis();

@@ -39,6 +39,7 @@ adminRoutes.get("/stats", async (c) => {
   ]);
 
   return c.json({
+    success: true,
     stats: {
       totalUsers,
       totalCommunities,
@@ -96,6 +97,7 @@ adminRoutes.get("/users", async (c) => {
   ]);
 
   return c.json({
+    success: true,
     users: users.map((u) => ({
       id: u.id,
       name: u.name,
@@ -121,12 +123,22 @@ adminRoutes.get("/users", async (c) => {
 
 adminRoutes.put("/users/:userId/suspend", async (c) => {
   const authUser = c.get("user");
-  const userId = c.req.param("userId");
+  const userId = c.req.param("userId") as string;
 
   const user = await prisma.user.findUnique({ where: { id: userId } });
 
   if (!user) {
-    return c.json({ error: "User not found" }, 404);
+    return c.json({ success: false, message: "User not found" }, 404);
+  }
+
+  const callerRoles = await prisma.userRole.findMany({ where: { userId: authUser.id }, select: { role: true } });
+  const isSuperAdmin = callerRoles.some(r => r.role === "SUPER_ADMIN");
+  if (!isSuperAdmin && user.status === "ACTIVE") {
+    const targetRoles = await prisma.userRole.findMany({ where: { userId }, select: { role: true } });
+    const hasHigherPrivilege = targetRoles.some(r => ["SUPER_ADMIN", "PLATFORM_ADMIN"].includes(r.role));
+    if (hasHigherPrivilege) {
+      return c.json({ success: false, message: "Tidak dapat menangguhkan user dengan hak akses lebih tinggi" }, 403);
+    }
   }
 
   const before = { status: user.status };
@@ -145,7 +157,7 @@ adminRoutes.put("/users/:userId/suspend", async (c) => {
     afterData: { status: "SUSPENDED" },
   });
 
-  return c.json({ message: "User berhasil ditangguhkan" });
+  return c.json({ success: true, message: "User berhasil ditangguhkan" });
 });
 
 // ==========================================
@@ -154,12 +166,12 @@ adminRoutes.put("/users/:userId/suspend", async (c) => {
 
 adminRoutes.put("/users/:userId/activate", async (c) => {
   const authUser = c.get("user");
-  const userId = c.req.param("userId");
+  const userId = c.req.param("userId") as string;
 
   const user = await prisma.user.findUnique({ where: { id: userId } });
 
   if (!user) {
-    return c.json({ error: "User not found" }, 404);
+    return c.json({ success: false, message: "User not found" }, 404);
   }
 
   const before = { status: user.status };
@@ -178,7 +190,7 @@ adminRoutes.put("/users/:userId/activate", async (c) => {
     afterData: { status: "ACTIVE" },
   });
 
-  return c.json({ message: "User berhasil diaktifkan" });
+  return c.json({ success: true, message: "User berhasil diaktifkan" });
 });
 
 // ==========================================
@@ -209,6 +221,7 @@ adminRoutes.get("/communities/pending", async (c) => {
   ]);
 
   return c.json({
+    success: true,
     communities: communities.map((c) => ({
       id: c.id,
       name: c.name,
@@ -229,12 +242,12 @@ adminRoutes.get("/communities/pending", async (c) => {
 
 adminRoutes.put("/communities/:communityId/approve", async (c) => {
   const authUser = c.get("user");
-  const communityId = c.req.param("communityId");
+  const communityId = c.req.param("communityId") as string;
 
   const community = await prisma.community.findUnique({ where: { id: communityId } });
 
   if (!community) {
-    return c.json({ error: "Community not found" }, 404);
+    return c.json({ success: false, message: "Community not found" }, 404);
   }
 
   const before = { status: community.status };
@@ -253,17 +266,17 @@ adminRoutes.put("/communities/:communityId/approve", async (c) => {
     afterData: { status: "APPROVED" },
   });
 
-  return c.json({ message: "Komunitas berhasil disetujui" });
+  return c.json({ success: true, message: "Komunitas berhasil disetujui" });
 });
 
 adminRoutes.put("/communities/:communityId/suspend", async (c) => {
   const authUser = c.get("user");
-  const communityId = c.req.param("communityId");
+  const communityId = c.req.param("communityId") as string;
 
   const community = await prisma.community.findUnique({ where: { id: communityId } });
 
   if (!community) {
-    return c.json({ error: "Community not found" }, 404);
+    return c.json({ success: false, message: "Community not found" }, 404);
   }
 
   const before = { status: community.status };
@@ -282,7 +295,7 @@ adminRoutes.put("/communities/:communityId/suspend", async (c) => {
     afterData: { status: "SUSPENDED" },
   });
 
-  return c.json({ message: "Komunitas berhasil ditangguhkan" });
+  return c.json({ success: true, message: "Komunitas berhasil ditangguhkan" });
 });
 
 // ==========================================
@@ -310,6 +323,7 @@ adminRoutes.get("/organizations/pending", async (c) => {
   ]);
 
   return c.json({
+    success: true,
     organizations: organizations.map((o) => ({
       id: o.id,
       name: o.name,
@@ -329,12 +343,12 @@ adminRoutes.get("/organizations/pending", async (c) => {
 
 adminRoutes.put("/organizations/:organizationId/approve", async (c) => {
   const authUser = c.get("user");
-  const organizationId = c.req.param("organizationId");
+  const organizationId = c.req.param("organizationId") as string;
 
   const organization = await prisma.organization.findUnique({ where: { id: organizationId } });
 
   if (!organization) {
-    return c.json({ error: "Organization not found" }, 404);
+    return c.json({ success: false, message: "Organization not found" }, 404);
   }
 
   const before = { status: organization.status };
@@ -353,17 +367,17 @@ adminRoutes.put("/organizations/:organizationId/approve", async (c) => {
     afterData: { status: "APPROVED" },
   });
 
-  return c.json({ message: "Organisasi berhasil disetujui" });
+  return c.json({ success: true, message: "Organisasi berhasil disetujui" });
 });
 
 adminRoutes.put("/organizations/:organizationId/suspend", async (c) => {
   const authUser = c.get("user");
-  const organizationId = c.req.param("organizationId");
+  const organizationId = c.req.param("organizationId") as string;
 
   const organization = await prisma.organization.findUnique({ where: { id: organizationId } });
 
   if (!organization) {
-    return c.json({ error: "Organization not found" }, 404);
+    return c.json({ success: false, message: "Organization not found" }, 404);
   }
 
   const before = { status: organization.status };
@@ -382,7 +396,7 @@ adminRoutes.put("/organizations/:organizationId/suspend", async (c) => {
     afterData: { status: "SUSPENDED" },
   });
 
-  return c.json({ message: "Organisasi berhasil ditangguhkan" });
+  return c.json({ success: true, message: "Organisasi berhasil ditangguhkan" });
 });
 
 // ==========================================
@@ -420,6 +434,7 @@ adminRoutes.get("/reports", async (c) => {
   ]);
 
   return c.json({
+    success: true,
     reports: reports.map((r) => ({
       id: r.id,
       targetType: r.targetType,
@@ -442,7 +457,7 @@ adminRoutes.get("/reports", async (c) => {
 
 adminRoutes.put("/reports/:reportId/resolve", async (c) => {
   const authUser = c.get("user");
-  const reportId = c.req.param("reportId");
+  const reportId = c.req.param("reportId") as string;
   const body = await c.req.json();
 
   const { action, note } = body as { action: "DISMISSED" | "SUSPENDED"; note?: string };
@@ -450,7 +465,7 @@ adminRoutes.put("/reports/:reportId/resolve", async (c) => {
   const report = await prisma.report.findUnique({ where: { id: reportId } });
 
   if (!report) {
-    return c.json({ error: "Report not found" }, 404);
+    return c.json({ success: false, message: "Report not found" }, 404);
   }
 
   const before = { status: report.status };
@@ -473,7 +488,7 @@ adminRoutes.put("/reports/:reportId/resolve", async (c) => {
     afterData: { status: action, note },
   });
 
-  return c.json({ message: `Laporan berhasil ${action === "SUSPENDED" ? "ditindaklanjuti" : "ditolak"}` });
+  return c.json({ success: true, message: `Laporan berhasil ${action === "SUSPENDED" ? "ditindaklanjuti" : "ditolak"}` });
 });
 
 // ==========================================
@@ -482,7 +497,7 @@ adminRoutes.put("/reports/:reportId/resolve", async (c) => {
 
 adminRoutes.put("/users/:userId/role", requireSuperAdmin(), async (c) => {
   const authUser = c.get("user");
-  const userId = c.req.param("userId");
+  const userId = c.req.param("userId") as string;
   const body = await c.req.json();
 
   const { role } = body as { role: "SUPER_ADMIN" | "PLATFORM_ADMIN" | "MEMBER" };
@@ -493,7 +508,7 @@ adminRoutes.put("/users/:userId/role", requireSuperAdmin(), async (c) => {
   });
 
   if (!user) {
-    return c.json({ error: "User not found" }, 404);
+    return c.json({ success: false, message: "User not found" }, 404);
   }
 
   const before = user.roles.map((r) => r.role);
@@ -513,7 +528,7 @@ adminRoutes.put("/users/:userId/role", requireSuperAdmin(), async (c) => {
     afterData: { roles: [role] },
   });
 
-  return c.json({ message: "Role berhasil diubah" });
+  return c.json({ success: true, message: "Role berhasil diubah" });
 });
 
 // ==========================================
@@ -553,6 +568,7 @@ adminRoutes.get("/audit-logs", requireSuperAdmin(), async (c) => {
   ]);
 
   return c.json({
+    success: true,
     logs: logs.map((l) => ({
       id: l.id,
       user: l.user,

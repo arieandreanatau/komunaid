@@ -6,7 +6,11 @@ export function validate(schema: ZodSchema, source: "body" | "query" | "param" =
     let data: unknown;
 
     if (source === "body") {
-      data = await c.req.json();
+      try {
+        data = await c.req.json();
+      } catch {
+        return c.json({ success: false, message: "Invalid JSON body" }, 400);
+      }
     } else if (source === "query") {
       const url = new URL(c.req.url);
       data = Object.fromEntries(url.searchParams);
@@ -22,8 +26,9 @@ export function validate(schema: ZodSchema, source: "body" | "query" | "param" =
       if (error instanceof ZodError) {
         return c.json(
           {
-            error: "Validation Error",
-            details: error.errors.map((e) => ({
+            success: false,
+            message: "Validation Error",
+            errors: error.errors.map((e) => ({
               field: e.path.join("."),
               message: e.message,
             })),

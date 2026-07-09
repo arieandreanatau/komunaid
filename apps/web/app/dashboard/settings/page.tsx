@@ -7,6 +7,7 @@ import api from "@/lib/api";
 
 export default function SettingsPage() {
   const [success, setSuccess] = useState("");
+  const [pwError, setPwError] = useState("");
 
   const {
     register,
@@ -33,7 +34,9 @@ export default function SettingsPage() {
 
   const onSubmit = (data: { currentPassword: string; newPassword: string; confirmNewPassword: string }) => {
     setSuccess("");
+    setPwError("");
     if (data.newPassword !== data.confirmNewPassword) {
+      setPwError("Password baru tidak cocok");
       return;
     }
     changePasswordMutation.mutate(data);
@@ -50,6 +53,8 @@ export default function SettingsPage() {
         {success && (
           <div className="bg-green-50 border border-green-200 text-green-700 text-sm p-3 rounded-lg mb-4">{success}</div>
         )}
+
+        {pwError && <div className="bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded-lg mb-4">{pwError}</div>}
 
         {changePasswordMutation.isError && (
           <div className="bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded-lg mb-4">

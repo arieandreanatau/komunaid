@@ -3,6 +3,23 @@ import { prisma } from "@komunaid/database";
 
 type PlatformRole = "SUPER_ADMIN" | "PLATFORM_ADMIN" | "MEMBER";
 
+const roleCache = new Map<string, { roles: string[]; expiresAt: number }>();
+const ROLE_CACHE_TTL = 60 * 1000; // 1 minute
+
+function getCachedRoles(userId: string): Promise<{ role: string }[]> {
+  const cached = roleCache.get(userId);
+  if (cached && Date.now() < cached.expiresAt) {
+    return Promise.resolve(cached.roles.map(r => ({ role: r })));
+  }
+  return prisma.userRole.findMany({
+    where: { userId },
+    select: { role: true },
+  }).then(roles => {
+    roleCache.set(userId, { roles: roles.map(r => r.role), expiresAt: Date.now() + ROLE_CACHE_TTL });
+    return roles;
+  });
+}
+
 export function requireRole(...roles: PlatformRole[]) {
   return async (c: Context, next: Next) => {
     const user = c.get("user");
@@ -11,12 +28,9 @@ export function requireRole(...roles: PlatformRole[]) {
       throw new Error("Unauthorized");
     }
 
-    const userRoles = await prisma.userRole.findMany({
-      where: { userId: user.id },
-      select: { role: true },
-    });
+    const userRoles = await getCachedRoles(user.id);
 
-    const hasRole = userRoles.some((r) => roles.includes(r.role));
+    const hasRole = userRoles.some((r) => roles.includes(r.role as PlatformRole));
 
     if (!hasRole) {
       throw new Error("Forbidden");

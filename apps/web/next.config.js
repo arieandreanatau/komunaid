@@ -3,12 +3,12 @@ const nextConfig = {
   transpilePackages: ["@komunaid/shared", "@komunaid/ui"],
   images: {
     remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "**",
-      },
+      { protocol: "https", hostname: "**.amazonaws.com" },
+      { protocol: "https", hostname: "localhost" },
     ],
   },
+  poweredByHeader: false,
+  reactStrictMode: true,
 };
 
 module.exports = nextConfig;

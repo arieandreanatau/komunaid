@@ -10,6 +10,7 @@ export default function DashboardPage() {
 
   const { data: profile } = useQuery({
     queryKey: ["profile"],
+    enabled: !!user,
     queryFn: async () => {
       const res = await api.get("/users/profile");
       return res.data.data?.user || res.data.user;

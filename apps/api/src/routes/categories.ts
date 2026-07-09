@@ -18,7 +18,7 @@ categoryRoutes.get("/", async (c) => {
     orderBy: { name: "asc" },
   });
 
-  return c.json({ categories });
+  return c.json({ success: true, categories });
 });
 
 // ==========================================
@@ -30,7 +30,7 @@ categoryRoutes.post("/", authMiddleware, requirePlatformAdmin(), async (c) => {
   const { name, description, icon } = body;
 
   if (!name) {
-    return c.json({ error: "Nama kategori wajib diisi" }, 400);
+    return c.json({ success: false, message: "Nama kategori wajib diisi" }, 400);
   }
 
   const slug = name
@@ -41,7 +41,7 @@ categoryRoutes.post("/", authMiddleware, requirePlatformAdmin(), async (c) => {
   const existing = await prisma.category.findUnique({ where: { slug } });
 
   if (existing) {
-    return c.json({ error: "Kategori sudah ada" }, 409);
+    return c.json({ success: false, message: "Kategori sudah ada" }, 409);
   }
 
   const category = await prisma.category.create({
@@ -53,7 +53,7 @@ categoryRoutes.post("/", authMiddleware, requirePlatformAdmin(), async (c) => {
     },
   });
 
-  return c.json({ category }, 201);
+  return c.json({ success: true, category }, 201);
 });
 
 // ==========================================
@@ -68,7 +68,7 @@ categoryRoutes.put("/:categoryId", authMiddleware, requirePlatformAdmin(), async
   const category = await prisma.category.findUnique({ where: { id: categoryId } });
 
   if (!category) {
-    return c.json({ error: "Category not found" }, 404);
+    return c.json({ success: false, message: "Category not found" }, 404);
   }
 
   const updated = await prisma.category.update({
@@ -81,7 +81,7 @@ categoryRoutes.put("/:categoryId", authMiddleware, requirePlatformAdmin(), async
     },
   });
 
-  return c.json({ category: updated });
+  return c.json({ success: true, category: updated });
 });
 
 // ==========================================
@@ -96,5 +96,5 @@ categoryRoutes.delete("/:categoryId", authMiddleware, requirePlatformAdmin(), as
     data: { isActive: false },
   });
 
-  return c.json({ message: "Kategori berhasil dinonaktifkan" });
+  return c.json({ success: true, message: "Kategori berhasil dinonaktifkan" });
 });

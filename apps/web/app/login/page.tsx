@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { loginSchema, type LoginInput } from "@komunaid/shared";
@@ -11,7 +11,9 @@ import { useAuth } from "@/components/auth-provider";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { user, setUser } = useAuth();
+  const { setUser } = useAuth();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get("redirect") || "/dashboard";
   const [error, setError] = useState("");
 
   const {
@@ -28,7 +30,7 @@ export default function LoginPage() {
       const res = await api.post("/auth/login", data);
       const userData = res.data.data?.user || res.data.user;
       setUser(userData);
-      router.push("/dashboard");
+      router.push(redirectTo);
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { message?: string; error?: string } } };
       setError(axiosErr.response?.data?.message || axiosErr.response?.data?.error || "Login gagal");
