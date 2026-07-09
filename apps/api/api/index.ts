@@ -1,5 +1,8 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import { handle } from "hono/vercel";
-import app from "../apps/api/src/app";
+import app from "./app";
 
 export const GET = handle(app);
 export const POST = handle(app);

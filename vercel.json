@@ -2,16 +2,5 @@
   "installCommand": "npm install -g pnpm@10.33.4 && pnpm install --no-frozen-lockfile",
   "buildCommand": "cd packages/database && npx prisma generate && cd ../.. && pnpm --filter @komunaid/web build",
   "framework": "nextjs",
-  "outputDirectory": "apps/web/.next",
-  "functions": {
-    "api/index.ts": {
-      "maxDuration": 30
-    }
-  },
-  "rewrites": [
-    { "source": "/api/v1/:path*", "destination": "/api/index.ts" },
-    { "source": "/health", "destination": "/api/index.ts" },
-    { "source": "/ready", "destination": "/api/index.ts" },
-    { "source": "/live", "destination": "/api/index.ts" }
-  ]
+  "outputDirectory": "apps/web/.next"
 }

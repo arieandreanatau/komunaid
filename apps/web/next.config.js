@@ -9,6 +9,13 @@ const nextConfig = {
   },
   poweredByHeader: false,
   reactStrictMode: true,
+  async rewrites() {
+    return [
+      { source: "/health", destination: "/api/health" },
+      { source: "/ready", destination: "/api/ready" },
+      { source: "/live", destination: "/api/live" },
+    ];
+  },
 };
 
 module.exports = nextConfig;

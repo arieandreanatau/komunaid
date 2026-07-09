@@ -17,9 +17,9 @@ export async function securityHeaders(c: Context, next: Next) {
 // RATE LIMITER — Redis-backed with in-memory fallback
 // ==========================================
 
-let redis: import("ioredis").Redis | null = null;
+let redis: { incr(key: string): Promise<number>; pexpire(key: string, ms: number): Promise<number>; on(event: string, cb: (err: Error) => void): void } | null = null;
 
-function getRedis(): import("ioredis").Redis | null {
+function getRedis(): typeof redis {
   if (redis !== undefined && redis !== null) return redis;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
