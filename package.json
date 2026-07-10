@@ -13,7 +13,7 @@
     "build:api": "pnpm --filter @komunaid/api build",
     "lint": "pnpm -r lint",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
-    "typecheck": "pnpm -r lint",
+    "typecheck": "pnpm -r exec tsc --noEmit",
     "db:generate": "pnpm --filter @komunaid/database generate",
     "db:push": "pnpm --filter @komunaid/database push",
     "db:migrate": "pnpm --filter @komunaid/database migrate",

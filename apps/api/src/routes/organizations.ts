@@ -6,6 +6,9 @@ import {
   organizationQuerySchema,
   updateOrganizationSettingsSchema,
   changeOrganizationMemberRoleSchema,
+  updateOrganizationProfileSchema,
+  updateOrganizationBannerSchema,
+  updateOrganizationLogoSchema,
 } from "@komunaid/shared";
 import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth";
 import {
@@ -209,7 +212,7 @@ organizationRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
         take: 20,
       },
       events: {
-        where: { status: "APPROVED", eventDate: { gte: new Date() } },
+        where: { status: "PUBLISHED", eventDate: { gte: new Date() } },
         orderBy: { eventDate: "asc" },
         take: 5,
       },
@@ -318,7 +321,7 @@ organizationRoutes.post("/", authMiddleware, validate(createOrganizationSchema),
         create: {
           userId: authUser.id,
           role: "OWNER",
-          status: "PENDING",
+          status: "ACTIVE",
         },
       },
       settings: {
@@ -675,7 +678,7 @@ organizationRoutes.get(
           where: { organizationId: organizationId, status: "PENDING" },
         }),
         prisma.event.count({
-          where: { organizationId, status: "APPROVED", eventDate: { gte: new Date() } },
+          where: { organizationId, status: "PUBLISHED", eventDate: { gte: new Date() } },
         }),
         prisma.membershipHistory.findMany({
           where: { organizationId },
@@ -842,15 +845,19 @@ organizationRoutes.put(
   "/:organizationId/profile",
   authMiddleware,
   requireOrganizationAdmin,
+  validate(updateOrganizationProfileSchema),
   async (c) => {
     const authUser = c.get("user");
     const organizationId = c.req.param("organizationId") as string;
-    const body = await c.req.json();
+    const data = c.get("validated");
 
     const {
       name, description, location, website, industry,
       country, province, city, instagram, contactEmail, contactPhone,
-    } = body;
+    } = data as {
+      name?: string; description?: string; location?: string; website?: string; industry?: string;
+      country?: string; province?: string; city?: string; instagram?: string; contactEmail?: string; contactPhone?: string;
+    };
 
     const organization = await prisma.organization.findUnique({
       where: { id: organizationId },
@@ -921,11 +928,12 @@ organizationRoutes.put(
   "/:organizationId/banner",
   authMiddleware,
   requireOrganizationAdmin,
+  validate(updateOrganizationBannerSchema),
   async (c) => {
     const authUser = c.get("user");
     const organizationId = c.req.param("organizationId") as string;
-    const body = await c.req.json();
-    const { banner } = body;
+    const data = c.get("validated");
+    const { banner } = data as { banner?: string };
 
     if (!banner) {
       return c.json({ success: false, message: "URL banner wajib diisi" }, 400);
@@ -969,11 +977,12 @@ organizationRoutes.put(
   "/:organizationId/logo",
   authMiddleware,
   requireOrganizationAdmin,
+  validate(updateOrganizationLogoSchema),
   async (c) => {
     const authUser = c.get("user");
     const organizationId = c.req.param("organizationId") as string;
-    const body = await c.req.json();
-    const { logo } = body;
+    const data = c.get("validated");
+    const { logo } = data as { logo?: string };
 
     if (!logo) {
       return c.json({ success: false, message: "URL logo wajib diisi" }, 400);
@@ -1211,6 +1220,16 @@ organizationRoutes.post(
       resourceId: organizationId,
     });
 
+    await prisma.notification.create({
+      data: {
+        userId: organization.ownerId,
+        title: "Anggota Baru Bergabung",
+        message: `${authUser.name} telah bergabung dengan organisasi "${organization.name}".`,
+        type: "ORGANIZATION",
+        link: `/organizations/${organization.slug}`,
+      },
+    });
+
     await prisma.activityHistory.create({
       data: {
         userId: authUser.id,
@@ -1262,13 +1281,14 @@ organizationRoutes.post(
       where: { id: organizationId },
     });
 
-    await prisma.organizationMember.delete({
+    await prisma.organizationMember.update({
       where: {
         organizationId_userId: {
           organizationId,
           userId: authUser.id,
         },
       },
+      data: { status: "BANNED", deletedAt: new Date() },
     });
 
     await createAuditLog({
@@ -1576,8 +1596,9 @@ organizationRoutes.delete(
       where: { id: organizationId },
     });
 
-    await prisma.organizationMember.delete({
+    await prisma.organizationMember.update({
       where: { id: memberId },
+      data: { status: "BANNED", deletedAt: new Date() },
     });
 
     await createAuditLog({

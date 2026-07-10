@@ -1,4 +1,7 @@
 import { Context, Next } from "hono";
+import { createChildLogger } from "../lib/logger";
+
+const log = createChildLogger("security");
 
 export async function securityHeaders(c: Context, next: Next) {
   c.header("X-Content-Type-Options", "nosniff");
@@ -28,7 +31,7 @@ function getRedis(): typeof redis {
     const Redis = require("ioredis");
     const client = new Redis(url);
     client.on("error", (err: Error) => {
-      console.error("[rate-limiter] Redis error:", err.message);
+      log.error({ err }, "[rate-limiter] Redis error:");
       redis = null;
     });
     redis = client;

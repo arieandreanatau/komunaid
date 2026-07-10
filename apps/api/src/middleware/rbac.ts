@@ -6,6 +6,10 @@ type PlatformRole = "SUPER_ADMIN" | "PLATFORM_ADMIN" | "MEMBER";
 const roleCache = new Map<string, { roles: string[]; expiresAt: number }>();
 const ROLE_CACHE_TTL = 60 * 1000; // 1 minute
 
+export function invalidateRoleCache(userId: string) {
+  roleCache.delete(userId);
+}
+
 function getCachedRoles(userId: string): Promise<{ role: string }[]> {
   const cached = roleCache.get(userId);
   if (cached && Date.now() < cached.expiresAt) {
@@ -71,7 +75,7 @@ export async function requireCommunityOwner(c: Context, next: Next) {
     },
   });
 
-  if (!membership || membership.role !== "OWNER") {
+  if (!membership || membership.role !== "OWNER" || membership.status !== "ACTIVE") {
     throw new Error("Forbidden");
   }
 
@@ -95,7 +99,7 @@ export async function requireCommunityAdmin(c: Context, next: Next) {
     },
   });
 
-  if (!membership || !["OWNER", "ADMIN"].includes(membership.role)) {
+  if (!membership || !["OWNER", "ADMIN"].includes(membership.role) || membership.status !== "ACTIVE") {
     throw new Error("Forbidden");
   }
 
@@ -119,7 +123,7 @@ export async function requireOrganizationOwner(c: Context, next: Next) {
     },
   });
 
-  if (!membership || membership.role !== "OWNER") {
+  if (!membership || membership.role !== "OWNER" || membership.status !== "ACTIVE") {
     throw new Error("Forbidden");
   }
 
@@ -143,7 +147,7 @@ export async function requireOrganizationAdmin(c: Context, next: Next) {
     },
   });
 
-  if (!membership || !["OWNER", "ADMIN"].includes(membership.role)) {
+  if (!membership || !["OWNER", "ADMIN"].includes(membership.role) || membership.status !== "ACTIVE") {
     throw new Error("Forbidden");
   }
 

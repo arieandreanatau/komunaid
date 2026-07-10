@@ -297,7 +297,7 @@ export default function CommunitySettingsPage() {
             </Link>
             <span>/</span>
             <Link href={`/communities/${slug}`} className="hover:text-komuna-blue transition-colors">
-              {community.name}
+              {community?.name}
             </Link>
             <span>/</span>
             <span className="text-komuna-navy font-medium">Pengaturan</span>
@@ -615,7 +615,7 @@ export default function CommunitySettingsPage() {
             </button>
             <h3 className="text-lg font-semibold text-red-600 mb-1">Arsipkan Komunitas</h3>
             <p className="text-sm text-gray-500 mb-4">
-              Ketik <strong className="text-komuna-navy">{community.name}</strong> untuk mengonfirmasi.
+              Ketik <strong className="text-komuna-navy">{community?.name}</strong> untuk mengonfirmasi.
             </p>
             <input
               type="text"
@@ -636,7 +636,7 @@ export default function CommunitySettingsPage() {
               </button>
               <button
                 onClick={handleArchive}
-                disabled={archiveConfirm !== community.name || archiveLoading}
+                disabled={archiveConfirm !== community?.name || archiveLoading}
                 className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors text-sm disabled:opacity-50 inline-flex items-center justify-center gap-2"
               >
                 {archiveLoading && <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}

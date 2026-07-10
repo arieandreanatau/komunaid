@@ -81,7 +81,7 @@ reportRoutes.get("/my", authMiddleware, async (c) => {
 
   return c.json({
     success: true,
-    reports,
+    data: reports,
     pagination: {
       page,
       limit,

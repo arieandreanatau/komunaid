@@ -22,34 +22,12 @@ export function csrfProtection() {
       c.header("Set-Cookie", serialize("csrf_token", token, {
         httpOnly: false,
         secure: IS_PRODUCTION,
-        sameSite: "lax",
+        sameSite: "strict",
         path: "/",
         maxAge: 60 * 60,
       }));
       c.header("X-CSRF-Token", token);
       return next();
-    }
-
-    const origin = c.req.header("origin");
-    const referer = c.req.header("referer");
-    const host = c.req.header("host");
-
-    if (origin && host) {
-      try {
-        const originHost = new URL(origin).host;
-        if (originHost === host) {
-          return next();
-        }
-      } catch {}
-    }
-
-    if (referer && host) {
-      try {
-        const refererHost = new URL(referer).host;
-        if (refererHost === host) {
-          return next();
-        }
-      } catch {}
     }
 
     const csrfHeader = c.req.header("x-csrf-token");

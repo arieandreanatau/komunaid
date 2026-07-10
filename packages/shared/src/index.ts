@@ -227,6 +227,32 @@ export const changeOrganizationMemberRoleSchema = z.object({
 });
 
 // ==========================================
+// ORGANIZATION SUB-UPDATE SCHEMAS
+// ==========================================
+
+export const updateOrganizationProfileSchema = z.object({
+  name: z.string().min(3).max(100).optional(),
+  description: z.string().max(2000).optional(),
+  location: z.string().max(100).optional(),
+  website: z.string().url("URL website tidak valid").optional().or(z.literal("")),
+  industry: z.string().max(100).optional(),
+  country: z.string().max(100).optional(),
+  province: z.string().max(100).optional(),
+  city: z.string().max(100).optional(),
+  instagram: z.string().max(100).optional(),
+  contactEmail: z.string().email("Email tidak valid").optional().or(z.literal("")),
+  contactPhone: z.string().max(20).optional(),
+});
+
+export const updateOrganizationBannerSchema = z.object({
+  banner: z.string().url("URL banner tidak valid").optional().or(z.literal("")),
+});
+
+export const updateOrganizationLogoSchema = z.object({
+  logo: z.string().url("URL logo tidak valid").optional().or(z.literal("")),
+});
+
+// ==========================================
 // EVENT SCHEMAS
 // ==========================================
 
@@ -376,6 +402,9 @@ export type OrganizationQueryInput = z.infer<typeof organizationQuerySchema>;
 export type SubmitOrganizationInput = z.infer<typeof submitOrganizationSchema>;
 export type UpdateOrganizationSettingsInput = z.infer<typeof updateOrganizationSettingsSchema>;
 export type ChangeOrganizationMemberRoleInput = z.infer<typeof changeOrganizationMemberRoleSchema>;
+export type UpdateOrganizationProfileInput = z.infer<typeof updateOrganizationProfileSchema>;
+export type UpdateOrganizationBannerInput = z.infer<typeof updateOrganizationBannerSchema>;
+export type UpdateOrganizationLogoInput = z.infer<typeof updateOrganizationLogoSchema>;
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 export type UpdateEventInput = z.infer<typeof updateEventSchema>;
 export type EventQueryInput = z.infer<typeof eventQuerySchema>;

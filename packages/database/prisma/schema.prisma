@@ -316,6 +316,7 @@ model OrganizationMember {
   role           OrganizationRole @default(MEMBER)
   status         MembershipStatus @default(ACTIVE)
   joinedAt       DateTime         @default(now())
+  deletedAt      DateTime?
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -422,6 +423,7 @@ model Event {
   @@index([createdById])
   @@index([eventDate])
   @@index([status])
+  @@index([communityId, status, eventDate])
   @@map("events")
 }
 
@@ -678,6 +680,7 @@ model Report {
   reviewedBy  String?
   reviewedAt  DateTime?
   reviewNote  String?
+  deletedAt   DateTime?
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
@@ -755,6 +758,7 @@ model Notification {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, isRead])
+  @@index([createdAt])
   @@map("notifications")
 }
 

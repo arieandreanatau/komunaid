@@ -225,7 +225,7 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
         take: 20,
       },
       events: {
-        where: { status: "APPROVED", eventDate: { gte: new Date() } },
+        where: { status: "PUBLISHED", eventDate: { gte: new Date() } },
         orderBy: { eventDate: "asc" },
         take: 5,
       },
@@ -329,7 +329,7 @@ communityRoutes.post("/", authMiddleware, validate(createCommunitySchema), async
         create: {
           userId: authUser.id,
           role: "OWNER",
-          status: "PENDING",
+          status: "ACTIVE",
         },
       },
       settings: {
@@ -691,7 +691,7 @@ communityRoutes.get(
           where: { communityId, status: "PENDING" },
         }),
         prisma.event.count({
-          where: { communityId, status: "APPROVED", eventDate: { gte: new Date() } },
+          where: { communityId, status: "PUBLISHED", eventDate: { gte: new Date() } },
         }),
         prisma.membershipHistory.findMany({
           where: { communityId },
@@ -1180,6 +1180,16 @@ communityRoutes.post(
         actionType: AuditActions.COMMUNITY_MEMBER_JOIN,
         resourceName: "Community",
         resourceId: communityId,
+      });
+
+      await prisma.notification.create({
+        data: {
+          userId: community.ownerId,
+          title: "Anggota Baru Bergabung",
+          message: `${authUser.name} telah bergabung dengan komunitas "${community.name}".`,
+          type: "COMMUNITY",
+          link: `/communities/${community.slug}`,
+        },
       });
 
       await prisma.activityHistory.create({

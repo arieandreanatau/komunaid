@@ -202,7 +202,7 @@ async function main() {
       eventDate: new Date("2026-07-25T19:00:00+07:00"),
       endDate: new Date("2026-07-25T22:00:00+07:00"),
       quota: 50,
-      status: "APPROVED",
+      status: "PUBLISHED",
       communityId: techCommunity.id,
       createdById: member.id,
       registrations: {

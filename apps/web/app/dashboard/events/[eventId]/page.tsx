@@ -410,7 +410,7 @@ export default function EventDashboardPage() {
             </div>
             {recentRegistrations && recentRegistrations.length > 0 ? (
               <div className="space-y-3">
-                {recentRegistrations.slice(0, 5).map((reg) => (
+                {recentRegistrations.slice(0, 5).map((reg: any) => (
                   <div key={reg.id} className="flex items-center gap-3">
                     {reg.user.avatar ? (
                       <img src={reg.user.avatar} alt={reg.user.name} className="h-8 w-8 rounded-full object-cover" />

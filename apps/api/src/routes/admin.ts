@@ -1,8 +1,7 @@
-// @ts-nocheck - Dynamic Prisma queries with Record<string, any> where clauses
 import { Hono } from "hono";
 import { prisma } from "@komunaid/database";
 import { authMiddleware } from "../middleware/auth";
-import { requirePlatformAdmin, requireSuperAdmin } from "../middleware/rbac";
+import { requirePlatformAdmin, requireSuperAdmin, invalidateRoleCache } from "../middleware/rbac";
 import { createAuditLog, AuditActions } from "../services/audit";
 import type { AuthUser } from "../middleware/auth";
 
@@ -178,7 +177,7 @@ adminRoutes.get("/users", async (c) => {
 
   const [users, total] = await Promise.all([
     prisma.user.findMany({
-      where: where as any,
+      where: where as never,
       include: {
         roles: true,
         _count: {
@@ -193,8 +192,8 @@ adminRoutes.get("/users", async (c) => {
       orderBy: { createdAt: sortOrder as "asc" | "desc" },
       skip,
       take: limit,
-    } as any),
-    prisma.user.count({ where }),
+    }),
+    prisma.user.count({ where: where as never }),
   ]);
 
   return c.json({
@@ -530,6 +529,8 @@ adminRoutes.put("/users/:userId/role", requireSuperAdmin(), async (c) => {
   await prisma.userRole.deleteMany({ where: { userId } });
   await prisma.userRole.create({ data: { userId, role } });
 
+  invalidateRoleCache(userId);
+
   await createAuditLog({
     userId: authUser.id,
     actionType: AuditActions.ROLE_CHANGE,
@@ -574,7 +575,7 @@ adminRoutes.get("/communities", async (c) => {
 
   const [communities, total] = await Promise.all([
     prisma.community.findMany({
-      where,
+      where: where as never,
       include: {
         owner: { select: { id: true, name: true, email: true, avatar: true } },
         categories: { include: { category: true } },
@@ -584,8 +585,8 @@ adminRoutes.get("/communities", async (c) => {
       orderBy: { createdAt: sortOrder as "asc" | "desc" },
       skip,
       take: limit,
-    } as any),
-    prisma.community.count({ where }),
+    }),
+    prisma.community.count({ where: where as never }),
   ]);
 
   return c.json({
@@ -928,7 +929,7 @@ adminRoutes.get("/organizations", async (c) => {
 
   const [organizations, total] = await Promise.all([
     prisma.organization.findMany({
-      where,
+      where: where as never,
       include: {
         owner: { select: { id: true, name: true, email: true, avatar: true } },
         categories: { include: { category: true } },
@@ -938,13 +939,13 @@ adminRoutes.get("/organizations", async (c) => {
       orderBy: { createdAt: sortOrder as "asc" | "desc" },
       skip,
       take: limit,
-    } as any),
-    prisma.organization.count({ where }),
+    }),
+    prisma.organization.count({ where: where as never }),
   ]);
 
   return c.json({
     success: true,
-    data: organizations.map((org) => ({
+    data: organizations.map((org: any) => ({
       id: org.id,
       name: org.name,
       slug: org.slug,
@@ -958,8 +959,8 @@ adminRoutes.get("/organizations", async (c) => {
       submittedAt: org.submittedAt,
       reviewedAt: org.reviewedAt,
       owner: org.owner,
-      categories: org.categories.map((oc) => oc.category),
-      tags: org.tags.map((t) => t.tag),
+      categories: org.categories.map((oc: any) => oc.category),
+      tags: org.tags.map((t: any) => t.tag),
       memberCount: org._count.members,
       eventCount: org._count.events,
       createdAt: org.createdAt,
@@ -1254,7 +1255,7 @@ adminRoutes.get("/communities/review-queue", async (c) => {
         tags: true,
         _count: { select: { members: true, events: true } },
       },
-      orderBy,
+      orderBy: orderBy as any,
       skip,
       take: limit,
     }),
@@ -1263,7 +1264,7 @@ adminRoutes.get("/communities/review-queue", async (c) => {
 
   return c.json({
     success: true,
-    data: communities.map((comm) => ({
+    data: communities.map((comm: any) => ({
       id: comm.id,
       name: comm.name,
       slug: comm.slug,
@@ -1276,8 +1277,8 @@ adminRoutes.get("/communities/review-queue", async (c) => {
       adminNote: comm.adminNote,
       submittedAt: comm.submittedAt,
       owner: comm.owner,
-      categories: comm.categories.map((cc) => cc.category),
-      tags: comm.tags.map((t) => t.tag),
+      categories: comm.categories.map((cc: any) => cc.category),
+      tags: comm.tags.map((t: any) => t.tag),
       memberCount: comm._count.members,
       eventCount: comm._count.events,
       createdAt: comm.createdAt,
@@ -1309,7 +1310,7 @@ adminRoutes.get("/events", async (c) => {
 
   const [events, total] = await Promise.all([
     prisma.event.findMany({
-      where,
+      where: where as never,
       include: {
         createdBy: { select: { id: true, name: true, avatar: true } },
         community: { select: { id: true, name: true, slug: true } },
@@ -1320,8 +1321,8 @@ adminRoutes.get("/events", async (c) => {
       orderBy: { createdAt: sortOrder as "asc" | "desc" },
       skip,
       take: limit,
-    } as any),
-    prisma.event.count({ where }),
+    }),
+    prisma.event.count({ where: where as never }),
   ]);
 
   return c.json({
@@ -1616,7 +1617,7 @@ adminRoutes.get("/volunteers", async (c) => {
         positions: true,
         _count: { select: { applications: true } },
       },
-      orderBy,
+      orderBy: orderBy as any,
       skip,
       take: limit,
     }),
@@ -1625,7 +1626,7 @@ adminRoutes.get("/volunteers", async (c) => {
 
   return c.json({
     success: true,
-    data: opportunities.map((o) => ({
+    data: opportunities.map((o: any) => ({
       id: o.id,
       title: o.title,
       slug: o.slug,
@@ -2645,8 +2646,8 @@ adminRoutes.put("/settings/platform/general", requireSuperAdmin(), async (c) => 
   for (const [key, value] of entries) {
     await prisma.setting.upsert({
       where: { key },
-      create: { key, value },
-      update: { value },
+      create: { key, value: value as any },
+      update: { value: value as any },
     });
   }
 
