@@ -4,7 +4,9 @@ const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://komuna.id";
 
 async function fetchSlugs(endpoint: string): Promise<string[]> {
   try {
-    const apiUrl = process.env.API_URL || "http://localhost:3001";
+    const apiUrl = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : process.env.API_URL || "http://localhost:3001";
     const res = await fetch(`${apiUrl}/api/v1/${endpoint}?limit=500`, {
       next: { revalidate: 3600 },
     });

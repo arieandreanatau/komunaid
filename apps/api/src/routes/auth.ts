@@ -115,21 +115,34 @@ authRoutes.post("/register", validate(registerSchema), async (c) => {
 
   setTokenCookies(c, accessToken, refreshToken);
 
-  await createAuditLog({
-    userId: user.id,
-    actionType: AuditActions.USER_REGISTER,
-    resourceName: "User",
-    resourceId: user.id,
-    afterData: { name: user.name, email: user.email, username: user.username },
-  });
-
-  await prisma.activityHistory.create({
-    data: {
+  try {
+    await createAuditLog({
       userId: user.id,
-      action: "USER_REGISTER",
-      details: { email: user.email, username: user.username },
-    },
-  });
+      actionType: AuditActions.USER_REGISTER,
+      resourceName: "User",
+      resourceId: user.id,
+      afterData: { name: user.name, email: user.email, username: user.username },
+    });
+
+    await prisma.notification.create({
+      data: {
+        userId: user.id,
+        title: "Selamat Datang di KomunaID!",
+        message: "Akun Anda berhasil dibuat. Mulai jelajahi komunitas dan event di sekitar Anda.",
+        type: "SYSTEM",
+      },
+    });
+
+    await prisma.activityHistory.create({
+      data: {
+        userId: user.id,
+        action: "USER_REGISTER",
+        details: { email: user.email, username: user.username },
+      },
+    });
+  } catch (postErr) {
+    log.error({ err: postErr, userId: user.id }, "post-registration operations failed");
+  }
 
   log.info({ userId: user.id }, "user registered");
 
@@ -413,6 +426,15 @@ authRoutes.put("/change-password", authMiddleware, validate(changePasswordSchema
     resourceId: authUser.id,
   });
 
+  await prisma.notification.create({
+    data: {
+      userId: authUser.id,
+      title: "Password Berhasil Diubah",
+      message: "Password akun Anda telah berhasil diubah. Jika Anda tidak melakukan ini, segera hubungi administrator.",
+      type: "SYSTEM",
+    },
+  });
+
   return c.json({ success: true, message: "Password berhasil diubah" });
 });
 
@@ -495,6 +517,15 @@ authRoutes.post("/reset-password", validate(resetPasswordSchema), async (c) => {
       actionType: "USER_RESET_PASSWORD",
       resourceName: "User",
       resourceId: user.id,
+    });
+
+    await prisma.notification.create({
+      data: {
+        userId: user.id,
+        title: "Password Berhasil Direset",
+        message: "Password akun Anda telah berhasil direset. Jika Anda tidak melakukan ini, segera hubungi administrator.",
+        type: "SYSTEM",
+      },
     });
 
     return c.json({

@@ -3,11 +3,16 @@ import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { JsonLd } from "@/components/json-ld";
 
-const API_URL = process.env.API_URL || "http://localhost:3001";
+function getBaseUrl() {
+  if (typeof window !== "undefined") return "";
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return process.env.API_URL || "http://localhost:3001";
+}
 
 async function fetchPublic<T>(endpoint: string, fallback: T): Promise<T> {
   try {
-    const res = await fetch(`${API_URL}/api/v1/${endpoint}`, {
+    const baseUrl = getBaseUrl();
+    const res = await fetch(`${baseUrl}/api/v1/${endpoint}`, {
       next: { revalidate: 60 },
     });
     if (!res.ok) return fallback;

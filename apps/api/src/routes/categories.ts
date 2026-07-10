@@ -4,6 +4,7 @@ import { authMiddleware } from "../middleware/auth";
 import { requirePlatformAdmin } from "../middleware/rbac";
 import { validate } from "../middleware/validate";
 import { adminCreateCategorySchema, adminUpdateCategorySchema } from "@komunaid/shared";
+import { createAuditLog, AuditActions } from "../services/audit";
 import type { AuthUser } from "../middleware/auth";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
@@ -58,6 +59,14 @@ categoryRoutes.post("/", authMiddleware, requirePlatformAdmin(), validate(adminC
     },
   });
 
+  await createAuditLog({
+    userId: authUser.id,
+    actionType: AuditActions.SETTINGS_UPDATE,
+    resourceName: "Category",
+    resourceId: category.id,
+    afterData: { name: category.name, slug: category.slug, type: category.type },
+  });
+
   return c.json({ success: true, data: category }, 201);
 });
 
@@ -67,7 +76,7 @@ categoryRoutes.post("/", authMiddleware, requirePlatformAdmin(), validate(adminC
 
 categoryRoutes.put("/:categoryId", authMiddleware, requirePlatformAdmin(), validate(adminUpdateCategorySchema), async (c) => {
   const authUser = c.get("user");
-  const categoryId = c.req.param("categoryId");
+  const categoryId = c.req.param("categoryId") as string;
   const data = c.get("validated");
 
   const category = await prisma.category.findUnique({ where: { id: categoryId } });
@@ -83,6 +92,15 @@ categoryRoutes.put("/:categoryId", authMiddleware, requirePlatformAdmin(), valid
     },
   });
 
+  await createAuditLog({
+    userId: authUser.id,
+    actionType: AuditActions.SETTINGS_UPDATE,
+    resourceName: "Category",
+    resourceId: categoryId,
+    beforeData: { name: category.name },
+    afterData: { name: updated.name, type: updated.type, isActive: updated.isActive },
+  });
+
   return c.json({ success: true, data: updated });
 });
 
@@ -91,11 +109,27 @@ categoryRoutes.put("/:categoryId", authMiddleware, requirePlatformAdmin(), valid
 // ==========================================
 
 categoryRoutes.delete("/:categoryId", authMiddleware, requirePlatformAdmin(), async (c) => {
-  const categoryId = c.req.param("categoryId");
+  const authUser = c.get("user");
+  const categoryId = c.req.param("categoryId") as string;
+
+  const category = await prisma.category.findUnique({ where: { id: categoryId } });
+
+  if (!category) {
+    return c.json({ success: false, message: "Category not found" }, 404);
+  }
 
   await prisma.category.update({
     where: { id: categoryId },
     data: { isActive: false },
+  });
+
+  await createAuditLog({
+    userId: authUser.id,
+    actionType: AuditActions.SETTINGS_UPDATE,
+    resourceName: "Category",
+    resourceId: categoryId,
+    beforeData: { isActive: category.isActive },
+    afterData: { isActive: false },
   });
 
   return c.json({ success: true, message: "Kategori berhasil dinonaktifkan" });

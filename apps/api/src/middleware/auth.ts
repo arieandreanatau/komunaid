@@ -6,8 +6,15 @@ const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "dev-secre
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "15m";
 const REFRESH_EXPIRES_IN = process.env.REFRESH_TOKEN_EXPIRES_IN || "30d";
 const COOKIE_SECRET = process.env.COOKIE_SECRET || "dev-cookie-secret-change-this";
-const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || "localhost";
+const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || "";
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
+
+function getCookieDomain(): string | undefined {
+  if (IS_PRODUCTION && COOKIE_DOMAIN && COOKIE_DOMAIN !== "localhost") {
+    return COOKIE_DOMAIN;
+  }
+  return undefined;
+}
 
 function assertProductionSecrets() {
   if (IS_PRODUCTION && (!process.env.JWT_SECRET || process.env.JWT_SECRET === "dev-secret-change-this")) {
@@ -80,7 +87,7 @@ export function setTokenCookies(c: Context, accessToken: string, refreshToken: s
     sameSite: "strict",
     path: "/",
     maxAge: 15 * 60, // 15 minutes
-    domain: IS_PRODUCTION ? COOKIE_DOMAIN : undefined,
+    domain: getCookieDomain(),
   });
 
   const refreshCookie = serialize("refreshToken", refreshToken, {
@@ -89,7 +96,7 @@ export function setTokenCookies(c: Context, accessToken: string, refreshToken: s
     sameSite: "strict",
     path: "/api/v1/auth/refresh",
     maxAge: 30 * 24 * 60 * 60, // 30 days
-    domain: IS_PRODUCTION ? COOKIE_DOMAIN : undefined,
+    domain: getCookieDomain(),
   });
 
   c.header("Set-Cookie", accessCookie);
@@ -103,7 +110,7 @@ export function clearTokenCookies(c: Context) {
     sameSite: "strict",
     path: "/",
     maxAge: 0,
-    domain: IS_PRODUCTION ? COOKIE_DOMAIN : undefined,
+    domain: getCookieDomain(),
   });
 
   const refreshCookie = serialize("refreshToken", "", {
@@ -112,7 +119,7 @@ export function clearTokenCookies(c: Context) {
     sameSite: "strict",
     path: "/api/v1/auth/refresh",
     maxAge: 0,
-    domain: IS_PRODUCTION ? COOKIE_DOMAIN : undefined,
+    domain: getCookieDomain(),
   });
 
   c.header("Set-Cookie", accessCookie);

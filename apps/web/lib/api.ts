@@ -69,12 +69,6 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       csrfToken = null;
-      if (typeof window !== "undefined") {
-        const currentPath = window.location.pathname;
-        if (!currentPath.startsWith("/login") && !currentPath.startsWith("/register") && !currentPath.startsWith("/forgot-password") && !currentPath.startsWith("/reset-password")) {
-          window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`;
-        }
-      }
     }
     return Promise.reject(error);
   }

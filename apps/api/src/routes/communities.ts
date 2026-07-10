@@ -518,6 +518,23 @@ communityRoutes.post(
       afterData: { status: "PENDING" },
     });
 
+    const platformAdmins = await prisma.userRole.findMany({
+      where: { role: "PLATFORM_ADMIN" },
+      select: { userId: true },
+    });
+
+    if (platformAdmins.length > 0) {
+      await prisma.notification.createMany({
+        data: platformAdmins.map((admin) => ({
+          userId: admin.userId,
+          title: "Komunitas Baru Menunggu Review",
+          message: `Komunitas "${community.name}" telah dikirim untuk review.`,
+          type: "APPROVAL",
+          link: `/admin/communities`,
+        })),
+      });
+    }
+
     await prisma.activityHistory.create({
       data: {
         userId: authUser.id,
@@ -641,7 +658,7 @@ communityRoutes.post(
 
     await createAuditLog({
       userId: authUser.id,
-      actionType: AuditActions.COMMUNITY_SUSPEND,
+      actionType: AuditActions.COMMUNITY_ARCHIVE,
       resourceName: "Community",
       resourceId: communityId,
       beforeData: { status: beforeStatus },

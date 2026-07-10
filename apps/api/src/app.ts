@@ -36,7 +36,11 @@ app.use("*", requestSizeLimit("10mb"));
 app.use(
   "*",
   cors({
-    origin: process.env.CORS_ORIGIN || "http://localhost:3000",
+    origin: (origin) => {
+      const allowed = (process.env.CORS_ORIGIN || "http://localhost:3000").split(",").map((s) => s.trim());
+      if (!origin || allowed.includes(origin)) return origin;
+      return allowed[0];
+    },
     credentials: true,
     allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization", "X-CSRF-Token"],

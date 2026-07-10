@@ -507,6 +507,23 @@ organizationRoutes.post(
       afterData: { status: "PENDING" },
     });
 
+    const platformAdmins = await prisma.userRole.findMany({
+      where: { role: "PLATFORM_ADMIN" },
+      select: { userId: true },
+    });
+
+    if (platformAdmins.length > 0) {
+      await prisma.notification.createMany({
+        data: platformAdmins.map((admin) => ({
+          userId: admin.userId,
+          title: "Organisasi Baru Menunggu Review",
+          message: `Organisasi "${organization.name}" telah dikirim untuk review.`,
+          type: "APPROVAL",
+          link: `/admin/organizations`,
+        })),
+      });
+    }
+
     await prisma.activityHistory.create({
       data: {
         userId: authUser.id,
@@ -628,7 +645,7 @@ organizationRoutes.post(
 
     await createAuditLog({
       userId: authUser.id,
-      actionType: AuditActions.ORG_SUSPEND,
+      actionType: AuditActions.ORG_ARCHIVE,
       resourceName: "Organization",
       resourceId: organizationId,
       beforeData: { status: beforeStatus },

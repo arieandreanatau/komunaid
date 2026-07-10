@@ -1,9 +1,7 @@
+import "dotenv/config";
 import { serve } from "@hono/node-server";
-import dotenv from "dotenv";
 import app from "./app";
 import { createChildLogger } from "./lib/logger";
-
-dotenv.config();
 
 const log = createChildLogger("server");
 
