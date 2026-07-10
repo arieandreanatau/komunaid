@@ -37,12 +37,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const isSuperAdmin = user?.roles?.includes("SUPER_ADMIN");
   const isAdmin = user?.roles?.includes("PLATFORM_ADMIN") || isSuperAdmin;
+  const isLoginPage = pathname === "/admin/login";
 
   useEffect(() => {
-    if (!isLoading && (!isAuthenticated || !isAdmin)) {
+    if (!isLoading && !isLoginPage && (!isAuthenticated || !isAdmin)) {
       router.push("/admin/login");
     }
-  }, [isLoading, isAuthenticated, isAdmin, router]);
+  }, [isLoading, isAuthenticated, isAdmin, router, isLoginPage]);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -84,6 +85,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="h-8 w-8 border-4 border-komuna-blue border-t-transparent rounded-full animate-spin" />
       </div>
     );
+  }
+
+  if (isLoginPage) {
+    return <>{children}</>;
   }
 
   if (!isAuthenticated || !isAdmin) return null;
