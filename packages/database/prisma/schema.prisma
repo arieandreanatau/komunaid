@@ -790,16 +790,16 @@ model NotificationTemplate {
 // ==========================================
 
 model MembershipHistory {
-  id             String   @id @default(cuid())
+  id             String             @id @default(cuid())
   communityId    String?
   organizationId String?
   userId         String
-  action         String
+  action         MembershipAction
   oldRole        String?
   newRole        String?
   details        Json?
   performedBy    String?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime           @default(now())
 
   community    Community?    @relation(fields: [communityId], references: [id], onDelete: Cascade)
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -810,6 +810,29 @@ model MembershipHistory {
   @@index([userId])
   @@index([createdAt])
   @@map("membership_history")
+}
+
+enum MembershipAction {
+  COMMUNITY_CREATED
+  COMMUNITY_APPROVED
+  COMMUNITY_SUSPENDED
+  COMMUNITY_REJECTED
+  COMMUNITY_REVISION_REQUESTED
+  COMMUNITY_RESTORED
+  COMMUNITY_MEMBER_JOIN
+  COMMUNITY_MEMBER_LEAVE
+  COMMUNITY_MEMBER_REMOVE
+  COMMUNITY_ROLE_CHANGE
+  ORG_CREATED
+  ORG_APPROVED
+  ORG_SUSPENDED
+  ORG_REJECTED
+  ORG_REVISION_REQUESTED
+  ORG_RESTORED
+  ORG_MEMBER_JOIN
+  ORG_MEMBER_LEAVE
+  ORG_MEMBER_REMOVE
+  ORG_ROLE_CHANGE
 }
 
 // ==========================================

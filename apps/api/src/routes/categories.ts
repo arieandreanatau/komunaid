@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import { prisma } from "@komunaid/database";
 import { authMiddleware } from "../middleware/auth";
 import { requirePlatformAdmin } from "../middleware/rbac";
+import { validate } from "../middleware/validate";
+import { adminCreateCategorySchema, adminUpdateCategorySchema } from "@komunaid/shared";
 import type { AuthUser } from "../middleware/auth";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
@@ -18,20 +20,22 @@ categoryRoutes.get("/", async (c) => {
     orderBy: { name: "asc" },
   });
 
-  return c.json({ success: true, categories });
+  return c.json({ success: true, data: categories });
 });
 
 // ==========================================
 // CREATE CATEGORY (Admin)
 // ==========================================
 
-categoryRoutes.post("/", authMiddleware, requirePlatformAdmin(), async (c) => {
-  const body = await c.req.json();
-  const { name, description, icon } = body;
-
-  if (!name) {
-    return c.json({ success: false, message: "Nama kategori wajib diisi" }, 400);
-  }
+categoryRoutes.post("/", authMiddleware, requirePlatformAdmin(), validate(adminCreateCategorySchema), async (c) => {
+  const authUser = c.get("user");
+  const data = c.get("validated");
+  const { name, description, icon, type } = data as {
+    name: string;
+    description?: string;
+    icon?: string;
+    type?: string;
+  };
 
   const slug = name
     .toLowerCase()
@@ -50,20 +54,21 @@ categoryRoutes.post("/", authMiddleware, requirePlatformAdmin(), async (c) => {
       slug,
       description,
       icon,
+      type: (type as any) || "COMMUNITY",
     },
   });
 
-  return c.json({ success: true, category }, 201);
+  return c.json({ success: true, data: category }, 201);
 });
 
 // ==========================================
 // UPDATE CATEGORY (Admin)
 // ==========================================
 
-categoryRoutes.put("/:categoryId", authMiddleware, requirePlatformAdmin(), async (c) => {
+categoryRoutes.put("/:categoryId", authMiddleware, requirePlatformAdmin(), validate(adminUpdateCategorySchema), async (c) => {
+  const authUser = c.get("user");
   const categoryId = c.req.param("categoryId");
-  const body = await c.req.json();
-  const { name, description, icon, isActive } = body;
+  const data = c.get("validated");
 
   const category = await prisma.category.findUnique({ where: { id: categoryId } });
 
@@ -74,14 +79,11 @@ categoryRoutes.put("/:categoryId", authMiddleware, requirePlatformAdmin(), async
   const updated = await prisma.category.update({
     where: { id: categoryId },
     data: {
-      ...(name && { name }),
-      ...(description !== undefined && { description }),
-      ...(icon !== undefined && { icon }),
-      ...(isActive !== undefined && { isActive }),
+      ...data,
     },
   });
 
-  return c.json({ success: true, category: updated });
+  return c.json({ success: true, data: updated });
 });
 
 // ==========================================

@@ -16,7 +16,6 @@
     "paths": {
       "@komunaid/database": ["./packages/database/src"],
       "@komunaid/shared": ["./packages/shared/src"],
-      "@komunaid/config": ["./packages/config"],
       "@komunaid/ui": ["./packages/ui/src"]
     }
   },

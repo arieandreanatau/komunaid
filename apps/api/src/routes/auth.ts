@@ -13,12 +13,39 @@ import {
   authMiddleware,
 } from "../middleware/auth";
 import { validate } from "../middleware/validate";
-import { createAuditLog, AuditActions } from "../services/audit";
-import { sendEmail, buildResetPasswordEmail } from "../services/email";
 import { createChildLogger } from "../lib/logger";
-import type { AuthUser } from "../middleware/auth";
 
 const log = createChildLogger("auth");
+
+// ==========================================
+// BRUTE-FORCE PROTECTION
+// ==========================================
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOGIN_LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
+
+function checkLoginAttempts(identifier: string): boolean {
+  const record = loginAttempts.get(identifier);
+  if (!record) return true;
+  if (Date.now() > record.resetAt) {
+    loginAttempts.delete(identifier);
+    return true;
+  }
+  return record.count < MAX_LOGIN_ATTEMPTS;
+}
+
+function recordLoginAttempt(identifier: string): void {
+  const record = loginAttempts.get(identifier);
+  if (!record || Date.now() > record.resetAt) {
+    loginAttempts.set(identifier, { count: 1, resetAt: Date.now() + LOGIN_LOCKOUT_MS });
+  } else {
+    record.count++;
+  }
+}
+
+function clearLoginAttempts(identifier: string): void {
+  loginAttempts.delete(identifier);
+}
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "dev-secret-change-this");
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
@@ -128,6 +155,10 @@ authRoutes.post("/register", validate(registerSchema), async (c) => {
 authRoutes.post("/login", validate(loginSchema), async (c) => {
   const data = c.get("validated");
 
+  if (!checkLoginAttempts(data.identifier)) {
+    return c.json({ success: false, message: "Terlalu banyak percobaan login. Coba lagi dalam 15 menit." }, 429);
+  }
+
   const isEmail = data.identifier.includes("@");
 
   const user = await prisma.user.findUnique({
@@ -138,6 +169,7 @@ authRoutes.post("/login", validate(loginSchema), async (c) => {
   });
 
   if (!user) {
+    recordLoginAttempt(data.identifier);
     return c.json({ success: false, message: "Email/username atau password salah" }, 401);
   }
 
@@ -156,8 +188,11 @@ authRoutes.post("/login", validate(loginSchema), async (c) => {
   const isValidPassword = await bcrypt.compare(data.password, user.password);
 
   if (!isValidPassword) {
+    recordLoginAttempt(data.identifier);
     return c.json({ success: false, message: "Email/username atau password salah" }, 401);
   }
+
+  clearLoginAttempts(data.identifier);
 
   const accessToken = await generateAccessToken({
     id: user.id,

@@ -1,4 +1,10 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Kebijakan Privasi - KomunaID",
+  description: "Kebijakan privasi KomunaID tentang pengumpulan, penggunaan, dan perlindungan data pribadi Anda.",
+};
 
 export default function PrivacyPage() {
   return (

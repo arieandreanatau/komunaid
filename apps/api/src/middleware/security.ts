@@ -55,6 +55,8 @@ export function rateLimiter(options?: { windowMs?: number; max?: number }) {
   const max = options?.max || 100;
 
   return async (c: Context, next: Next) => {
+    cleanupMemoryStore();
+
     const isTrustedProxy = process.env.TRUSTED_PROXIES === "true";
     const ip = isTrustedProxy
       ? (c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || c.req.header("x-real-ip") || "unknown")
@@ -125,13 +127,18 @@ function parseSize(size: string): number {
 }
 
 // ==========================================
-// Cleanup memory store periodically (every 15 min)
+// Lazy cleanup of memory store (on each request, max once per 5 min)
 // ==========================================
-setInterval(() => {
+let lastCleanup = 0;
+const CLEANUP_INTERVAL = 5 * 60 * 1000;
+
+function cleanupMemoryStore() {
   const now = Date.now();
+  if (now - lastCleanup < CLEANUP_INTERVAL) return;
+  lastCleanup = now;
   for (const [key, record] of memoryHits.entries()) {
     if (now > record.resetTime) {
       memoryHits.delete(key);
     }
   }
-}, 15 * 60 * 1000);
+}

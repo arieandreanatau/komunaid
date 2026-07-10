@@ -13,7 +13,12 @@ export const registerSchema = z
       .max(30, "Username maksimal 30 karakter")
       .regex(/^[a-zA-Z0-9_]+$/, "Username hanya boleh huruf, angka, dan underscore"),
     email: z.string().email("Email tidak valid"),
-    password: z.string().min(8, "Password minimal 8 karakter"),
+    password: z
+      .string()
+      .min(8, "Password minimal 8 karakter")
+      .regex(/[A-Z]/, "Password harus mengandung minimal 1 huruf besar")
+      .regex(/[a-z]/, "Password harus mengandung minimal 1 huruf kecil")
+      .regex(/[0-9]/, "Password harus mengandung minimal 1 angka"),
     confirmPassword: z.string(),
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -33,7 +38,12 @@ export const forgotPasswordSchema = z.object({
 export const resetPasswordSchema = z
   .object({
     token: z.string().min(1, "Token wajib diisi"),
-    password: z.string().min(8, "Password minimal 8 karakter"),
+    password: z
+      .string()
+      .min(8, "Password minimal 8 karakter")
+      .regex(/[A-Z]/, "Password harus mengandung minimal 1 huruf besar")
+      .regex(/[a-z]/, "Password harus mengandung minimal 1 huruf kecil")
+      .regex(/[0-9]/, "Password harus mengandung minimal 1 angka"),
     confirmPassword: z.string(),
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -43,7 +53,12 @@ export const resetPasswordSchema = z
 
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, "Password saat ini wajib diisi"),
-  newPassword: z.string().min(8, "Password baru minimal 8 karakter"),
+  newPassword: z
+    .string()
+    .min(8, "Password baru minimal 8 karakter")
+    .regex(/[A-Z]/, "Password harus mengandung minimal 1 huruf besar")
+    .regex(/[a-z]/, "Password harus mengandung minimal 1 huruf kecil")
+    .regex(/[0-9]/, "Password harus mengandung minimal 1 angka"),
   confirmNewPassword: z.string(),
 }).refine((data) => data.newPassword === data.confirmNewPassword, {
   message: "Password baru tidak cocok",
@@ -388,6 +403,51 @@ export const createReportSchema = z.object({
 });
 
 // ==========================================
+// ADMIN SCHEMAS
+// ==========================================
+
+export const adminActionNoteSchema = z.object({
+  note: z.string().max(2000, "Catatan maksimal 2000 karakter").optional(),
+});
+
+export const adminResolveReportSchema = z.object({
+  action: z.enum(["DISMISSED", "SUSPENDED"]),
+  note: z.string().max(2000).optional(),
+});
+
+export const adminBroadcastNotificationSchema = z.object({
+  title: z.string().min(1, "Title wajib diisi").max(200),
+  message: z.string().min(1, "Message wajib diisi").max(2000),
+  type: z.enum(["SYSTEM", "COMMUNITY", "ORGANIZATION", "EVENT", "REPORT", "APPROVAL"]).optional(),
+  targetRoles: z.array(z.enum(["SUPER_ADMIN", "PLATFORM_ADMIN", "MEMBER"])).optional(),
+});
+
+export const adminCreateCategorySchema = z.object({
+  name: z.string().min(2, "Nama minimal 2 karakter").max(50),
+  description: z.string().max(500).optional(),
+  icon: z.string().max(100).optional(),
+  type: z.enum(["COMMUNITY", "ORGANIZATION", "EVENT", "VOLUNTEER"]).optional(),
+});
+
+export const adminUpdateCategorySchema = z.object({
+  name: z.string().min(2).max(50).optional(),
+  description: z.string().max(500).optional(),
+  icon: z.string().max(100).optional(),
+  isActive: z.boolean().optional(),
+  type: z.enum(["COMMUNITY", "ORGANIZATION", "EVENT", "VOLUNTEER"]).optional(),
+});
+
+export const adminUpdateSettingSchema = z.object({
+  value: z.unknown(),
+});
+
+export const adminUpdatePlatformGeneralSchema = z.record(z.unknown());
+
+export const adminUpdateMasterDataSchema = z.object({
+  data: z.array(z.string()),
+});
+
+// ==========================================
 // TYPE EXPORTS
 // ==========================================
 
@@ -434,3 +494,9 @@ export type VolunteerOpportunityQueryInput = z.infer<typeof volunteerOpportunity
 export type ApplyVolunteerInput = z.infer<typeof applyVolunteerSchema>;
 export type ReviewVolunteerApplicationInput = z.infer<typeof reviewVolunteerApplicationSchema>;
 export type AssignVolunteerInput = z.infer<typeof assignVolunteerSchema>;
+export type AdminActionNoteInput = z.infer<typeof adminActionNoteSchema>;
+export type AdminResolveReportInput = z.infer<typeof adminResolveReportSchema>;
+export type AdminBroadcastNotificationInput = z.infer<typeof adminBroadcastNotificationSchema>;
+export type AdminCreateCategoryInput = z.infer<typeof adminCreateCategorySchema>;
+export type AdminUpdateCategoryInput = z.infer<typeof adminUpdateCategorySchema>;
+export type AdminUpdateSettingInput = z.infer<typeof adminUpdateSettingSchema>;

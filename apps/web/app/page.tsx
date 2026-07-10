@@ -20,6 +20,9 @@ export default function HomePage() {
             <Link href="/organizations" className="hover:text-komuna-blue transition-colors">
               Organisasi
             </Link>
+            <Link href="/volunteer" className="hover:text-komuna-blue transition-colors">
+              Volunteer
+            </Link>
             <Link href="/about" className="hover:text-komuna-blue transition-colors">
               Tentang
             </Link>
@@ -133,6 +136,89 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Volunteer */}
+      <section className="py-16 bg-white">
+        <div className="container mx-auto px-4">
+          <div className="flex flex-col md:flex-row items-center gap-12">
+            <div className="flex-1">
+              <h2 className="text-3xl font-bold text-komuna-navy mb-4">
+                Jadi Relawan, Berikan Dampak
+              </h2>
+              <p className="text-gray-600 mb-6">
+                Temukan peluang volunteer dari komunitas dan organisasi di seluruh Indonesia.
+                Daftar, ikut, dan buktikan kontribusimu.
+              </p>
+              <ul className="space-y-3 mb-8">
+                <li className="flex items-start gap-3">
+                  <svg className="h-5 w-5 text-komuna-teal mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="text-sm text-gray-700">Cari peluang volunteer berdasarkan lokasi, kategori, atau minat</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <svg className="h-5 w-5 text-komuna-teal mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="text-sm text-gray-700">Langsung daftar secara online tanpa proses ribet</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <svg className="h-5 w-5 text-komuna-teal mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="text-sm text-gray-700">Pantau status dan histori kegiatan volunteer Anda</span>
+                </li>
+              </ul>
+              <Link
+                href="/volunteer"
+                className="inline-block px-6 py-3 text-sm font-semibold text-white bg-komuna-teal rounded-lg hover:bg-komuna-blue transition-colors"
+              >
+                Lihat Peluang Volunteer
+              </Link>
+            </div>
+            <div className="flex-1 bg-gradient-to-br from-komuna-teal/10 to-komuna-aqua/10 rounded-2xl p-8">
+              <div className="bg-white rounded-xl shadow-sm p-6 space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 bg-komuna-teal/10 rounded-lg flex items-center justify-center">
+                    <svg className="h-5 w-5 text-komuna-teal" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="font-semibold text-sm text-komuna-navy">Bersih-bersih Pantai</div>
+                    <div className="text-xs text-gray-500">Jakarta Selatan</div>
+                  </div>
+                  <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">Open</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 bg-komuna-blue/10 rounded-lg flex items-center justify-center">
+                    <svg className="h-5 w-5 text-komuna-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="font-semibold text-sm text-komuna-navy">Guru Mengajar</div>
+                    <div className="text-xs text-gray-500">Bandung</div>
+                  </div>
+                  <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">Open</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 bg-komuna-aqua/10 rounded-lg flex items-center justify-center">
+                    <svg className="h-5 w-5 text-komuna-aqua" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="font-semibold text-sm text-komuna-navy">Tim Medis</div>
+                    <div className="text-xs text-gray-500">Yogyakarta</div>
+                  </div>
+                  <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 font-medium">Limited</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Footer */}
       <footer className="bg-komuna-navy text-white py-12">
         <div className="container mx-auto px-4">
@@ -150,6 +236,7 @@ export default function HomePage() {
                 <Link href="/communities" className="hover:text-komuna-aqua">Komunitas</Link>
                 <Link href="/events" className="hover:text-komuna-aqua">Event</Link>
                 <Link href="/organizations" className="hover:text-komuna-aqua">Organisasi</Link>
+                <Link href="/volunteer" className="hover:text-komuna-aqua">Volunteer</Link>
               </div>
             </div>
             <div>

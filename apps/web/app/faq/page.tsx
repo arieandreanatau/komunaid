@@ -1,4 +1,10 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "FAQ - KomunaID",
+  description: "Pertanyaan umum seputar penggunaan platform KomunaID, termasuk pendaftaran, komunitas, event, dan kebijakan platform.",
+};
 
 export default function FAQPage() {
   const faqs = [

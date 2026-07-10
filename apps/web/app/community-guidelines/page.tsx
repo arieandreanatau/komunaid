@@ -1,4 +1,10 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Panduan Komunitas - KomunaID",
+  description: "Panduan dan pedoman penggunaan komunitas di platform KomunaID.",
+};
 
 export default function CommunityGuidelinesPage() {
   return (

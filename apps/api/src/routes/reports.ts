@@ -52,7 +52,7 @@ reportRoutes.post("/", authMiddleware, validate(createReportSchema), async (c) =
   return c.json({
     success: true,
     message: "Laporan berhasil dikirim",
-    report: {
+    data: {
       id: report.id,
       status: report.status,
     },

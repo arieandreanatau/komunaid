@@ -291,10 +291,10 @@ async function main() {
   console.log("Settings seeded");
 
   console.log("\nSeeding completed!");
-  console.log("\nAccounts:");
-  console.log("  Super Admin:    admin@komuna.id / SuperAdmin123!");
-  console.log("  Platform Admin: platform@komuna.id / PlatformAdmin123!");
-  console.log("  Demo Member:    member@komuna.id / Member123!");
+  console.log("\nAccounts (see .env.example for default passwords):");
+  console.log("  Super Admin:    admin@komuna.id");
+  console.log("  Platform Admin: platform@komuna.id");
+  console.log("  Demo Member:    member@komuna.id");
 }
 
 main()

@@ -1,4 +1,10 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Tentang KomunaID - KomunaID",
+  description: "Pelajari lebih lanjut tentang KomunaID, platform digital yang menghubungkan individu, komunitas, organisasi, event, dan ekosistem kolaborasi di Indonesia.",
+};
 
 export default function AboutPage() {
   return (

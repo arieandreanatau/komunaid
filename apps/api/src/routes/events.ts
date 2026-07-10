@@ -837,28 +837,36 @@ eventRoutes.post("/:eventId/register", authMiddleware, async (c) => {
     return c.json({ success: false, message: "Sudah terdaftar di event ini" }, 409);
   }
 
-  if (existing && existing.status === "CANCELLED") {
-    await prisma.eventRegistration.delete({ where: { id: existing.id } });
-  }
-
-  const confirmedCount = event._count.registrations;
-  const isFull = confirmedCount >= event.quota;
-  let registrationStatus = "CONFIRMED";
-
-  if (isFull) {
-    if (!event.allowWaitlist) {
-      return c.json({ success: false, message: "Kuota event penuh" }, 400);
+  const registration = await prisma.$transaction(async (tx) => {
+    if (existing && existing.status === "CANCELLED") {
+      await tx.eventRegistration.delete({ where: { id: existing.id } });
     }
-    registrationStatus = "WAITLISTED";
-  }
 
-  const registration = await prisma.eventRegistration.create({
-    data: {
-      eventId,
-      userId: authUser.id,
-      status: registrationStatus as any,
-    },
+    const confirmedCount = await tx.eventRegistration.count({
+      where: { eventId, status: "CONFIRMED" },
+    });
+    const isFull = confirmedCount >= event.quota;
+    let registrationStatus = "CONFIRMED";
+
+    if (isFull) {
+      if (!event.allowWaitlist) {
+        return null;
+      }
+      registrationStatus = "WAITLISTED";
+    }
+
+    return tx.eventRegistration.create({
+      data: {
+        eventId,
+        userId: authUser.id,
+        status: registrationStatus as any,
+      },
+    });
   });
+
+  if (!registration) {
+    return c.json({ success: false, message: "Kuota event penuh" }, 400);
+  }
 
   await prisma.notification.create({
     data: {

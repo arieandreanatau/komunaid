@@ -1,4 +1,10 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Panduan Event - KomunaID",
+  description: "Panduan dan pedoman penyelenggaraan event di platform KomunaID.",
+};
 
 export default function EventGuidelinesPage() {
   return (

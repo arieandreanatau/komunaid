@@ -2,6 +2,16 @@ import { Hono } from "hono";
 import { prisma } from "@komunaid/database";
 import { authMiddleware } from "../middleware/auth";
 import { requirePlatformAdmin, requireSuperAdmin, invalidateRoleCache } from "../middleware/rbac";
+import { validate } from "../middleware/validate";
+import {
+  assignRoleSchema,
+  adminActionNoteSchema,
+  adminResolveReportSchema,
+  adminBroadcastNotificationSchema,
+  adminCreateCategorySchema,
+  adminUpdateCategorySchema,
+  adminUpdatePlatformGeneralSchema,
+} from "@komunaid/shared";
 import { createAuditLog, AuditActions } from "../services/audit";
 import type { AuthUser } from "../middleware/auth";
 
@@ -505,15 +515,11 @@ adminRoutes.get("/roles", async (c) => {
   });
 });
 
-adminRoutes.put("/users/:userId/role", requireSuperAdmin(), async (c) => {
+adminRoutes.put("/users/:userId/role", requireSuperAdmin(), validate(assignRoleSchema), async (c) => {
   const authUser = c.get("user");
   const userId = c.req.param("userId") as string;
-  const body = await c.req.json();
-  const { role } = body as { role: "SUPER_ADMIN" | "PLATFORM_ADMIN" | "MEMBER" };
-
-  if (!["SUPER_ADMIN", "PLATFORM_ADMIN", "MEMBER"].includes(role)) {
-    return c.json({ success: false, message: "Role tidak valid" }, 400);
-  }
+  const data = c.get("validated");
+  const { role } = data as { role: "SUPER_ADMIN" | "PLATFORM_ADMIN" | "MEMBER" };
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -802,11 +808,11 @@ adminRoutes.put("/communities/:communityId/restore", async (c) => {
   return c.json({ success: true, message: "Komunitas berhasil dipulihkan" });
 });
 
-adminRoutes.patch("/communities/:communityId/reject", async (c) => {
+adminRoutes.patch("/communities/:communityId/reject", validate(adminActionNoteSchema), async (c) => {
   const authUser = c.get("user");
   const communityId = c.req.param("communityId") as string;
-  const body = await c.req.json();
-  const { note } = body as { note?: string };
+  const data = c.get("validated");
+  const { note } = data as { note?: string };
 
   const community = await prisma.community.findUnique({ where: { id: communityId } });
   if (!community) {
@@ -854,11 +860,11 @@ adminRoutes.patch("/communities/:communityId/reject", async (c) => {
   return c.json({ success: true, message: "Komunitas berhasil ditolak" });
 });
 
-adminRoutes.patch("/communities/:communityId/request-revision", async (c) => {
+adminRoutes.patch("/communities/:communityId/request-revision", validate(adminActionNoteSchema), async (c) => {
   const authUser = c.get("user");
   const communityId = c.req.param("communityId") as string;
-  const body = await c.req.json();
-  const { note } = body as { note?: string };
+  const data = c.get("validated");
+  const { note } = data as { note?: string };
 
   const community = await prisma.community.findUnique({ where: { id: communityId } });
   if (!community) {
@@ -1136,11 +1142,11 @@ adminRoutes.put("/organizations/:organizationId/restore", async (c) => {
   return c.json({ success: true, message: "Organisasi berhasil dipulihkan" });
 });
 
-adminRoutes.patch("/organizations/:organizationId/reject", async (c) => {
+adminRoutes.patch("/organizations/:organizationId/reject", validate(adminActionNoteSchema), async (c) => {
   const authUser = c.get("user");
   const organizationId = c.req.param("organizationId") as string;
-  const body = await c.req.json();
-  const { note } = body as { note?: string };
+  const data = c.get("validated");
+  const { note } = data as { note?: string };
 
   const organization = await prisma.organization.findUnique({ where: { id: organizationId } });
   if (!organization) {
@@ -1178,11 +1184,11 @@ adminRoutes.patch("/organizations/:organizationId/reject", async (c) => {
   return c.json({ success: true, message: "Organisasi berhasil ditolak" });
 });
 
-adminRoutes.patch("/organizations/:organizationId/request-revision", async (c) => {
+adminRoutes.patch("/organizations/:organizationId/request-revision", validate(adminActionNoteSchema), async (c) => {
   const authUser = c.get("user");
   const organizationId = c.req.param("organizationId") as string;
-  const body = await c.req.json();
-  const { note } = body as { note?: string };
+  const data = c.get("validated");
+  const { note } = data as { note?: string };
 
   const organization = await prisma.organization.findUnique({ where: { id: organizationId } });
   if (!organization) {
@@ -1904,15 +1910,11 @@ adminRoutes.get("/reports", async (c) => {
   });
 });
 
-adminRoutes.put("/reports/:reportId/resolve", async (c) => {
+adminRoutes.put("/reports/:reportId/resolve", validate(adminResolveReportSchema), async (c) => {
   const authUser = c.get("user");
   const reportId = c.req.param("reportId") as string;
-  const body = await c.req.json();
-  const { action, note } = body as { action: "DISMISSED" | "SUSPENDED"; note?: string };
-
-  if (!["DISMISSED", "SUSPENDED"].includes(action)) {
-    return c.json({ success: false, message: "Action tidak valid" }, 400);
-  }
+  const data = c.get("validated");
+  const { action, note } = data as { action: "DISMISSED" | "SUSPENDED"; note?: string };
 
   const report = await prisma.report.findUnique({ where: { id: reportId } });
   if (!report) {
@@ -2439,19 +2441,15 @@ adminRoutes.get("/notifications", async (c) => {
   });
 });
 
-adminRoutes.post("/notifications/broadcast", requireSuperAdmin(), async (c) => {
+adminRoutes.post("/notifications/broadcast", requireSuperAdmin(), validate(adminBroadcastNotificationSchema), async (c) => {
   const authUser = c.get("user");
-  const body = await c.req.json();
-  const { title, message, type, targetRoles } = body as {
+  const data = c.get("validated");
+  const { title, message, type, targetRoles } = data as {
     title: string;
     message: string;
     type?: string;
     targetRoles?: string[];
   };
-
-  if (!title || !message) {
-    return c.json({ success: false, message: "Title dan message wajib diisi" }, 400);
-  }
 
   const where: Record<string, any> = { deletedAt: null };
   if (targetRoles && targetRoles.length > 0) {
