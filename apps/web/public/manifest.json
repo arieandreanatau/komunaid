@@ -1,0 +1,22 @@
+{
+  "name": "KomunaID - Platform Komunitas Digital Indonesia",
+  "short_name": "KomunaID",
+  "description": "Platform digital untuk menghubungkan individu, komunitas, organisasi, event, dan ekosistem kolaborasi secara terstruktur di Indonesia.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#0A1D4D",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon_komuna.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon_komuna.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
