@@ -2,6 +2,9 @@
 const nextConfig = {
   transpilePackages: ["@komunaid/shared", "@komunaid/ui"],
   serverExternalPackages: ["@prisma/client", "prisma"],
+  outputFileTracingIncludes: {
+    "/api/**": ["../../node_modules/.prisma/client/**", "../../node_modules/@prisma/client/**"],
+  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "**.amazonaws.com" },
