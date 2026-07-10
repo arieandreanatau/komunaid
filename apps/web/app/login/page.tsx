@@ -32,8 +32,16 @@ export default function LoginPage() {
       setUser(userData);
       router.push(redirectTo);
     } catch (err: unknown) {
-      const axiosErr = err as { response?: { data?: { message?: string; error?: string } } };
-      setError(axiosErr.response?.data?.message || axiosErr.response?.data?.error || "Login gagal");
+      const axiosErr = err as { response?: { data?: { message?: string; error?: string | { code?: string; message?: string } } } };
+      const errData = axiosErr.response?.data;
+      const errMsg = typeof errData?.message === "string" && errData.message
+        ? errData.message
+        : typeof errData?.error === "string"
+          ? errData.error
+          : typeof errData?.error?.message === "string"
+            ? errData.error.message
+            : "Login gagal";
+      setError(errMsg);
     }
   };
 

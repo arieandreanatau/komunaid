@@ -12,9 +12,9 @@ datasource db {
 // ==========================================
 
 model User {
-  id              String    @id @default(cuid())
-  email           String    @unique
-  username        String    @unique
+  id              String     @id @default(cuid())
+  email           String     @unique
+  username        String     @unique
   password        String
   name            String
   avatar          String?
@@ -24,24 +24,29 @@ model User {
   emailVerifiedAt DateTime?
   status          UserStatus @default(ACTIVE)
   deletedAt       DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 
   // Relations
-  roles              UserRole[]
-  interests          UserInterest[]
-  joinedCommunities  CommunityMember[]
-  organizationMembers OrganizationMember[]
-  registeredEvents   EventRegistration[]
-  createdCommunities Community[]
-  createdOrganizations Organization[]
-  createdEvents      Event[]
-  auditLogs          AuditLog[]
-  reportedReports    Report[]  @relation("ReportReporter")
-  reviewedReports    Report[]  @relation("ReportReviewer")
-  joinRequests       JoinRequest[]
-  notifications      Notification[]
-  activityLogs       ActivityHistory[]
+  roles                 UserRole[]
+  interests             UserInterest[]
+  joinedCommunities     CommunityMember[]
+  organizationMembers   OrganizationMember[]
+  registeredEvents      EventRegistration[]
+  createdCommunities    Community[]
+  createdOrganizations  Organization[]
+  createdEvents         Event[]
+  auditLogs             AuditLog[]
+  reportedReports       Report[]               @relation("ReportReporter")
+  reviewedReports       Report[]               @relation("ReportReviewer")
+  joinRequests          JoinRequest[]
+  notifications         Notification[]
+  activityLogs          ActivityHistory[]
+  membershipHistory     MembershipHistory[]
+  createdVolunteerOpps  VolunteerOpportunity[]
+  volunteerApplications VolunteerApplication[]
+  reviewedVolunteerApps VolunteerApplication[] @relation("ReviewedVolunteerApps")
+  picAssignments        VolunteerAssignment[]
 
   @@index([status])
   @@map("users")
@@ -54,10 +59,10 @@ enum UserStatus {
 }
 
 model UserRole {
-  id        String   @id @default(cuid())
+  id        String       @id @default(cuid())
   userId    String
   role      PlatformRole
-  createdAt DateTime @default(now())
+  createdAt DateTime     @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -76,30 +81,45 @@ enum PlatformRole {
 // ==========================================
 
 model Community {
-  id             String         @id @default(cuid())
+  id             String              @id @default(cuid())
   name           String
-  slug           String         @unique
+  slug           String              @unique
   description    String?
   coverImage     String?
   logo           String?
   location       String?
   website        String?
-  membershipType MembershipType @default(OPEN)
-  status         CommunityStatus @default(PENDING)
+  membershipType MembershipType      @default(OPEN)
+  status         CommunityStatus     @default(PENDING)
+  visibility     CommunityVisibility @default(PUBLIC)
+  banner         String?
+  country        String?
+  province       String?
+  city           String?
+  instagram      String?
+  contactEmail   String?
+  contactPhone   String?
+  adminNote      String?
+  submittedAt    DateTime?
+  reviewedAt     DateTime?
   deletedAt      DateTime?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
 
   // Relations
-  ownerId    String
-  owner      User               @relation(fields: [ownerId], references: [id])
-  members    CommunityMember[]
-  events     Event[]
-  categories CommunityCategory[]
-  joinRequests JoinRequest[]
+  ownerId             String
+  owner               User                @relation(fields: [ownerId], references: [id])
+  members             CommunityMember[]
+  events              Event[]
+  categories          CommunityCategory[]
+  joinRequests        JoinRequest[]
+  tags                CommunityTag[]
+  settings            CommunitySettings?
+  membershipHistories MembershipHistory[]
 
   @@index([ownerId])
   @@index([status])
+  @@index([submittedAt])
   @@map("communities")
 }
 
@@ -108,20 +128,29 @@ enum MembershipType {
   RESTRICTED
 }
 
+enum CommunityVisibility {
+  PUBLIC
+  PRIVATE
+}
+
 enum CommunityStatus {
+  DRAFT
   PENDING
   APPROVED
   SUSPENDED
   ARCHIVED
+  REJECTED
+  REVISION_REQUIRED
 }
 
 model CommunityMember {
-  id          String        @id @default(cuid())
+  id          String           @id @default(cuid())
   communityId String
   userId      String
-  role        CommunityRole @default(MEMBER)
+  role        CommunityRole    @default(MEMBER)
   status      MembershipStatus @default(ACTIVE)
-  joinedAt    DateTime      @default(now())
+  joinedAt    DateTime         @default(now())
+  deletedAt   DateTime?
 
   community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -147,19 +176,22 @@ enum MembershipStatus {
 }
 
 model JoinRequest {
-  id          String             @id @default(cuid())
-  communityId String
-  userId      String
-  status      JoinRequestStatus  @default(PENDING)
-  message     String?
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  id             String            @id @default(cuid())
+  communityId    String?
+  organizationId String?
+  userId         String
+  status         JoinRequestStatus @default(PENDING)
+  message        String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
-  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  community    Community?    @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([communityId, userId])
   @@index([communityId])
+  @@index([organizationId])
   @@index([userId])
   @@map("join_requests")
 }
@@ -185,38 +217,96 @@ model CommunityCategory {
 }
 
 // ==========================================
+// COMMUNITY TAGS
+// ==========================================
+
+model CommunityTag {
+  id          String   @id @default(cuid())
+  communityId String
+  tag         String
+  createdAt   DateTime @default(now())
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@unique([communityId, tag])
+  @@index([communityId])
+  @@index([tag])
+  @@map("community_tags")
+}
+
+model CommunitySettings {
+  id              String   @id @default(cuid())
+  communityId     String   @unique
+  allowMemberPost Boolean  @default(true)
+  requireApproval Boolean  @default(false)
+  showMemberList  Boolean  @default(true)
+  showEventList   Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@map("community_settings")
+}
+
+// ==========================================
 // ORGANIZATION
 // ==========================================
 
 model Organization {
-  id          String             @id @default(cuid())
-  name        String
-  slug        String             @unique
-  description String?
-  logo        String?
-  website     String?
-  location    String?
-  industry    String?
-  status      OrganizationStatus @default(PENDING)
-  deletedAt   DateTime?
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  id           String                 @id @default(cuid())
+  name         String
+  slug         String                 @unique
+  description  String?
+  logo         String?
+  banner       String?
+  website      String?
+  location     String?
+  industry     String?
+  country      String?
+  province     String?
+  city         String?
+  instagram    String?
+  contactEmail String?
+  contactPhone String?
+  visibility   OrganizationVisibility @default(PUBLIC)
+  status       OrganizationStatus     @default(DRAFT)
+  adminNote    String?
+  submittedAt  DateTime?
+  reviewedAt   DateTime?
+  deletedAt    DateTime?
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
 
-  ownerId String
-  owner   User                 @relation(fields: [ownerId], references: [id])
-  members OrganizationMember[]
-  events  Event[]
+  ownerId             String
+  owner               User                   @relation(fields: [ownerId], references: [id])
+  members             OrganizationMember[]
+  events              Event[]
+  categories          OrganizationCategory[]
+  tags                OrganizationTag[]
+  settings            OrganizationSettings?
+  membershipHistories MembershipHistory[]
+  joinRequests        JoinRequest[]
 
   @@index([ownerId])
   @@index([status])
+  @@index([submittedAt])
   @@map("organizations")
 }
 
+enum OrganizationVisibility {
+  PUBLIC
+  PRIVATE
+}
+
 enum OrganizationStatus {
+  DRAFT
   PENDING
   APPROVED
   SUSPENDED
   ARCHIVED
+  REJECTED
+  REVISION_REQUIRED
 }
 
 model OrganizationMember {
@@ -242,37 +332,90 @@ enum OrganizationRole {
   MEMBER
 }
 
+model OrganizationCategory {
+  id             String   @id @default(cuid())
+  organizationId String
+  categoryId     String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  category     Category     @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, categoryId])
+  @@index([categoryId])
+  @@map("organization_categories")
+}
+
+model OrganizationTag {
+  id             String   @id @default(cuid())
+  organizationId String
+  tag            String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, tag])
+  @@index([organizationId])
+  @@index([tag])
+  @@map("organization_tags")
+}
+
+model OrganizationSettings {
+  id              String   @id @default(cuid())
+  organizationId  String   @unique
+  allowMemberPost Boolean  @default(true)
+  requireApproval Boolean  @default(false)
+  showMemberList  Boolean  @default(true)
+  showEventList   Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("organization_settings")
+}
+
 // ==========================================
 // EVENT
 // ==========================================
 
 model Event {
-  id             String    @id @default(cuid())
-  title          String
-  slug           String    @unique
-  description    String?
-  coverImage     String?
-  location       String?
-  isOnline       Boolean   @default(false)
-  onlineUrl      String?
-  eventDate      DateTime
-  endDate        DateTime?
-  quota          Int
-  status         EventStatus @default(PENDING)
-  deletedAt      DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id            String          @id @default(cuid())
+  title         String
+  slug          String          @unique
+  description   String?
+  coverImage    String?
+  thumbnail     String?
+  location      String?
+  locationType  LocationType    @default(OFFLINE)
+  isOnline      Boolean         @default(false)
+  onlineUrl     String?
+  meetingUrl    String?
+  eventDate     DateTime
+  endDate       DateTime?
+  timezone      String?         @default("Asia/Jakarta")
+  quota         Int
+  allowWaitlist Boolean         @default(false)
+  status        EventStatus     @default(DRAFT)
+  visibility    EventVisibility @default(PUBLIC)
+  contactName   String?
+  contactEmail  String?
+  contactPhone  String?
+  gallery       String?         @db.Text
+  deletedAt     DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
 
-  // Relations
   communityId    String?
   organizationId String?
   createdById    String
 
-  community      Community?       @relation(fields: [communityId], references: [id], onDelete: SetNull)
-  organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  createdBy      User             @relation(fields: [createdById], references: [id])
-  registrations  EventRegistration[]
-  categories     EventCategory[]
+  community              Community?             @relation(fields: [communityId], references: [id], onDelete: SetNull)
+  organization           Organization?          @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  createdBy              User                   @relation(fields: [createdById], references: [id])
+  registrations          EventRegistration[]
+  categories             EventCategory[]
+  volunteerOpportunities VolunteerOpportunity[]
 
   @@index([communityId])
   @@index([organizationId])
@@ -283,12 +426,25 @@ model Event {
 }
 
 enum EventStatus {
-  PENDING
-  APPROVED
+  DRAFT
+  PUBLISHED
+  REGISTRATION_OPEN
+  REGISTRATION_CLOSED
   ONGOING
   COMPLETED
   CANCELLED
-  SUSPENDED
+  ARCHIVED
+}
+
+enum EventVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum LocationType {
+  OFFLINE
+  ONLINE
+  HYBRID
 }
 
 model EventRegistration {
@@ -296,7 +452,12 @@ model EventRegistration {
   eventId      String
   userId       String
   status       RegistrationStatus @default(CONFIRMED)
+  attendance   AttendanceStatus   @default(NOT_CHECKED_IN)
+  checkedInAt  DateTime?
+  checkedOutAt DateTime?
+  notes        String?
   registeredAt DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -304,6 +465,7 @@ model EventRegistration {
   @@unique([eventId, userId])
   @@index([eventId])
   @@index([userId])
+  @@index([attendance])
   @@map("event_registrations")
 }
 
@@ -312,6 +474,13 @@ enum RegistrationStatus {
   CONFIRMED
   CANCELLED
   WAITLISTED
+  REJECTED
+}
+
+enum AttendanceStatus {
+  NOT_CHECKED_IN
+  CHECKED_IN
+  CHECKED_OUT
 }
 
 model EventCategory {
@@ -329,22 +498,168 @@ model EventCategory {
 }
 
 // ==========================================
+// VOLUNTEER
+// ==========================================
+
+model VolunteerOpportunity {
+  id                   String                     @id @default(cuid())
+  title                String
+  slug                 String                     @unique
+  description          String?
+  status               VolunteerOpportunityStatus @default(DRAFT)
+  registrationDeadline DateTime?
+  briefingDate         DateTime?
+  activityStartDate    DateTime?
+  activityEndDate      DateTime?
+  deletedAt            DateTime?
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+
+  eventId     String
+  createdById String
+
+  event        Event                  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  createdBy    User                   @relation(fields: [createdById], references: [id])
+  positions    VolunteerPosition[]
+  applications VolunteerApplication[]
+
+  @@index([eventId])
+  @@index([createdById])
+  @@index([status])
+  @@index([createdAt])
+  @@map("volunteer_opportunities")
+}
+
+enum VolunteerOpportunityStatus {
+  DRAFT
+  PUBLISHED
+  OPEN
+  CLOSED
+  ARCHIVED
+}
+
+model VolunteerPosition {
+  id            String   @id @default(cuid())
+  opportunityId String
+  name          String
+  description   String?
+  requiredQty   Int      @default(1)
+  requirement   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  opportunity  VolunteerOpportunity   @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  assignments  VolunteerAssignment[]
+  applications VolunteerApplication[]
+
+  @@index([opportunityId])
+  @@map("volunteer_positions")
+}
+
+model VolunteerApplication {
+  id            String                     @id @default(cuid())
+  opportunityId String
+  positionId    String
+  userId        String
+  motivation    String?
+  experience    String?
+  availability  String?
+  agreement     Boolean                    @default(false)
+  status        VolunteerApplicationStatus @default(APPLIED)
+  reviewedAt    DateTime?
+  reviewedById  String?
+  reviewNote    String?
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
+
+  opportunity VolunteerOpportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  position    VolunteerPosition    @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy  User?                @relation("ReviewedVolunteerApps", fields: [reviewedById], references: [id])
+  assignment  VolunteerAssignment?
+
+  @@unique([opportunityId, userId])
+  @@index([opportunityId])
+  @@index([positionId])
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("volunteer_applications")
+}
+
+enum VolunteerApplicationStatus {
+  APPLIED
+  REVIEWED
+  ACCEPTED
+  REJECTED
+}
+
+model VolunteerAssignment {
+  id            String    @id @default(cuid())
+  applicationId String    @unique
+  positionId    String
+  picUserId     String?
+  shiftStart    DateTime?
+  shiftEnd      DateTime?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  application VolunteerApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  position    VolunteerPosition    @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  picUser     User?                @relation(fields: [picUserId], references: [id])
+  attendance  VolunteerAttendance?
+
+  @@index([positionId])
+  @@index([picUserId])
+  @@index([applicationId])
+  @@map("volunteer_assignments")
+}
+
+model VolunteerAttendance {
+  id           String           @id @default(cuid())
+  assignmentId String           @unique
+  checkInAt    DateTime?
+  checkOutAt   DateTime?
+  status       AttendanceStatus @default(NOT_CHECKED_IN)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  assignment VolunteerAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@index([assignmentId])
+  @@index([status])
+  @@map("volunteer_attendances")
+}
+
+// ==========================================
 // CATEGORY
 // ==========================================
 
+enum CategoryType {
+  COMMUNITY
+  ORGANIZATION
+  EVENT
+  VOLUNTEER
+}
+
 model Category {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  slug        String   @unique
+  id          String       @id @default(cuid())
+  name        String       @unique
+  slug        String       @unique
   description String?
   icon        String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  type        CategoryType @default(COMMUNITY)
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
-  communities CommunityCategory[]
-  events      EventCategory[]
+  communities   CommunityCategory[]
+  organizations OrganizationCategory[]
+  events        EventCategory[]
 
+  @@index([type])
+  @@index([isActive])
   @@map("categories")
 }
 
@@ -353,24 +668,26 @@ model Category {
 // ==========================================
 
 model Report {
-  id          String         @id @default(cuid())
+  id          String           @id @default(cuid())
   reporterId  String
   targetType  ReportTargetType
   targetId    String
   reason      ReportReason
   description String?
-  status      ReportStatus   @default(OPEN)
+  status      ReportStatus     @default(OPEN)
   reviewedBy  String?
   reviewedAt  DateTime?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  reviewNote  String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
-  reporter User      @relation("ReportReporter", fields: [reporterId], references: [id])
-  reviewer User?     @relation("ReportReviewer", fields: [reviewedBy], references: [id])
+  reporter User  @relation("ReportReporter", fields: [reporterId], references: [id])
+  reviewer User? @relation("ReportReviewer", fields: [reviewedBy], references: [id])
 
   @@index([status])
   @@index([reporterId])
   @@index([targetType, targetId])
+  @@index([createdAt])
   @@map("reports")
 }
 
@@ -444,9 +761,51 @@ model Notification {
 enum NotificationType {
   SYSTEM
   COMMUNITY
+  ORGANIZATION
   EVENT
   REPORT
   APPROVAL
+}
+
+model NotificationTemplate {
+  id        String           @id @default(cuid())
+  name      String           @unique
+  title     String
+  message   String
+  type      NotificationType @default(SYSTEM)
+  isActive  Boolean          @default(true)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@index([isActive])
+  @@map("notification_templates")
+}
+
+// ==========================================
+// MEMBERSHIP HISTORY
+// ==========================================
+
+model MembershipHistory {
+  id             String   @id @default(cuid())
+  communityId    String?
+  organizationId String?
+  userId         String
+  action         String
+  oldRole        String?
+  newRole        String?
+  details        Json?
+  performedBy    String?
+  createdAt      DateTime @default(now())
+
+  community    Community?    @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id])
+
+  @@index([communityId])
+  @@index([organizationId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("membership_history")
 }
 
 // ==========================================

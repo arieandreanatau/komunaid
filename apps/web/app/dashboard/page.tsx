@@ -64,6 +64,68 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Community Entry Points */}
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Link href="/communities/create" className="bg-gradient-to-br from-komuna-navy to-komuna-blue rounded-xl p-6 text-white hover:shadow-lg transition-shadow">
+            <div className="flex items-start gap-4">
+              <div className="h-12 w-12 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+              </div>
+              <div>
+                <h3 className="font-semibold text-lg">Buat Komunitas</h3>
+                <p className="text-white/70 text-sm mt-1">Daftarkan komunitas Anda di KomunaID</p>
+              </div>
+            </div>
+          </Link>
+
+          <Link href="/communities" className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 hover:shadow-md transition-shadow">
+            <div className="flex items-start gap-4">
+              <div className="h-12 w-12 rounded-lg bg-komuna-teal/10 flex items-center justify-center shrink-0">
+                <svg className="h-6 w-6 text-komuna-teal" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+              </div>
+              <div>
+                <h3 className="font-semibold text-lg text-komuna-navy">Jelajahi Komunitas</h3>
+                <p className="text-gray-500 text-sm mt-1">Jelajahi dan bergabung dengan komunitas</p>
+              </div>
+            </div>
+          </Link>
+        </div>
+
+        {profileData?.communities?.filter(
+          (c: { role?: string; status?: string }) => c.role === "OWNER" && c.status === "APPROVED"
+        ).length > 0 && (
+          profileData.communities
+            .filter((c: { role?: string; status?: string }) => c.role === "OWNER" && c.status === "APPROVED")
+            .slice(0, 1)
+            .map((community: { id: string; name: string; slug: string; logo?: string }) => (
+              <Link
+                key={community.id}
+                href={`/dashboard/communities/${community.id}`}
+                className="block bg-gradient-to-r from-komuna-teal to-komuna-blue rounded-xl p-6 text-white hover:shadow-lg transition-shadow"
+              >
+                <div className="flex items-center gap-4">
+                  {community.logo ? (
+                    <img src={community.logo} alt={community.name} className="h-14 w-14 rounded-xl object-cover border-2 border-white/30" />
+                  ) : (
+                    <div className="h-14 w-14 rounded-xl bg-white/20 flex items-center justify-center text-xl font-bold">
+                      {community.name.charAt(0)}
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <p className="text-white/70 text-sm">Community Dashboard</p>
+                    <h3 className="font-bold text-lg">{community.name}</h3>
+                    <p className="text-white/70 text-sm">Kelola komunitas Anda dari sini</p>
+                  </div>
+                  <div className="bg-white/20 rounded-lg px-4 py-2 text-sm font-medium">
+                    Buka Dashboard
+                  </div>
+                </div>
+              </Link>
+            ))
+        )}
+      </div>
+
       {/* Profile Summary */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
         <h2 className="text-lg font-semibold text-komuna-navy mb-4">Profile Summary</h2>

@@ -125,3 +125,27 @@ export async function requireOrganizationOwner(c: Context, next: Next) {
 
   await next();
 }
+
+export async function requireOrganizationAdmin(c: Context, next: Next) {
+  const user = c.get("user");
+  const organizationId = c.req.param("organizationId") || c.req.query("organizationId");
+
+  if (!user || !organizationId) {
+    throw new Error("Forbidden");
+  }
+
+  const membership = await prisma.organizationMember.findUnique({
+    where: {
+      organizationId_userId: {
+        organizationId,
+        userId: user.id,
+      },
+    },
+  });
+
+  if (!membership || !["OWNER", "ADMIN"].includes(membership.role)) {
+    throw new Error("Forbidden");
+  }
+
+  await next();
+}

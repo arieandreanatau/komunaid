@@ -48,8 +48,16 @@ function ResetPasswordForm() {
       setMessage("Password berhasil diubah. Mengalihkan ke halaman login...");
       setTimeout(() => router.push("/login"), 2000);
     } catch (err: unknown) {
-      const axiosErr = err as { response?: { data?: { message?: string } } };
-      setError(axiosErr.response?.data?.message || "Gagal mereset password.");
+      const axiosErr = err as { response?: { data?: { message?: string; error?: string | { code?: string; message?: string } } } };
+      const errData = axiosErr.response?.data;
+      const errMsg = typeof errData?.message === "string" && errData.message
+        ? errData.message
+        : typeof errData?.error === "string"
+          ? errData.error
+          : typeof errData?.error?.message === "string"
+            ? errData.error.message
+            : "Gagal mereset password.";
+      setError(errMsg);
     }
   };
 

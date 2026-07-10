@@ -22,18 +22,17 @@ let redis: { incr(key: string): Promise<number>; pexpire(key: string, ms: number
 function getRedis(): typeof redis {
   if (redis !== undefined && redis !== null) return redis;
   try {
+    const url = process.env.REDIS_URL;
+    if (!url) return null;
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const Redis = require("ioredis");
-    const url = process.env.REDIS_URL;
-    if (url) {
-      const client = new Redis(url);
-      client.on("error", (err: Error) => {
-        console.error("[rate-limiter] Redis error:", err.message);
-        redis = null;
-      });
-      redis = client;
-      return redis;
-    }
+    const client = new Redis(url);
+    client.on("error", (err: Error) => {
+      console.error("[rate-limiter] Redis error:", err.message);
+      redis = null;
+    });
+    redis = client;
+    return redis;
   } catch {
     // ioredis not installed or REDIS_URL not set
   }

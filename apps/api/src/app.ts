@@ -9,6 +9,7 @@ import { userRoutes } from "./routes/users";
 import { communityRoutes } from "./routes/communities";
 import { organizationRoutes } from "./routes/organizations";
 import { eventRoutes } from "./routes/events";
+import { volunteerRoutes } from "./routes/volunteers";
 import { reportRoutes } from "./routes/reports";
 import { adminRoutes } from "./routes/admin";
 import { categoryRoutes } from "./routes/categories";
@@ -38,8 +39,8 @@ app.use(
     origin: process.env.CORS_ORIGIN || "http://localhost:3000",
     credentials: true,
     allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Authorization"],
-    exposeHeaders: ["Set-Cookie"],
+    allowHeaders: ["Content-Type", "Authorization", "X-CSRF-Token"],
+    exposeHeaders: ["Set-Cookie", "X-CSRF-Token"],
   })
 );
 app.use("/api/v1/*", csrfProtection());
@@ -78,6 +79,7 @@ api.route("/users", userRoutes);
 api.route("/communities", communityRoutes);
 api.route("/organizations", organizationRoutes);
 api.route("/events", eventRoutes);
+api.route("/volunteer", volunteerRoutes);
 api.route("/reports", reportRoutes);
 api.route("/admin", adminRoutes);
 api.route("/categories", categoryRoutes);
