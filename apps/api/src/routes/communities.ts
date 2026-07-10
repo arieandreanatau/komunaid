@@ -44,24 +44,13 @@ communityRoutes.get("/", optionalAuthMiddleware, validate(communityQuerySchema, 
   const page = q.page as number;
   const limit = q.limit as number;
 
-  const where: any = { deletedAt: null };
-
-  if (user) {
-    where.status = q.status || "APPROVED";
-  } else {
-    where.status = "APPROVED";
-    where.visibility = q.visibility || "PUBLIC";
-  }
+  const where: any = { deletedAt: null, status: "APPROVED", visibility: "PUBLIC" };
 
   if (q.search) {
     where.OR = [
       { name: { contains: q.search } },
       { description: { contains: q.search } },
     ];
-  }
-
-  if (q.visibility && user) {
-    where.visibility = q.visibility;
   }
 
   if (q.membershipType) {
@@ -225,9 +214,9 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
         take: 20,
       },
       events: {
-        where: { status: "PUBLISHED", eventDate: { gte: new Date() } },
+        where: { deletedAt: null },
         orderBy: { eventDate: "asc" },
-        take: 5,
+        take: 20,
       },
       categories: {
         include: { category: true },
@@ -244,8 +233,28 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
     return c.json({ success: false, message: "Komunitas tidak ditemukan" }, 404);
   }
 
+  if (community.status !== "APPROVED") {
+    if (!user || community.ownerId !== user.id) {
+      return c.json({ success: false, message: "Komunitas tidak ditemukan" }, 404);
+    }
+  }
+
   if (!user && community.visibility === "PRIVATE") {
     return c.json({ success: false, message: "Komunitas ini bersifat privat" }, 403);
+  }
+
+  if (user && community.visibility === "PRIVATE") {
+    const membership = await prisma.communityMember.findUnique({
+      where: {
+        communityId_userId: {
+          communityId: community.id,
+          userId: user.id,
+        },
+      },
+    });
+    if (!membership && community.ownerId !== user.id) {
+      return c.json({ success: false, message: "Komunitas ini bersifat privat" }, 403);
+    }
   }
 
   let userMembership: { role: string; status: string } | null = null;
@@ -289,6 +298,21 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
         role: m.role,
       })),
       upcomingEvents: community.events,
+      currentEvents: community.events.filter((e: any) => {
+        const now = new Date();
+        const start = new Date(e.eventDate);
+        const end = e.endDate ? new Date(e.endDate) : start;
+        return start <= now && end >= now;
+      }),
+      pastEvents: community.events.filter((e: any) => {
+        const now = new Date();
+        const end = e.endDate ? new Date(e.endDate) : new Date(e.eventDate);
+        return end < now;
+      }),
+      futureEvents: community.events.filter((e: any) => {
+        const now = new Date();
+        return new Date(e.eventDate) > now;
+      }),
       categories: community.categories.map((cc) => cc.category),
       tags: community.tags.map((t) => t.tag),
       settings: community.settings
@@ -1316,7 +1340,7 @@ communityRoutes.post(
           userId: authUser.id,
         },
       },
-      data: { status: "BANNED", deletedAt: new Date() },
+      data: { deletedAt: new Date() },
     });
 
     await createAuditLog({
@@ -1324,6 +1348,16 @@ communityRoutes.post(
       actionType: AuditActions.COMMUNITY_MEMBER_LEAVE,
       resourceName: "Community",
       resourceId: communityId,
+    });
+
+    await prisma.membershipHistory.create({
+      data: {
+        communityId,
+        userId: authUser.id,
+        action: "COMMUNITY_MEMBER_LEAVE",
+        details: { communityName: community?.name || communityId },
+        performedBy: authUser.id,
+      },
     });
 
     await prisma.activityHistory.create({

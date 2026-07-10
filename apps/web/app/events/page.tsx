@@ -94,7 +94,7 @@ export default function EventsPage() {
       }
 
       const { data } = await api.get("/events", { params });
-      setEvents(data.events || []);
+      setEvents(data.data || data.events || []);
       setTotalPages(data.pagination?.totalPages || 1);
     } catch {
       setEvents([]);

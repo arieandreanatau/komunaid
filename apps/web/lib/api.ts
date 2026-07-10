@@ -67,8 +67,15 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
-    if (error.response?.status === 401) {
-      csrfToken = null;
+    if (error.response) {
+      const setCookie = error.response.headers["set-cookie"];
+      if (setCookie) {
+        const cookieStr = Array.isArray(setCookie) ? setCookie.join("; ") : setCookie;
+        const tokenMatch = cookieStr.match(/csrf_token=([^;]+)/);
+        if (tokenMatch) {
+          csrfToken = decodeURIComponent(tokenMatch[1]);
+        }
+      }
     }
     return Promise.reject(error);
   }

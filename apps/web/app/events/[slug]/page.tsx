@@ -84,18 +84,25 @@ export default function EventDetailPage() {
     enabled: !!event,
     queryFn: async () => {
       const { data } = await api.get("/events", { params: { limit: 3, upcoming: "true" } });
-      const events = (data.events || []) as Event[];
+      const events = (data.data || data.events || []) as Event[];
       return events.filter((e) => e.slug !== slug).slice(0, 3);
     },
   });
 
+  const [registerError, setRegisterError] = useState("");
+
   const registerMutation = useMutation({
     mutationFn: async () => {
+      setRegisterError("");
       return api.post(`/events/${event!.id}/register`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["event", slug] });
       setRegisterModalOpen(false);
+    },
+    onError: (error: any) => {
+      const msg = error.response?.data?.message || "Gagal mendaftar event. Silakan coba lagi.";
+      setRegisterError(msg);
     },
   });
 
@@ -163,7 +170,7 @@ export default function EventDetailPage() {
 
   const registration = event.userRegistration;
   const isRegistered = registration && registration.status !== "CANCELLED" && registration.status !== "REJECTED";
-  const canRegister = event.status === "REGISTRATION_OPEN" && (!isRegistered || registration?.status === "CANCELLED");
+  const canRegister = (event.status === "REGISTRATION_OPEN" || event.status === "PUBLISHED") && (!isRegistered || registration?.status === "CANCELLED");
   const canCancel = isRegistered && event.status !== "COMPLETED" && event.status !== "CANCELLED";
   const regInfo = registration ? REG_STATUS_MAP[registration.status] : null;
   const quotaPercent = event.quota > 0 ? Math.round((event.registeredCount / event.quota) * 100) : 0;
@@ -493,6 +500,12 @@ export default function EventDetailPage() {
               )}
             </p>
 
+            {registerError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                {registerError}
+              </div>
+            )}
+
             <div className="bg-gray-50 rounded-lg p-3 mb-4 text-sm">
               <div className="flex justify-between mb-1">
                 <span className="text-gray-500">Tanggal</span>
@@ -522,13 +535,4 @@ export default function EventDetailPage() {
               >
                 {registerMutation.isPending && (
                   <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                )}
-                {isFull && event.allowWaitlist ? "Join Waiting List" : "Konfirmasi Daftar"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+       

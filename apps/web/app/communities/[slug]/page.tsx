@@ -21,7 +21,9 @@ interface CommunityEvent {
   title: string;
   slug: string;
   eventDate: string;
+  endDate: string | null;
   coverImage: string | null;
+  status: string;
 }
 
 interface Community {
@@ -45,6 +47,9 @@ interface Community {
   eventCount: number;
   membersPreview: CommunityMember[];
   upcomingEvents: CommunityEvent[];
+  currentEvents: CommunityEvent[];
+  pastEvents: CommunityEvent[];
+  futureEvents: CommunityEvent[];
   categories: { id: string; name: string }[];
   tags: { id: string; tag: string }[];
   settings: { showMemberList: boolean; showEventList: boolean };
@@ -69,6 +74,7 @@ export default function CommunityDetailPage() {
   const [joinModalOpen, setJoinModalOpen] = useState(false);
   const [joinMessage, setJoinMessage] = useState("");
   const [joinLoading, setJoinLoading] = useState(false);
+  const [eventTab, setEventTab] = useState<"now" | "upcoming" | "past">("now");
 
   useEffect(() => { fetchCommunity(); }, [slug]);
 
@@ -77,8 +83,8 @@ export default function CommunityDetailPage() {
       setLoading(true);
       setError(null);
       const { data } = await api.get(`/communities/${slug}`);
-      setCommunity(data.community);
-      fetchRelated(data.community?.id);
+      setCommunity(data.data);
+      fetchRelated(data.data?.id);
     } catch (err: any) {
       setError(err?.response?.data?.message || "Gagal memuat data komunitas.");
     } finally {
@@ -227,7 +233,7 @@ export default function CommunityDetailPage() {
               {community.categories.length > 0 && (
                 <div className="bg-white rounded-xl shadow-sm p-6">
                   <h2 className="text-lg font-semibold text-komuna-navy mb-3">Kategori</h2>
-                  <div className="flex flex-wrap gap-2">{community.categories.map((cat) => <span key={cat.id} className="px-3 py-1.5 bg-komuna-blue/10 text-komuna-blue rounded-full text-sm font-medium">{cat.name}</span>)}</div>
+                  <div className="flex flex-wrap gap-2">{community.categories.map((cat) => <Link key={cat.id} href={`/communities?categoryId=${cat.id}`} className="px-3 py-1.5 bg-komuna-blue/10 text-komuna-blue rounded-full text-sm font-medium hover:bg-komuna-blue/20 transition-colors">{cat.name}</Link>)}</div>
                 </div>
               )}
               {community.tags.length > 0 && (
@@ -236,7 +242,7 @@ export default function CommunityDetailPage() {
                   <div className="flex flex-wrap gap-2">{community.tags.map((t, i) => <span key={t.id} className={`px-3 py-1 rounded-full text-sm font-medium ${TAG_COLORS[i % TAG_COLORS.length]}`}>#{t.tag}</span>)}</div>
                 </div>
               )}
-              {community.settings.showEventList && community.upcomingEvents.length > 0 && (
+              {community.settings?.showEventList && community.upcomingEvents.length > 0 && (
                 <div className="bg-white rounded-xl shadow-sm p-6">
                   <h2 className="text-lg font-semibold text-komuna-navy mb-4">Event Mendatang</h2>
                   <div className="space-y-3">
@@ -254,9 +260,18 @@ export default function CommunityDetailPage() {
               )}
               <div className="bg-white rounded-xl shadow-sm p-6">
                 <div className="grid grid-cols-3 gap-4 text-center">
-                  <div><p className="text-2xl font-bold text-komuna-navy">{community.memberCount}</p><p className="text-sm text-gray-500">Anggota</p></div>
-                  <div><p className="text-2xl font-bold text-komuna-navy">{community.eventCount}</p><p className="text-sm text-gray-500">Event</p></div>
-                  <div><p className="text-2xl font-bold text-komuna-navy">{community.categories.length}</p><p className="text-sm text-gray-500">Kategori</p></div>
+                  <Link href={`/communities/${slug}/members`} className="group rounded-lg p-2 -m-2 hover:bg-komuna-blue/5 transition-colors">
+                    <p className="text-2xl font-bold text-komuna-navy group-hover:text-komuna-blue transition-colors">{community.memberCount}</p>
+                    <p className="text-sm text-gray-500 group-hover:text-komuna-blue transition-colors">Anggota</p>
+                  </Link>
+                  <Link href={`/events?communityId=${community.id}`} className="group rounded-lg p-2 -m-2 hover:bg-komuna-blue/5 transition-colors">
+                    <p className="text-2xl font-bold text-komuna-navy group-hover:text-komuna-blue transition-colors">{community.eventCount}</p>
+                    <p className="text-sm text-gray-500 group-hover:text-komuna-blue transition-colors">Event</p>
+                  </Link>
+                  <div className="rounded-lg p-2 -m-2">
+                    <p className="text-2xl font-bold text-komuna-navy">{community.categories.length}</p>
+                    <p className="text-sm text-gray-500">Kategori</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -280,18 +295,18 @@ export default function CommunityDetailPage() {
                   </div>
                 </div>
               )}
-              {community.settings.showMemberList && community.membersPreview.length > 0 && (
+              {community.settings?.showMemberList && community.membersPreview.length > 0 && (
                 <div className="bg-white rounded-xl shadow-sm p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-medium text-gray-500">Anggota</h3>
-                    <span className="text-xs text-gray-400">{community.memberCount} total</span>
+                    <Link href={`/communities/${slug}/members`} className="text-xs text-komuna-blue hover:underline">Lihat Semua</Link>
                   </div>
                   <div className="space-y-3">
                     {community.membersPreview.slice(0, 10).map((member) => (
-                      <div key={member.id} className="flex items-center gap-3">
+                      <Link key={member.id} href={`/communities/${slug}/members`} className="flex items-center gap-3 hover:bg-gray-50 rounded-lg p-1 -m-1 transition-colors">
                         {member.avatar ? <img src={member.avatar} alt={member.name} className="h-8 w-8 rounded-full object-cover" /> : <div className="h-8 w-8 rounded-full bg-komuna-blue/10 flex items-center justify-center shrink-0"><span className="text-komuna-blue font-bold text-xs">{member.name[0]}</span></div>}
                         <div className="min-w-0 flex-1"><p className="text-sm font-medium text-komuna-navy truncate">{member.name}</p>{member.role !== "MEMBER" && <p className="text-xs text-gray-500 capitalize">{member.role.toLowerCase()}</p>}</div>
-                      </div>
+                      </Link>
                     ))}
                   </div>
                   {community.memberCount > 10 && <p className="mt-3 text-xs text-gray-400 text-center">+{community.memberCount - 10} anggota lainnya</p>}

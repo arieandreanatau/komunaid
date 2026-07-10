@@ -11,6 +11,7 @@ import {
   adminCreateCategorySchema,
   adminUpdateCategorySchema,
   adminUpdatePlatformGeneralSchema,
+  adminUpdateSettingSchema,
 } from "@komunaid/shared";
 import { createAuditLog, AuditActions } from "../services/audit";
 import type { AuthUser } from "../middleware/auth";
@@ -1063,6 +1064,16 @@ adminRoutes.put("/organizations/:organizationId/approve", async (c) => {
     afterData: { status: "APPROVED" },
   });
 
+  await prisma.membershipHistory.create({
+    data: {
+      organizationId,
+      userId: organization.ownerId,
+      action: "ORG_APPROVED",
+      details: { approvedBy: authUser.id },
+      performedBy: authUser.id,
+    },
+  });
+
   return c.json({ success: true, message: "Organisasi berhasil disetujui" });
 });
 
@@ -1099,6 +1110,16 @@ adminRoutes.put("/organizations/:organizationId/suspend", async (c) => {
     resourceId: organizationId,
     beforeData: before,
     afterData: { status: "SUSPENDED" },
+  });
+
+  await prisma.membershipHistory.create({
+    data: {
+      organizationId,
+      userId: organization.ownerId,
+      action: "ORG_SUSPENDED",
+      details: { suspendedBy: authUser.id },
+      performedBy: authUser.id,
+    },
   });
 
   return c.json({ success: true, message: "Organisasi berhasil ditangguhkan" });
@@ -1139,6 +1160,16 @@ adminRoutes.put("/organizations/:organizationId/restore", async (c) => {
     afterData: { status: "APPROVED" },
   });
 
+  await prisma.membershipHistory.create({
+    data: {
+      organizationId,
+      userId: organization.ownerId,
+      action: "ORG_RESTORED",
+      details: { restoredBy: authUser.id },
+      performedBy: authUser.id,
+    },
+  });
+
   return c.json({ success: true, message: "Organisasi berhasil dipulihkan" });
 });
 
@@ -1174,11 +1205,21 @@ adminRoutes.patch("/organizations/:organizationId/reject", validate(adminActionN
 
   await createAuditLog({
     userId: authUser.id,
-    actionType: "ORG_REJECTED",
+    actionType: AuditActions.ORG_REJECTED,
     resourceName: "Organization",
     resourceId: organizationId,
     beforeData: { status: organization.status },
     afterData: { status: "REJECTED", note },
+  });
+
+  await prisma.membershipHistory.create({
+    data: {
+      organizationId,
+      userId: organization.ownerId,
+      action: "ORG_REJECTED",
+      details: { rejectedBy: authUser.id, note: note || null },
+      performedBy: authUser.id,
+    },
   });
 
   return c.json({ success: true, message: "Organisasi berhasil ditolak" });
@@ -1221,6 +1262,16 @@ adminRoutes.patch("/organizations/:organizationId/request-revision", validate(ad
     resourceId: organizationId,
     beforeData: { status: organization.status },
     afterData: { status: "REVISION_REQUIRED", note },
+  });
+
+  await prisma.membershipHistory.create({
+    data: {
+      organizationId,
+      userId: organization.ownerId,
+      action: "ORG_REVISION_REQUESTED",
+      details: { requestedBy: authUser.id, note: note || null },
+      performedBy: authUser.id,
+    },
   });
 
   return c.json({ success: true, message: "Revisi berhasil diminta" });
@@ -2035,18 +2086,10 @@ adminRoutes.get("/categories", async (c) => {
   });
 });
 
-adminRoutes.post("/categories", async (c) => {
+adminRoutes.post("/categories", validate(adminCreateCategorySchema), async (c) => {
   const authUser = c.get("user");
-  const body = await c.req.json();
-  const { name, description, icon, type } = body as { name: string; description?: string; icon?: string; type?: string };
-
-  if (!name) {
-    return c.json({ success: false, message: "Nama kategori wajib diisi" }, 400);
-  }
-
-  if (type && !["COMMUNITY", "ORGANIZATION", "EVENT"].includes(type)) {
-    return c.json({ success: false, message: "Tipe kategori tidak valid" }, 400);
-  }
+  const data = c.get("validated");
+  const { name, description, icon, type } = data as { name: string; description?: string; icon?: string; type?: string };
 
   const slug = name
     .toLowerCase()
@@ -2079,11 +2122,10 @@ adminRoutes.post("/categories", async (c) => {
   return c.json({ success: true, data: category }, 201);
 });
 
-adminRoutes.put("/categories/:categoryId", async (c) => {
+adminRoutes.put("/categories/:categoryId", validate(adminUpdateCategorySchema), async (c) => {
   const authUser = c.get("user");
   const categoryId = c.req.param("categoryId") as string;
-  const body = await c.req.json();
-  const { name, description, icon, isActive, type } = body;
+  const data = c.get("validated");
 
   const category = await prisma.category.findUnique({ where: { id: categoryId } });
   if (!category) {
@@ -2095,11 +2137,11 @@ adminRoutes.put("/categories/:categoryId", async (c) => {
   const updated = await prisma.category.update({
     where: { id: categoryId },
     data: {
-      ...(name && { name }),
-      ...(description !== undefined && { description }),
-      ...(icon !== undefined && { icon }),
-      ...(isActive !== undefined && { isActive }),
-      ...(type && { type }),
+      ...(data.name && { name: data.name }),
+      ...(data.description !== undefined && { description: data.description }),
+      ...(data.icon !== undefined && { icon: data.icon }),
+      ...(data.isActive !== undefined && { isActive: data.isActive }),
+      ...(data.type && { type: data.type }),
     },
   });
 
@@ -2600,11 +2642,11 @@ adminRoutes.get("/settings/:key", async (c) => {
   return c.json({ success: true, data: { key: setting.key, value: setting.value } });
 });
 
-adminRoutes.put("/settings/:key", requireSuperAdmin(), async (c) => {
+adminRoutes.put("/settings/:key", requireSuperAdmin(), validate(adminUpdateSettingSchema), async (c) => {
   const authUser = c.get("user");
   const key = c.req.param("key") as string;
-  const body = await c.req.json();
-  const { value } = body;
+  const data = c.get("validated");
+  const { value } = data as { value: any };
 
   const existing = await prisma.setting.findUnique({ where: { key } });
   const before = existing ? { value: existing.value } : null;
@@ -2636,9 +2678,9 @@ adminRoutes.get("/settings/platform/general", async (c) => {
   return c.json({ success: true, data });
 });
 
-adminRoutes.put("/settings/platform/general", requireSuperAdmin(), async (c) => {
+adminRoutes.put("/settings/platform/general", requireSuperAdmin(), validate(adminUpdatePlatformGeneralSchema), async (c) => {
   const authUser = c.get("user");
-  const body = await c.req.json();
+  const body = c.get("validated");
   const entries = Object.entries(body);
 
   for (const [key, value] of entries) {

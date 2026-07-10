@@ -187,6 +187,9 @@ eventRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
     });
   }
 
+  const role = user ? await getEventOrganizerRole(user.id, event) : null;
+  const isOrganizer = user ? canManageEvent(role, user.id, event) : false;
+
   const galleryParsed = event.gallery ? JSON.parse(event.gallery as string) : [];
 
   return c.json({
@@ -196,14 +199,16 @@ eventRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
       registrations: undefined,
       gallery: galleryParsed,
       registeredCount: event._count.registrations,
-      registeredUsers: event.registrations.map((r) => ({
-        id: r.user.id,
-        name: r.user.name,
-        avatar: r.user.avatar,
-        status: r.status,
-        attendance: r.attendance,
-        registeredAt: r.registeredAt,
-      })),
+      registeredUsers: isOrganizer
+        ? event.registrations.map((r) => ({
+            id: r.user.id,
+            name: r.user.name,
+            avatar: r.user.avatar,
+            status: r.status,
+            attendance: r.attendance,
+            registeredAt: r.registeredAt,
+          }))
+        : undefined,
       categories: event.categories.map((c) => c.category),
       userRegistration: userRegistration
         ? {
@@ -388,9 +393,13 @@ eventRoutes.delete("/:eventId", authMiddleware, async (c) => {
     return c.json({ success: false, message: "Tidak memiliki akses menghapus event ini" }, 403);
   }
 
+  if (!["DRAFT", "CANCELLED", "COMPLETED"].includes(event.status)) {
+    return c.json({ success: false, message: `Tidak dapat menghapus event dari status ${event.status}. Gunakan cancel terlebih dahulu.` }, 400);
+  }
+
   await prisma.event.update({
     where: { id: eventId },
-    data: { deletedAt: new Date(), status: "CANCELLED" },
+    data: { deletedAt: new Date() },
   });
 
   await createAuditLog({
@@ -825,7 +834,7 @@ eventRoutes.post("/:eventId/register", authMiddleware, async (c) => {
     return c.json({ success: false, message: "Event tidak ditemukan" }, 404);
   }
 
-  if (event.status !== "REGISTRATION_OPEN") {
+  if (event.status !== "REGISTRATION_OPEN" && event.status !== "PUBLISHED") {
     return c.json({ success: false, message: "Registrasi event belum dibuka" }, 400);
   }
 

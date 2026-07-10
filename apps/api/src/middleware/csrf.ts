@@ -22,7 +22,7 @@ export function csrfProtection() {
       c.header("Set-Cookie", serialize("csrf_token", token, {
         httpOnly: false,
         secure: IS_PRODUCTION,
-        sameSite: "strict",
+        sameSite: "lax",
         path: "/",
         maxAge: 60 * 60,
       }));

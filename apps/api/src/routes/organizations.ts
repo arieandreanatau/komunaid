@@ -41,24 +41,13 @@ organizationRoutes.get("/", optionalAuthMiddleware, validate(organizationQuerySc
   const page = q.page as number;
   const limit = q.limit as number;
 
-  const where: any = { deletedAt: null };
-
-  if (user) {
-    where.status = q.status || "APPROVED";
-  } else {
-    where.status = "APPROVED";
-    where.visibility = q.visibility || "PUBLIC";
-  }
+  const where: any = { deletedAt: null, status: "APPROVED", visibility: "PUBLIC" };
 
   if (q.search) {
     where.OR = [
       { name: { contains: q.search } },
       { description: { contains: q.search } },
     ];
-  }
-
-  if (q.visibility && user) {
-    where.visibility = q.visibility;
   }
 
   if (q.categoryId) {
@@ -231,8 +220,28 @@ organizationRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
     return c.json({ success: false, message: "Organisasi tidak ditemukan" }, 404);
   }
 
+  if (organization.status !== "APPROVED") {
+    if (!user || organization.ownerId !== user.id) {
+      return c.json({ success: false, message: "Organisasi tidak ditemukan" }, 404);
+    }
+  }
+
   if (!user && organization.visibility === "PRIVATE") {
     return c.json({ success: false, message: "Organisasi ini bersifat privat" }, 403);
+  }
+
+  if (user && organization.visibility === "PRIVATE") {
+    const membershipCheck = await prisma.organizationMember.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId: organization.id,
+          userId: user.id,
+        },
+      },
+    });
+    if (!membershipCheck && organization.ownerId !== user.id) {
+      return c.json({ success: false, message: "Organisasi ini bersifat privat" }, 403);
+    }
   }
 
   let userMembership: { role: string; status: string } | null = null;
@@ -1305,7 +1314,7 @@ organizationRoutes.post(
           userId: authUser.id,
         },
       },
-      data: { status: "BANNED", deletedAt: new Date() },
+      data: { deletedAt: new Date() },
     });
 
     await createAuditLog({
@@ -1313,6 +1322,16 @@ organizationRoutes.post(
       actionType: AuditActions.ORG_MEMBER_LEAVE,
       resourceName: "Organization",
       resourceId: organizationId,
+    });
+
+    await prisma.membershipHistory.create({
+      data: {
+        organizationId,
+        userId: authUser.id,
+        action: "ORG_MEMBER_LEAVE",
+        details: { organizationName: organization?.name || organizationId },
+        performedBy: authUser.id,
+      },
     });
 
     await prisma.activityHistory.create({

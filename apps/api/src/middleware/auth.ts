@@ -84,7 +84,7 @@ export function setTokenCookies(c: Context, accessToken: string, refreshToken: s
   const accessCookie = serialize("token", accessToken, {
     httpOnly: true,
     secure: IS_PRODUCTION,
-    sameSite: "strict",
+    sameSite: "lax",
     path: "/",
     maxAge: 15 * 60, // 15 minutes
     domain: getCookieDomain(),
@@ -93,13 +93,13 @@ export function setTokenCookies(c: Context, accessToken: string, refreshToken: s
   const refreshCookie = serialize("refreshToken", refreshToken, {
     httpOnly: true,
     secure: IS_PRODUCTION,
-    sameSite: "strict",
+    sameSite: "lax",
     path: "/api/v1/auth/refresh",
     maxAge: 30 * 24 * 60 * 60, // 30 days
     domain: getCookieDomain(),
   });
 
-  c.header("Set-Cookie", accessCookie);
+  c.header("Set-Cookie", accessCookie, { append: true });
   c.header("Set-Cookie", refreshCookie, { append: true });
 }
 
@@ -107,7 +107,7 @@ export function clearTokenCookies(c: Context) {
   const accessCookie = serialize("token", "", {
     httpOnly: true,
     secure: IS_PRODUCTION,
-    sameSite: "strict",
+    sameSite: "lax",
     path: "/",
     maxAge: 0,
     domain: getCookieDomain(),
@@ -116,13 +116,13 @@ export function clearTokenCookies(c: Context) {
   const refreshCookie = serialize("refreshToken", "", {
     httpOnly: true,
     secure: IS_PRODUCTION,
-    sameSite: "strict",
+    sameSite: "lax",
     path: "/api/v1/auth/refresh",
     maxAge: 0,
     domain: getCookieDomain(),
   });
 
-  c.header("Set-Cookie", accessCookie);
+  c.header("Set-Cookie", accessCookie, { append: true });
   c.header("Set-Cookie", refreshCookie, { append: true });
 }
 
