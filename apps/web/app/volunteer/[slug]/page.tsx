@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { Header } from "@/components/header";
+import { Footer } from "@/components/footer";
+import { Breadcrumbs } from "@/components/breadcrumbs";
 import { useAuth } from "@/components/auth-provider";
 import api from "@/lib/api";
 
@@ -58,6 +60,7 @@ export default function VolunteerDetailPage() {
   const [applying, setApplying] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [formError, setFormError] = useState("");
+  const [related, setRelated] = useState<VolunteerOpportunity[]>([]);
 
   const [form, setForm] = useState({
     motivation: "",
@@ -80,6 +83,23 @@ export default function VolunteerDetailPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!opportunity) return;
+    const fetchRelated = async () => {
+      try {
+        const { data } = await api.get("/volunteer?limit=3");
+        setRelated(
+          (data.data as VolunteerOpportunity[]).filter(
+            (o) => o.id !== opportunity.id
+          )
+        );
+      } catch {
+        // ignore
+      }
+    };
+    fetchRelated();
+  }, [opportunity]);
 
   const handleApply = async () => {
     if (!selectedPosition) {
@@ -139,6 +159,13 @@ export default function VolunteerDetailPage() {
     });
   };
 
+  const formatShortDate = (dateStr: string) =>
+    new Date(dateStr).toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
       DRAFT: "bg-gray-100 text-gray-700",
@@ -183,11 +210,18 @@ export default function VolunteerDetailPage() {
   const canApply = !userApp && ["PUBLISHED", "OPEN"].includes(opportunity.status) && opportunity.event.status !== "COMPLETED";
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-gray-50">
       <Header />
 
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-8 flex-1">
         <div className="max-w-4xl mx-auto">
+          <Breadcrumbs
+            items={[
+              { label: "Volunteer", href: "/volunteer" },
+              { label: opportunity.title },
+            ]}
+          />
+
           <div className="mb-4">
             <Link href="/volunteer" className="text-sm text-komuna-blue hover:underline flex items-center gap-1">
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -364,8 +398,54 @@ export default function VolunteerDetailPage() {
               Daftar Volunteer
             </button>
           )}
+
+          {related.length > 0 && (
+            <div className="mt-8">
+              <h2 className="text-lg font-semibold text-komuna-navy mb-4">Volunteer Lainnya</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {related.map((opp) => (
+                  <Link
+                    key={opp.id}
+                    href={`/volunteer/${opp.slug}`}
+                    className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatusBadge(opp.status)}`}>
+                        {opp.status}
+                      </span>
+                      {opp.activityStartDate && (
+                        <span className="text-xs text-gray-500">{formatShortDate(opp.activityStartDate)}</span>
+                      )}
+                    </div>
+                    <h3 className="font-semibold text-komuna-navy mb-2 line-clamp-2">{opp.title}</h3>
+                    {opp.description && (
+                      <p className="text-sm text-gray-500 mb-3 line-clamp-2">{opp.description}</p>
+                    )}
+                    <div className="flex items-center gap-2 text-xs text-gray-500 mb-3">
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      <span>{opp.event.title}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {opp.positions.map((pos) => (
+                        <span key={pos.id} className="px-2 py-0.5 text-xs bg-komuna-teal/10 text-komuna-teal rounded-full">
+                          {pos.name}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                      <span>{opp.applicationCount} pendaftar</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </main>
+
+      <Footer />
 
       {showApplyModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

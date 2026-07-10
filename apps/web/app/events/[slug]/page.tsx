@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { useAuth } from "@/components/auth-provider";
+import { Header } from "@/components/header";
+import { Footer } from "@/components/footer";
+import { Breadcrumbs } from "@/components/breadcrumbs";
 
 interface Event {
   id: string;
@@ -49,13 +52,23 @@ const REG_STATUS_MAP: Record<string, { label: string; className: string }> = {
   REJECTED: { label: "Ditolak", className: "bg-red-100 text-red-700 border-red-200" },
 };
 
+const RELATED_STATUS_MAP: Record<string, { label: string; className: string }> = {
+  DRAFT: { label: "Draft", className: "bg-gray-100 text-gray-600" },
+  PUBLISHED: { label: "Diterbitkan", className: "bg-blue-100 text-blue-700" },
+  REGISTRATION_OPEN: { label: "Pendaftaran Buka", className: "bg-green-100 text-green-700" },
+  REGISTRATION_CLOSED: { label: "Pendaftaran Tutup", className: "bg-yellow-100 text-yellow-700" },
+  ONGOING: { label: "Berlangsung", className: "bg-purple-100 text-purple-700" },
+  COMPLETED: { label: "Selesai", className: "bg-green-200 text-green-800" },
+  CANCELLED: { label: "Dibatalkan", className: "bg-red-100 text-red-700" },
+  ARCHIVED: { label: "Diarsipkan", className: "bg-gray-200 text-gray-700" },
+};
+
 export default function EventDetailPage() {
   const params = useParams();
   const slug = params.slug as string;
   const { user, isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
   const [registerModalOpen, setRegisterModalOpen] = useState(false);
-  const [registerLoading, setRegisterLoading] = useState(false);
 
   const { data: event, isLoading, error } = useQuery({
     queryKey: ["event", slug],
@@ -63,6 +76,16 @@ export default function EventDetailPage() {
     queryFn: async () => {
       const { data } = await api.get(`/events/${slug}`);
       return (data.event || data.data) as Event;
+    },
+  });
+
+  const { data: relatedEvents } = useQuery({
+    queryKey: ["relatedEvents", slug],
+    enabled: !!event,
+    queryFn: async () => {
+      const { data } = await api.get("/events", { params: { limit: 3, upcoming: "true" } });
+      const events = (data.events || []) as Event[];
+      return events.filter((e) => e.slug !== slug).slice(0, 3);
     },
   });
 
@@ -117,19 +140,23 @@ export default function EventDetailPage() {
 
   if (error || !event) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center max-w-md mx-auto px-4">
-          <div className="h-16 w-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="h-8 w-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        <Header />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center max-w-md mx-auto px-4">
+            <div className="h-16 w-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="h-8 w-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-komuna-navy mb-2">Event Tidak Ditemukan</h2>
+            <p className="text-gray-500 mb-6">Event yang kamu cari tidak tersedia atau telah dihapus.</p>
+            <Link href="/events" className="inline-flex items-center gap-2 px-5 py-2.5 bg-komuna-blue text-white rounded-lg font-medium hover:bg-komuna-navy transition-colors">
+              Kembali ke Direktori Event
+            </Link>
           </div>
-          <h2 className="text-2xl font-bold text-komuna-navy mb-2">Event Tidak Ditemukan</h2>
-          <p className="text-gray-500 mb-6">Event yang kamu cari tidak tersedia atau telah dihapus.</p>
-          <Link href="/events" className="inline-flex items-center gap-2 px-5 py-2.5 bg-komuna-blue text-white rounded-lg font-medium hover:bg-komuna-navy transition-colors">
-            Kembali ke Direktori Event
-          </Link>
         </div>
+        <Footer />
       </div>
     );
   }
@@ -143,29 +170,13 @@ export default function EventDetailPage() {
   const isFull = event.registeredCount >= event.quota;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="sticky top-0 z-50 w-full border-b bg-white/95 backdrop-blur">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-komuna-blue flex items-center justify-center">
-              <span className="text-white font-bold text-sm">K</span>
-            </div>
-            <span className="font-bold text-xl text-komuna-navy">KomunaID</span>
-          </Link>
-          <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
-            <Link href="/communities" className="hover:text-komuna-blue">Komunitas</Link>
-            <Link href="/events" className="text-komuna-blue">Event</Link>
-            <Link href="/about" className="hover:text-komuna-blue">Tentang</Link>
-          </nav>
-          <div className="flex items-center gap-3">
-            <Link href="/login" className="px-4 py-2 text-sm font-medium text-komuna-navy hover:text-komuna-blue">Masuk</Link>
-            <Link href="/register" className="px-4 py-2 text-sm font-medium text-white bg-komuna-blue rounded-lg hover:bg-komuna-navy">Daftar</Link>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen flex flex-col bg-gray-50">
+      <Header />
 
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-8 flex-1">
         <div className="max-w-5xl mx-auto">
+          <Breadcrumbs items={[{ label: "Event", href: "/events" }, { label: event.title }]} />
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Main Content */}
             <div className="lg:col-span-2 space-y-6">
@@ -264,6 +275,41 @@ export default function EventDetailPage() {
                         <img src={item.url} alt={item.caption || ""} className="w-full h-full object-cover" />
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Related Events */}
+              {relatedEvents && relatedEvents.length > 0 && (
+                <div className="bg-white rounded-xl shadow-sm p-6">
+                  <h2 className="text-lg font-semibold text-komuna-navy mb-4">Event Terkait</h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {relatedEvents.map((re) => {
+                      const statusInfo = RELATED_STATUS_MAP[re.status];
+                      return (
+                        <Link key={re.id} href={`/events/${re.slug}`} className="bg-gray-50 rounded-lg overflow-hidden hover:shadow-md transition-shadow group">
+                          <div className="h-32 relative overflow-hidden">
+                            {re.coverImage || re.thumbnail ? (
+                              <img src={re.coverImage || re.thumbnail} alt={re.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                            ) : (
+                              <div className="h-full bg-gradient-to-br from-komuna-blue to-komuna-teal flex items-center justify-center">
+                                <span className="text-white text-3xl font-bold opacity-30">{re.title[0]}</span>
+                              </div>
+                            )}
+                            {statusInfo && <span className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-xs font-medium ${statusInfo.className}`}>{statusInfo.label}</span>}
+                          </div>
+                          <div className="p-3">
+                            <h3 className="font-medium text-komuna-navy text-sm line-clamp-1 group-hover:text-komuna-blue transition-colors">{re.title}</h3>
+                            <p className="text-xs text-gray-500 mt-1">{new Date(re.eventDate).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</p>
+                            <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
+                              <span>{re.locationType === "ONLINE" ? "Online" : re.location || "TBD"}</span>
+                              <span>&middot;</span>
+                              <span>{re.registeredCount}/{re.quota}</span>
+                            </div>
+                          </div>
+                        </Link>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -422,6 +468,8 @@ export default function EventDetailPage() {
           </div>
         </div>
       </main>
+
+      <Footer />
 
       {/* Register Modal */}
       {registerModalOpen && (

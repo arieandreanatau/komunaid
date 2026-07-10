@@ -76,6 +76,71 @@ pnpm dev:api        # Start API only
 pnpm build          # Build both API and Web
 ```
 
+## Public Website Module
+
+### Pages
+
+| Route | Description |
+|-------|-------------|
+| `/` | Landing page (hero, features, communities, events, organizations, volunteer, stats, testimonials, partners, FAQ) |
+| `/about` | About page (visi, misi, cara kerja, nilai) |
+| `/communities` | Community directory (search, filter by category/type, sort, pagination) |
+| `/communities/[slug]` | Community detail (profile, members, events, tags, social, related) |
+| `/organizations` | Organization directory (search, filter, sort, pagination) |
+| `/organizations/[slug]` | Organization detail (profile, members, events, tags, contact, related) |
+| `/events` | Event directory (status tabs, search, location filter, sort, pagination) |
+| `/events/[slug]` | Event detail (registration, quota, organizer, gallery, related) |
+| `/volunteer` | Volunteer directory (search, status filter, pagination) |
+| `/volunteer/[slug]` | Volunteer detail (positions, apply, schedule, related) |
+| `/about` | About page |
+| `/faq` | FAQ page (expandable accordion) |
+| `/contact` | Contact page |
+| `/terms` | Terms & conditions |
+| `/privacy` | Privacy policy |
+| `/community-guidelines` | Community guidelines |
+| `/event-guidelines` | Event guidelines |
+| `/volunteer-guidelines` | Volunteer guidelines |
+| `/maintenance` | Maintenance page |
+| `/not-found` | 404 page |
+| `/500` | 500 server error page |
+
+### Components
+
+| Component | Path | Description |
+|-----------|------|-------------|
+| Header | `components/header.tsx` | Global navigation header (responsive, user dropdown) |
+| Footer | `components/footer.tsx` | Global footer (4-column, brand, links, copyright) |
+| Breadcrumbs | `components/breadcrumbs.tsx` | Breadcrumb navigation |
+| Pagination | `components/pagination.tsx` | Smart pagination with ellipsis |
+| JsonLd | `components/json-ld.tsx` | JSON-LD structured data |
+| VolunteerCTA | `components/volunteer-cta.tsx` | Reusable volunteer CTA banner |
+| EmptyState | `components/empty-state.tsx` | Reusable empty state |
+| Skeleton | `components/skeleton.tsx` | Loading skeleton components |
+| ErrorBoundary | `components/error-boundary.tsx` | React error boundary |
+
+### SEO Implementation
+
+- **Metadata**: Title, description, keywords, OpenGraph, Twitter Card on all pages
+- **JSON-LD**: Structured data for website and organization
+- **Sitemap**: Dynamic sitemap with static pages + API-fetched slugs
+- **robots.txt**: Allow public routes, disallow admin/dashboard/api
+- **manifest.json**: PWA manifest
+- **Breadcrumbs**: On all detail pages
+- **Canonical URLs**: Via metadataBase
+
+### Design System
+
+- **Font**: Plus Jakarta Sans
+- **Colors**: Deep Navy (#0A1D4D), Royal Blue (#1D4ED8), Teal (#11A79B), Aqua (#00C8E6)
+- **Responsive**: Desktop, Tablet, Mobile breakpoints
+
+### Security
+
+- Only APPROVED + PUBLIC communities/organizations visible
+- No draft/pending/rejected/suspended data exposed
+- No private events exposed
+- Soft-deleted data excluded from queries
+
 ## API
 
 API runs at `http://localhost:3001` in development.
@@ -88,10 +153,14 @@ API runs at `http://localhost:3001` in development.
 | POST | /api/v1/auth/login | No | Login |
 | GET | /api/v1/auth/me | Yes | Get current user |
 | GET | /api/v1/communities | No | List communities |
-| POST | /api/v1/communities | Yes | Create community |
+| GET | /api/v1/communities/:slug | No | Community detail |
+| GET | /api/v1/organizations | No | List organizations |
+| GET | /api/v1/organizations/:slug | No | Organization detail |
 | GET | /api/v1/events | No | List events |
-| POST | /api/v1/events | Yes | Create event |
+| GET | /api/v1/events/:slug | No | Event detail |
 | GET | /api/v1/volunteer | No | List volunteer opportunities |
+| GET | /api/v1/volunteer/detail/:slug | No | Volunteer detail |
+| GET | /api/v1/categories | No | List categories |
 
 ### RBAC Roles
 

@@ -6,6 +6,8 @@ import { useParams, useRouter } from "next/navigation";
 import api from "@/lib/api";
 import { useAuth } from "@/components/auth-provider";
 import { Header } from "@/components/header";
+import { Breadcrumbs } from "@/components/breadcrumbs";
+import { Footer } from "@/components/footer";
 
 interface OrganizationMember {
   id: string;
@@ -79,10 +81,17 @@ export default function OrganizationDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [relatedOrgs, setRelatedOrgs] = useState<Organization[]>([]);
 
   useEffect(() => {
     fetchOrganization();
   }, [slug]);
+
+  useEffect(() => {
+    if (organization) {
+      fetchRelatedOrgs();
+    }
+  }, [organization?.id]);
 
   const fetchOrganization = async () => {
     try {
@@ -94,6 +103,17 @@ export default function OrganizationDetailPage() {
       setError(err?.response?.data?.message || "Gagal memuat data organisasi.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchRelatedOrgs = async () => {
+    try {
+      const { data } = await api.get(`/organizations?limit=3`);
+      const orgs = (data.organizations || data.data || []).filter(
+        (o: Organization) => o.id !== organization!.id
+      );
+      setRelatedOrgs(orgs.slice(0, 3));
+    } catch {
     }
   };
 
@@ -303,6 +323,13 @@ export default function OrganizationDetailPage() {
 
       <main className="container mx-auto px-4">
         <div className="max-w-4xl mx-auto -mt-16 relative z-10">
+          <Breadcrumbs
+            items={[
+              { label: "Organisasi", href: "/organizations" },
+              { label: organization.name },
+            ]}
+          />
+
           <div className="flex flex-col md:flex-row md:items-end gap-4 mb-6">
             <div className="flex-shrink-0">
               {organization.logo ? (
@@ -588,7 +615,54 @@ export default function OrganizationDetailPage() {
             )}
           </div>
         </div>
+
+        {relatedOrgs.length > 0 && (
+          <div className="max-w-4xl mx-auto pb-12">
+            <h2 className="text-xl font-bold text-komuna-navy mb-6">Organisasi Lainnya</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {relatedOrgs.map((org) => (
+                <Link
+                  key={org.id}
+                  href={`/organizations/${org.slug}`}
+                  className="bg-white rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-shadow group"
+                >
+                  <div className="h-32 bg-gradient-to-br from-komuna-teal via-komuna-blue to-komuna-navy relative overflow-hidden">
+                    {org.banner ? (
+                      <img src={org.banner} alt={org.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-white/20 text-6xl font-bold select-none">{org.name[0]}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-4">
+                    <div className="flex items-center gap-3 mb-2">
+                      {org.logo ? (
+                        <img src={org.logo} alt={org.name} className="h-10 w-10 rounded-lg object-cover bg-white -mt-8 border-2 border-white shadow-sm" />
+                      ) : (
+                        <div className="h-10 w-10 rounded-lg bg-komuna-teal flex items-center justify-center -mt-8 border-2 border-white shadow-sm">
+                          <span className="text-white font-bold text-sm">{org.name[0]}</span>
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <h3 className="font-semibold text-komuna-navy truncate group-hover:text-komuna-blue transition-colors text-sm">
+                          {org.name}
+                        </h3>
+                        <p className="text-xs text-gray-500">{org.memberCount} anggota</p>
+                      </div>
+                    </div>
+                    {org.description && (
+                      <p className="text-xs text-gray-500 line-clamp-2 mt-1">{org.description}</p>
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
       </main>
+
+      <Footer />
     </div>
   );
 }

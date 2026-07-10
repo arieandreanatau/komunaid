@@ -9,8 +9,18 @@ const COOKIE_SECRET = process.env.COOKIE_SECRET || "dev-cookie-secret-change-thi
 const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || "localhost";
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
-if (IS_PRODUCTION && (!process.env.JWT_SECRET || process.env.JWT_SECRET === "dev-secret-change-this")) {
-  throw new Error("JWT_SECRET must be set in production");
+function assertProductionSecrets() {
+  if (IS_PRODUCTION && (!process.env.JWT_SECRET || process.env.JWT_SECRET === "dev-secret-change-this")) {
+    throw new Error("JWT_SECRET must be set in production");
+  }
+}
+
+let secretsAsserted = false;
+function ensureSecrets() {
+  if (!secretsAsserted) {
+    secretsAsserted = true;
+    assertProductionSecrets();
+  }
 }
 
 export interface AuthUser {

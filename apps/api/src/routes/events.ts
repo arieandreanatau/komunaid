@@ -883,12 +883,12 @@ eventRoutes.post("/:eventId/register", authMiddleware, async (c) => {
     actionType: AuditActions.EVENT_REGISTER,
     resourceName: "Event",
     resourceId: eventId,
-    afterData: { status: registrationStatus },
+    afterData: { status: registration.status },
   });
 
   return c.json({
     success: true,
-    message: registrationStatus === "WAITLISTED"
+    message: registration.status === "WAITLISTED"
       ? "Berhasil masuk waiting list"
       : "Berhasil mendaftar event",
     data: {

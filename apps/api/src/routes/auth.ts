@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
 import { prisma } from "@komunaid/database";
 import { registerSchema, loginSchema, changePasswordSchema, forgotPasswordSchema, resetPasswordSchema } from "@komunaid/shared";
+import type { AuthUser } from "../middleware/auth";
 import {
   generateAccessToken,
   generateRefreshToken,
@@ -13,6 +14,8 @@ import {
   authMiddleware,
 } from "../middleware/auth";
 import { validate } from "../middleware/validate";
+import { createAuditLog, AuditActions } from "../services/audit";
+import { sendEmail, buildResetPasswordEmail } from "../services/email";
 import { createChildLogger } from "../lib/logger";
 
 const log = createChildLogger("auth");
