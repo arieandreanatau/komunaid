@@ -67,8 +67,8 @@ app.get("/ready", async (c) => {
     const { prisma } = await import("@komunaid/database");
     await prisma.$queryRaw`SELECT 1`;
     return c.json({ status: "ready", database: "connected" });
-  } catch {
-    return c.json({ status: "not ready", database: "disconnected" }, 503);
+  } catch (err: any) {
+    return c.json({ status: "not ready", database: "disconnected", error: err?.message || String(err) }, 503);
   }
 });
 

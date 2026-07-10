@@ -535,4 +535,13 @@ export default function EventDetailPage() {
               >
                 {registerMutation.isPending && (
                   <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-       
+                )}
+                {isFull && event.allowWaitlist ? "Join Waiting List" : "Konfirmasi Daftar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import api from "@/lib/api";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
@@ -52,7 +53,10 @@ const STATUS_MAP: Record<string, { label: string; className: string }> = {
 };
 
 export default function EventsPage() {
+  const searchParams = useSearchParams();
+  const communityId = searchParams.get("communityId") || "";
   const [events, setEvents] = useState<Event[]>([]);
+  const [communityName, setCommunityName] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusTab, setStatusTab] = useState("");
@@ -73,6 +77,7 @@ export default function EventsPage() {
       const params: Record<string, string | number> = { page, limit: 12 };
       if (debouncedSearch) params.search = debouncedSearch;
       if (locationType) params.locationType = locationType;
+      if (communityId) params.communityId = communityId;
 
       if (statusTab === "upcoming") {
         params.upcoming = "true";
@@ -101,10 +106,19 @@ export default function EventsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, debouncedSearch, locationType, statusTab, sort]);
+  }, [page, debouncedSearch, locationType, statusTab, sort, communityId]);
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
   useEffect(() => { setPage(1); }, [debouncedSearch, locationType, statusTab, sort]);
+
+  useEffect(() => {
+    if (communityId) {
+      api.get(`/communities/${communityId}`).then(({ data }) => {
+        const c = data.data || data.community;
+        setCommunityName(c?.name || "");
+      }).catch(() => {});
+    }
+  }, [communityId]);
 
   const formatDate = (dateStr: string) => new Date(dateStr).toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
@@ -113,8 +127,22 @@ export default function EventsPage() {
       <Header />
       <main className="container mx-auto px-4 py-12 flex-1">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-komuna-navy mb-2">Direktori Event</h1>
-          <p className="text-gray-500 mb-6">Temukan event menarik di sekitarmu</p>
+          {communityId ? (
+            <>
+              <nav className="flex items-center gap-2 text-sm text-gray-500 mb-3">
+                <Link href="/events" className="hover:text-komuna-blue transition-colors">Event</Link>
+                <span>/</span>
+                <span className="text-komuna-navy font-medium">{communityName || "Komunitas"}</span>
+              </nav>
+              <h1 className="text-3xl font-bold text-komuna-navy mb-2">Event Komunitas</h1>
+              <p className="text-gray-500 mb-6">Daftar event dari komunitas {communityName}</p>
+            </>
+          ) : (
+            <>
+              <h1 className="text-3xl font-bold text-komuna-navy mb-2">Direktori Event</h1>
+              <p className="text-gray-500 mb-6">Temukan event menarik di sekitarmu</p>
+            </>
+          )}
 
           <div className="flex flex-wrap gap-2 mb-4">
             {STATUS_TABS.map((tab) => (

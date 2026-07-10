@@ -242,20 +242,57 @@ export default function CommunityDetailPage() {
                   <div className="flex flex-wrap gap-2">{community.tags.map((t, i) => <span key={t.id} className={`px-3 py-1 rounded-full text-sm font-medium ${TAG_COLORS[i % TAG_COLORS.length]}`}>#{t.tag}</span>)}</div>
                 </div>
               )}
-              {community.settings?.showEventList && community.upcomingEvents.length > 0 && (
+              {community.settings?.showEventList && (
                 <div className="bg-white rounded-xl shadow-sm p-6">
-                  <h2 className="text-lg font-semibold text-komuna-navy mb-4">Event Mendatang</h2>
-                  <div className="space-y-3">
-                    {community.upcomingEvents.map((event) => (
-                      <Link key={event.id} href={`/events/${event.slug}`} className="flex items-center gap-4 p-3 rounded-lg hover:bg-gray-50 transition-colors group">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-komuna-navy group-hover:text-komuna-blue transition-colors truncate">{event.title}</p>
-                          <p className="text-sm text-gray-500">{new Date(event.eventDate).toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
-                        </div>
-                        <svg className="h-5 w-5 text-gray-400 group-hover:text-komuna-blue transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                      </Link>
-                    ))}
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-semibold text-komuna-navy">Event</h2>
+                    <Link href={`/events?communityId=${community.id}`} className="text-xs text-komuna-blue hover:underline">Lihat Semua</Link>
                   </div>
+                  <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1">
+                    <button onClick={() => setEventTab("now")} className={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${eventTab === "now" ? "bg-white text-komuna-blue shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+                      Sekarang {community.currentEvents.length > 0 && <span className="ml-1 px-1.5 py-0.5 bg-komuna-blue/10 text-komuna-blue rounded text-xs">{community.currentEvents.length}</span>}
+                    </button>
+                    <button onClick={() => setEventTab("upcoming")} className={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${eventTab === "upcoming" ? "bg-white text-komuna-blue shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+                      Mendatang {community.futureEvents.length > 0 && <span className="ml-1 px-1.5 py-0.5 bg-komuna-blue/10 text-komuna-blue rounded text-xs">{community.futureEvents.length}</span>}
+                    </button>
+                    <button onClick={() => setEventTab("past")} className={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${eventTab === "past" ? "bg-white text-komuna-blue shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+                      Riwayat {community.pastEvents.length > 0 && <span className="ml-1 px-1.5 py-0.5 bg-komuna-blue/10 text-komuna-blue rounded text-xs">{community.pastEvents.length}</span>}
+                    </button>
+                  </div>
+                  {(() => {
+                    const events = eventTab === "now" ? community.currentEvents : eventTab === "upcoming" ? community.futureEvents : community.pastEvents;
+                    if (events.length === 0) {
+                      return (
+                        <div className="text-center py-8 text-gray-400">
+                          <svg className="h-10 w-10 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                          <p className="text-sm">{eventTab === "now" ? "Tidak ada event yang sedang berlangsung" : eventTab === "upcoming" ? "Belum ada event mendatang" : "Belum ada riwayat event"}</p>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="space-y-3">
+                        {events.map((event) => (
+                          <Link key={event.id} href={`/events/${event.slug}`} className="flex items-center gap-4 p-3 rounded-lg hover:bg-gray-50 transition-colors group">
+                            {event.coverImage ? (
+                              <img src={event.coverImage} alt={event.title} className="h-12 w-12 rounded-lg object-cover shrink-0" />
+                            ) : (
+                              <div className="h-12 w-12 rounded-lg bg-komuna-teal/10 flex items-center justify-center shrink-0">
+                                <svg className="h-5 w-5 text-komuna-teal" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium text-komuna-navy group-hover:text-komuna-blue transition-colors truncate">{event.title}</p>
+                                {event.status === "APPROVED" && eventTab === "now" && <span className="px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-xs">Berlangsung</span>}
+                              </div>
+                              <p className="text-sm text-gray-500">{new Date(event.eventDate).toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
+                            </div>
+                            <svg className="h-5 w-5 text-gray-400 group-hover:text-komuna-blue transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                          </Link>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
               <div className="bg-white rounded-xl shadow-sm p-6">

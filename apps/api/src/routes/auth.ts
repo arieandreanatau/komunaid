@@ -62,106 +62,111 @@ export const authRoutes = new Hono<Env>();
 authRoutes.post("/register", validate(registerSchema), async (c) => {
   const data = c.get("validated");
 
-  const existingEmail = await prisma.user.findUnique({
-    where: { email: data.email },
-  });
-
-  if (existingEmail) {
-    return c.json({ success: false, message: "Email sudah terdaftar" }, 409);
-  }
-
-  const existingUsername = await prisma.user.findUnique({
-    where: { username: data.username },
-  });
-
-  if (existingUsername) {
-    return c.json({ success: false, message: "Username sudah digunakan" }, 409);
-  }
-
-  const hashedPassword = await bcrypt.hash(
-    data.password,
-    parseInt(process.env.BCRYPT_ROUNDS || "12")
-  );
-
-  const user = await prisma.user.create({
-    data: {
-      name: data.name,
-      username: data.username,
-      email: data.email,
-      password: hashedPassword,
-      roles: {
-        create: {
-          role: "MEMBER",
-        },
-      },
-    },
-    include: {
-      roles: true,
-    },
-  });
-
-  const accessToken = await generateAccessToken({
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    username: user.username,
-  });
-  const refreshToken = await generateRefreshToken({
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    username: user.username,
-  });
-
-  setTokenCookies(c, accessToken, refreshToken);
-
   try {
-    await createAuditLog({
-      userId: user.id,
-      actionType: AuditActions.USER_REGISTER,
-      resourceName: "User",
-      resourceId: user.id,
-      afterData: { name: user.name, email: user.email, username: user.username },
+    const existingEmail = await prisma.user.findUnique({
+      where: { email: data.email },
     });
 
-    await prisma.notification.create({
-      data: {
-        userId: user.id,
-        title: "Selamat Datang di KomunaID!",
-        message: "Akun Anda berhasil dibuat. Mulai jelajahi komunitas dan event di sekitar Anda.",
-        type: "SYSTEM",
-      },
+    if (existingEmail) {
+      return c.json({ success: false, message: "Email sudah terdaftar" }, 409);
+    }
+
+    const existingUsername = await prisma.user.findUnique({
+      where: { username: data.username },
     });
 
-    await prisma.activityHistory.create({
-      data: {
-        userId: user.id,
-        action: "USER_REGISTER",
-        details: { email: user.email, username: user.username },
-      },
-    });
-  } catch (postErr) {
-    log.error({ err: postErr, userId: user.id }, "post-registration operations failed");
-  }
+    if (existingUsername) {
+      return c.json({ success: false, message: "Username sudah digunakan" }, 409);
+    }
 
-  log.info({ userId: user.id }, "user registered");
+    const hashedPassword = await bcrypt.hash(
+      data.password,
+      parseInt(process.env.BCRYPT_ROUNDS || "12")
+    );
 
-  return c.json(
-    {
-      success: true,
-      message: "Registrasi berhasil",
+    const user = await prisma.user.create({
       data: {
-        user: {
-          id: user.id,
-          name: user.name,
-          username: user.username,
-          email: user.email,
-          roles: user.roles.map((r) => r.role),
+        name: data.name,
+        username: data.username,
+        email: data.email,
+        password: hashedPassword,
+        roles: {
+          create: {
+            role: "MEMBER",
+          },
         },
       },
-    },
-    201
-  );
+      include: {
+        roles: true,
+      },
+    });
+
+    const accessToken = await generateAccessToken({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      username: user.username,
+    });
+    const refreshToken = await generateRefreshToken({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      username: user.username,
+    });
+
+    setTokenCookies(c, accessToken, refreshToken);
+
+    try {
+      await createAuditLog({
+        userId: user.id,
+        actionType: AuditActions.USER_REGISTER,
+        resourceName: "User",
+        resourceId: user.id,
+        afterData: { name: user.name, email: user.email, username: user.username },
+      });
+
+      await prisma.notification.create({
+        data: {
+          userId: user.id,
+          title: "Selamat Datang di KomunaID!",
+          message: "Akun Anda berhasil dibuat. Mulai jelajahi komunitas dan event di sekitar Anda.",
+          type: "SYSTEM",
+        },
+      });
+
+      await prisma.activityHistory.create({
+        data: {
+          userId: user.id,
+          action: "USER_REGISTER",
+          details: { email: user.email, username: user.username },
+        },
+      });
+    } catch (postErr) {
+      log.error({ err: postErr, userId: user.id }, "post-registration operations failed");
+    }
+
+    log.info({ userId: user.id }, "user registered");
+
+    return c.json(
+      {
+        success: true,
+        message: "Registrasi berhasil",
+        data: {
+          user: {
+            id: user.id,
+            name: user.name,
+            username: user.username,
+            email: user.email,
+            roles: user.roles.map((r) => r.role),
+          },
+        },
+      },
+      201
+    );
+  } catch (err) {
+    log.error({ err, email: data.email }, "register failed");
+    return c.json({ success: false, message: "Registrasi gagal" }, 500);
+  }
 });
 
 // ==========================================
