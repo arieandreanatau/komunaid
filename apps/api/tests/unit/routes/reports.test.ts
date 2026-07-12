@@ -190,12 +190,14 @@ describe("Report Routes", () => {
       const token = await generateToken({ sub: "u1", email: "a@b.com", name: "A", username: "a", type: "access" });
       (prisma.user.findUnique as any).mockImplementation(async (args: any) => {
         if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0, status: "ACTIVE" };
+        if (args?.where?.id === "r1") {
+          return {
+            id: "r1", reporterId: "u1", targetType: "USER", targetId: "t1",
+            reason: "SPAM", description: "desc", status: "OPEN",
+            reviewNote: null, reviewedAt: null, createdAt: new Date(),
+          };
+        }
         return null;
-      });
-      (prisma.report.findUnique as any).mockResolvedValue({
-        id: "r1", reporterId: "u1", targetType: "USER", targetId: "t1",
-        reason: "SPAM", description: "desc", status: "OPEN",
-        reviewNote: null, reviewedAt: null, createdAt: new Date(),
       });
 
       const res = await app.request("/reports/r1", {
@@ -223,10 +225,12 @@ describe("Report Routes", () => {
       const token = await generateToken({ sub: "u1", email: "a@b.com", name: "A", username: "a", type: "access" });
       (prisma.user.findUnique as any).mockImplementation(async (args: any) => {
         if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0, status: "ACTIVE" };
+        if (args?.where?.id === "r1") {
+          return {
+            id: "r1", reporterId: "other-user", targetType: "USER", targetId: "t1", reason: "SPAM", status: "OPEN",
+          };
+        }
         return null;
-      });
-      (prisma.report.findUnique as any).mockResolvedValue({
-        id: "r1", reporterId: "other-user", targetType: "USER", targetId: "t1", reason: "SPAM", status: "OPEN",
       });
 
       const res = await app.request("/reports/r1", {

@@ -182,7 +182,7 @@ describe("Events Integration Tests", () => {
       const res = await app.request("/api/v1/events", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ title: "Test Event", eventDate: "2025-12-01T10:00:00Z", communityId: "comm-1" }),
+        body: JSON.stringify({ title: "Test Event", eventDate: "2025-12-01T10:00:00Z", communityId: "comm-1", quota: 100 }),
       });
       expect(res.status).toBe(201);
     });

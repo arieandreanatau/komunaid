@@ -39,32 +39,13 @@ function containsDangerousContent(value: string): boolean {
 }
 
 function stripHtml(value: string): string {
-  let result = value
+  return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;")
     .trim();
-
-  if (containsDangerousContent(result)) {
-    result = result
-      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
-      .replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi, "")
-      .replace(/<object\b[^>]*>[\s\S]*?<\/object>/gi, "")
-      .replace(/<embed\b[^>]*>/gi, "")
-      .replace(/<applet\b[^>]*>[\s\S]*?<\/applet>/gi, "")
-      .replace(/javascript\s*:/gi, "")
-      .replace(/vbscript\s*:/gi, "")
-      .replace(/on\w+\s*=\s*["'][^"']*["']/gi, "")
-      .replace(/on\w+\s*=\s*[^\s>]*/gi, "")
-      .replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gi, "")
-      .replace(/<!--[\s\S]*?-->/g, "")
-      .replace(/style\s*=\s*["'][^"']*expression[^"']*["']/gi, "")
-      .trim();
-  }
-
-  return result;
 }
 
 function sanitizeValue(value: unknown): unknown {
@@ -89,11 +70,7 @@ export function xssSanitize(data: unknown): unknown {
     const pattern = TEXT_FIELD_PATTERNS[key];
     const value = obj[key];
     if (pattern && typeof value === "string") {
-      if (!pattern.test(value)) {
-        sanitized[key] = stripHtml(value);
-      } else {
-        sanitized[key] = value;
-      }
+      sanitized[key] = stripHtml(value);
     } else {
       sanitized[key] = sanitizeValue(value);
     }

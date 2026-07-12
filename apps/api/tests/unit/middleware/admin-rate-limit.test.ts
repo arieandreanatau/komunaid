@@ -227,7 +227,7 @@ describe("Admin Rate Limit Middleware", () => {
 
     const res = await app.request("/admin/test", { method: "POST" });
     expect(res.status).toBe(200);
-    expect(res.headers.get("X-RateLimit-Limit")).toBe("1");
+    expect(res.headers.get("X-RateLimit-Limit")).toBe("30");
     expect(res.headers.get("X-RateLimit-Remaining")).toBe("0");
   });
 

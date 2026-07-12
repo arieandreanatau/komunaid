@@ -15,11 +15,10 @@ vi.mock("@komunaid/database", () => {
     organization: { findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
     event: { findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
     joinRequest: { count: vi.fn(async () => 0) },
-    membershipHistory: { findMany: vi.fn(async () => []) },
+    membershipHistory: { findMany: vi.fn(async () => []), create: vi.fn(async () => ({})) },
     auditLog: { create: vi.fn(async () => ({})) },
     activityHistory: { create: vi.fn(async () => ({})) },
     notification: { create: vi.fn(async () => ({})), createMany: vi.fn(async () => ({ count: 0 })) },
-    membershipHistory: { create: vi.fn(async () => ({})) },
     $queryRaw: vi.fn(async () => []),
     $transaction: vi.fn(async (fn: any) => { if (typeof fn === "function") return fn(prisma); return Promise.all(fn); }),
   };

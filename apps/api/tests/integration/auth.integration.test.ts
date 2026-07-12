@@ -23,11 +23,8 @@ vi.mock("@komunaid/database", () => {
       create: vi.fn(async ({ data }: any) => {
         const id = createId();
         const user = {
+          ...data,
           id,
-          name: data.name,
-          email: data.email,
-          username: data.username,
-          password: data.password,
           tokenVersion: 0,
           status: "ACTIVE",
           deletedAt: null,
@@ -39,7 +36,6 @@ vi.mock("@komunaid/database", () => {
           updatedAt: new Date(),
           roles: data.roles?.create ? [{ role: data.roles.create.role }] : [],
           interests: [],
-          ...data,
         };
         users.set(id, user);
         return user;

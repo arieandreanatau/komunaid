@@ -68,10 +68,16 @@ describe("Security Middleware", () => {
     });
 
     it("should set Strict-Transport-Security header", async () => {
-      const res = await app.request("/test");
-      expect(res.headers.get("Strict-Transport-Security")).toBe(
-        "max-age=31536000; includeSubDomains; preload"
-      );
+      const original = process.env.NODE_ENV;
+      process.env.NODE_ENV = "production";
+      try {
+        const res = await app.request("/test");
+        expect(res.headers.get("Strict-Transport-Security")).toBe(
+          "max-age=31536000; includeSubDomains; preload"
+        );
+      } finally {
+        process.env.NODE_ENV = original;
+      }
     });
 
     it("should set Content-Security-Policy header", async () => {
@@ -85,18 +91,24 @@ describe("Security Middleware", () => {
     });
 
     it("should set all 7 security headers", async () => {
-      const res = await app.request("/test");
-      const headers = [
-        "X-Content-Type-Options",
-        "X-Frame-Options",
-        "X-XSS-Protection",
-        "Referrer-Policy",
-        "Permissions-Policy",
-        "Strict-Transport-Security",
-        "Content-Security-Policy",
-      ];
-      for (const header of headers) {
-        expect(res.headers.get(header)).toBeDefined();
+      const original = process.env.NODE_ENV;
+      process.env.NODE_ENV = "production";
+      try {
+        const res = await app.request("/test");
+        const headers = [
+          "X-Content-Type-Options",
+          "X-Frame-Options",
+          "X-XSS-Protection",
+          "Referrer-Policy",
+          "Permissions-Policy",
+          "Strict-Transport-Security",
+          "Content-Security-Policy",
+        ];
+        for (const header of headers) {
+          expect(res.headers.get(header)).toBeDefined();
+        }
+      } finally {
+        process.env.NODE_ENV = original;
       }
     });
 
