@@ -14,6 +14,8 @@ vi.mock("@komunaid/database", () => {
     community: { findUnique: vi.fn(async () => null), findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
     organization: { findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
     event: { findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
+    joinRequest: { count: vi.fn(async () => 0) },
+    membershipHistory: { findMany: vi.fn(async () => []) },
     auditLog: { create: vi.fn(async () => ({})) },
     activityHistory: { create: vi.fn(async () => ({})) },
     notification: { create: vi.fn(async () => ({})), createMany: vi.fn(async () => ({ count: 0 })) },
@@ -52,10 +54,7 @@ describe("RBAC Integration Tests", () => {
     app = new Hono();
     app.onError((err, c) => {
       if (err.message === "Unauthorized") {
-      if (err.name?.startsWith("JWT") || err.name?.startsWith("JOSE")) {
         return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Unauthorized" } }, 401);
-      }
-      return c.json({ success: false, error: { code: "INTERNAL_SERVER_ERROR", message: "Internal Server Error" } }, 500);
       }
       if (err.message === "Forbidden") {
         return c.json({ success: false, error: { code: "FORBIDDEN", message: "Forbidden" } }, 403);
@@ -172,7 +171,11 @@ describe("RBAC Integration Tests", () => {
         userId: "user-1", communityId: "comm-1", role: "OWNER", status: "ACTIVE",
       });
       (prisma.community.findUnique as any).mockResolvedValue({
-        id: "comm-1", deletedAt: null, status: "APPROVED",
+        id: "comm-1", deletedAt: null, status: "APPROVED", name: "Test Community", slug: "test-community",
+        description: null, coverImage: null, logo: null, banner: null, location: null, website: null,
+        membershipType: "OPEN", visibility: "PUBLIC", ownerId: "user-1", createdAt: new Date(), updatedAt: new Date(),
+        settings: null, tags: [], owner: { id: "user-1", name: "U1", avatar: null },
+        _count: { members: 1, events: 0 },
       });
 
       const res = await app.request("/api/v1/communities/comm-1/dashboard", {

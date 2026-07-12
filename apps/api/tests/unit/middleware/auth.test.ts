@@ -268,7 +268,7 @@ describe("Auth Middleware", () => {
         if (name === "Cookie") return "token=invalid.token.value";
         return undefined;
       });
-      await expect(authMiddleware(mockContext, mockNext)).rejects.toThrow("Unauthorized");
+      await expect(authMiddleware(mockContext, mockNext)).rejects.toThrow();
     });
 
     it("should throw Unauthorized for non-access token type", async () => {

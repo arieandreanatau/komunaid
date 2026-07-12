@@ -17,7 +17,7 @@ vi.mock("@komunaid/database", () => {
     activityHistory: { findMany: vi.fn(async () => []) },
     notification: { create: vi.fn(async () => ({})), findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
     notificationTemplate: { findMany: vi.fn(async () => []) },
-    category: { findUnique: vi.fn(async () => null), create: vi.fn(async ({ data }: any) => ({ id: "cat-1", ...data })), update: vi.fn(), delete: vi.fn() },
+    category: { findUnique: vi.fn(async () => null), findMany: vi.fn(async () => []), create: vi.fn(async ({ data }: any) => ({ id: "cat-1", ...data })), update: vi.fn(), delete: vi.fn() },
     $queryRaw: vi.fn(async () => [{ count: 0 }]),
     $transaction: vi.fn(async (fn: any) => { if (typeof fn === "function") return fn(prisma); return Promise.all(fn); }),
   };
@@ -173,9 +173,9 @@ describe("Admin Integration Tests", () => {
 
   describe("Audit Logs", () => {
     it("should list audit logs for admin", async () => {
-      const token = await generateToken({ sub: "admin-1", email: "admin@test.com", name: "Admin", username: "admin", type: "access" });
+      const token = await generateToken({ sub: "admin-audit", email: "admin-audit@test.com", name: "Admin", username: "admin-audit", type: "access" });
       (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
-      (prisma.userRole.findMany as any).mockResolvedValue([{ role: "PLATFORM_ADMIN" }]);
+      (prisma.userRole.findMany as any).mockResolvedValue([{ role: "SUPER_ADMIN" }]);
       (prisma.auditLog.findMany as any).mockResolvedValue([]);
       (prisma.auditLog.count as any).mockResolvedValue(0);
 
