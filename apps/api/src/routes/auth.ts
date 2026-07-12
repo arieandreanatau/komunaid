@@ -95,7 +95,7 @@ authRoutes.post("/register", validate(registerSchema), async (c) => {
       email: user.email,
       name: user.name,
       username: user.username,
-    }, user.tokenVersion);
+    }, user.tokenVersion, user.roles.map((r) => r.role));
 
     const userAgent = c.req.header("User-Agent") || "";
     const fingerprint = c.req.header("X-Device-Fingerprint") || undefined;
@@ -226,7 +226,7 @@ authRoutes.post("/login", validate(loginSchema), async (c) => {
     email: user.email,
     name: user.name,
     username: user.username,
-  }, user.tokenVersion);
+  }, user.tokenVersion, user.roles.map((r) => r.role));
 
   const fingerprint = c.req.header("X-Device-Fingerprint") || undefined;
   const { tokenHash: refreshTokenHash } = await createRefreshTokenFamily(
@@ -384,7 +384,7 @@ authRoutes.post("/refresh", async (c) => {
     email: user.email,
     name: user.name,
     username: user.username,
-  }, user.tokenVersion);
+  }, user.tokenVersion, user.roles.map((r) => r.role));
 
   setTokenCookies(c, newAccessToken, rotation.newTokenHash);
 

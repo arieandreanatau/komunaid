@@ -52,13 +52,14 @@ export interface JWTPayload {
   email: string;
   name: string;
   username: string;
+  roles?: string[];
   type: "access" | "refresh" | "reset";
   iat: number;
   exp: number;
   tokenVersion?: number;
 }
 
-export async function generateAccessToken(user: AuthUser, tokenVersion?: number): Promise<string> {
+export async function generateAccessToken(user: AuthUser, tokenVersion?: number, roles?: string[]): Promise<string> {
   const payload: Record<string, unknown> = {
     sub: user.id,
     email: user.email,
@@ -69,6 +70,10 @@ export async function generateAccessToken(user: AuthUser, tokenVersion?: number)
 
   if (tokenVersion !== undefined) {
     payload.tokenVersion = tokenVersion;
+  }
+
+  if (roles && roles.length > 0) {
+    payload.roles = roles;
   }
 
   return new SignJWT(payload)

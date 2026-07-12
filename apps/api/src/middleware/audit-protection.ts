@@ -1,5 +1,5 @@
 export function auditLogProtection() {
-  return async (params: { action: string; model?: string }, next: (params: any) => Promise<any>) => {
+  return async (params: { action: string; model?: string | null }, next: (params: any) => Promise<any>) => {
     const { action, model } = params;
 
     if (model === "AuditLog") {

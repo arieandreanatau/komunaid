@@ -144,7 +144,9 @@ export default function DashboardLayout({
     return <div className="min-h-screen flex items-center justify-center"><div className="h-8 w-8 border-4 border-komuna-blue border-t-transparent rounded-full animate-spin" /></div>;
   }
 
-  if (!isAuthenticated) return null;
+  if (!isAuthenticated) {
+    return <div className="min-h-screen flex items-center justify-center"><div className="h-8 w-8 border-4 border-komuna-blue border-t-transparent rounded-full animate-spin" /></div>;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">

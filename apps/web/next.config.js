@@ -1,7 +1,17 @@
 const path = require("path");
-require("dotenv").config({
-  path: path.resolve(__dirname, "../../.env.development"),
-});
+const fs = require("fs");
+
+function loadEnv() {
+  if (process.env.VERCEL) return;
+  const envFile = process.env.NODE_ENV === "production"
+    ? "../../.env.production"
+    : "../../.env.development";
+  const envPath = path.resolve(__dirname, envFile);
+  if (fs.existsSync(envPath)) {
+    require("dotenv").config({ path: envPath });
+  }
+}
+loadEnv();
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {

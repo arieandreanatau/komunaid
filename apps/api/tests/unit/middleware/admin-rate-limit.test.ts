@@ -39,12 +39,14 @@ vi.mock("../../../src/services/rate-limiter", () => ({
 
 import { adminMutationRateLimiter } from "../../../src/middleware/admin-rate-limit";
 
+type TestEnv = { Variables: { user: { id: string } } };
+
 describe("Admin Rate Limit Middleware", () => {
-  let app: Hono;
+  let app: Hono<TestEnv>;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    app = new Hono();
+    app = new Hono<TestEnv>();
     app.use("*", adminMutationRateLimiter());
     app.post("/admin/test", (c) => c.json({ ok: true }));
   });
@@ -62,7 +64,7 @@ describe("Admin Rate Limit Middleware", () => {
   });
 
   it("should call rate limiter when auth user is present", async () => {
-    app = new Hono();
+    app = new Hono<TestEnv>();
     app.use("*", async (c, next) => {
       c.set("user", { id: "admin-1" });
       await next();
@@ -83,7 +85,7 @@ describe("Admin Rate Limit Middleware", () => {
 
   it("should set rate limit headers when allowed", async () => {
     const resetAt = Date.now() + 60000;
-    app = new Hono();
+    app = new Hono<TestEnv>();
     app.use("*", async (c, next) => {
       c.set("user", { id: "admin-1" });
       await next();
@@ -104,7 +106,7 @@ describe("Admin Rate Limit Middleware", () => {
   });
 
   it("should return 429 when rate limit exceeded", async () => {
-    app = new Hono();
+    app = new Hono<TestEnv>();
     app.use("*", async (c, next) => {
       c.set("user", { id: "admin-1" });
       await next();
@@ -126,7 +128,7 @@ describe("Admin Rate Limit Middleware", () => {
   });
 
   it("should set Retry-After header when retryAfter is defined", async () => {
-    app = new Hono();
+    app = new Hono<TestEnv>();
     app.use("*", async (c, next) => {
       c.set("user", { id: "admin-1" });
       await next();
@@ -147,7 +149,7 @@ describe("Admin Rate Limit Middleware", () => {
   });
 
   it("should not set Retry-After header when retryAfter is undefined", async () => {
-    app = new Hono();
+    app = new Hono<TestEnv>();
     app.use("*", async (c, next) => {
       c.set("user", { id: "admin-1" });
       await next();
@@ -168,7 +170,7 @@ describe("Admin Rate Limit Middleware", () => {
   });
 
   it("should call next when allowed", async () => {
-    app = new Hono();
+    app = new Hono<TestEnv>();
     app.use("*", async (c, next) => {
       c.set("user", { id: "admin-1" });
       await next();
@@ -189,7 +191,7 @@ describe("Admin Rate Limit Middleware", () => {
   });
 
   it("should not set Retry-After header when allowed", async () => {
-    app = new Hono();
+    app = new Hono<TestEnv>();
     app.use("*", async (c, next) => {
       c.set("user", { id: "admin-1" });
       await next();
@@ -209,7 +211,7 @@ describe("Admin Rate Limit Middleware", () => {
   });
 
   it("should handle remaining=0 when allowed", async () => {
-    app = new Hono();
+    app = new Hono<TestEnv>();
     app.use("*", async (c, next) => {
       c.set("user", { id: "admin-1" });
       await next();
@@ -230,7 +232,7 @@ describe("Admin Rate Limit Middleware", () => {
   });
 
   it("should ceil the Retry-After value in seconds", async () => {
-    app = new Hono();
+    app = new Hono<TestEnv>();
     app.use("*", async (c, next) => {
       c.set("user", { id: "admin-1" });
       await next();

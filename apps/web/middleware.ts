@@ -30,6 +30,7 @@ interface TokenPayload {
   email: string;
   name: string;
   type: string;
+  roles?: string[];
   tokenVersion?: number;
   iat: number;
   exp: number;
@@ -68,6 +69,11 @@ export async function middleware(request: NextRequest) {
     if (!result.valid) {
       const loginUrl = new URL("/admin/login", request.url);
       return NextResponse.redirect(loginUrl);
+    }
+    const userRoles = result.payload?.roles || [];
+    const hasAdminRole = userRoles.some((r: string) => r === "SUPER_ADMIN" || r === "PLATFORM_ADMIN");
+    if (!hasAdminRole) {
+      return NextResponse.redirect(new URL("/forbidden", request.url));
     }
     return NextResponse.next();
   }
