@@ -13,6 +13,8 @@ const nextConfig = {
       "../../node_modules/@prisma/client/**",
       "../../node_modules/.pnpm/@prisma+client*/node_modules/.prisma/client/**",
       "../../node_modules/.pnpm/@prisma+client*/node_modules/@prisma/client/**",
+      "../api/src/**",
+      "../api/package.json",
     ],
   },
   images: {
