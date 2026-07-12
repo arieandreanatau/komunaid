@@ -84,7 +84,7 @@ api.interceptors.response.use(
       }
     }
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && !originalRequest._retry && !originalRequest._url?.includes("/auth/me")) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
@@ -100,9 +100,6 @@ api.interceptors.response.use(
         return api(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError);
-        if (typeof window !== "undefined") {
-          window.location.href = "/login?error=session_expired";
-        }
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
