@@ -333,6 +333,9 @@ describe("Auth Middleware", () => {
     });
 
     it("should set user when valid token provided", async () => {
+      const { prisma } = await import("@komunaid/database");
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE", deletedAt: null });
+
       const token = await generateAccessToken({
         id: "user-1",
         email: "test@test.com",

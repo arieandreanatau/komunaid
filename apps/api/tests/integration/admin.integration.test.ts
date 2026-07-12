@@ -8,13 +8,16 @@ process.env.JWT_SECRET = "test-integration-secret";
 vi.mock("@komunaid/database", () => {
   const prisma = {
     user: { findUnique: vi.fn(), findMany: vi.fn(async () => []), count: vi.fn(async () => 0), update: vi.fn() },
-    userRole: { findMany: vi.fn(async () => []), findUnique: vi.fn(async () => null), create: vi.fn(), delete: vi.fn() },
+    userRole: { findMany: vi.fn(async () => []), findUnique: vi.fn(async () => null), create: vi.fn(), delete: vi.fn(), count: vi.fn(async () => 0) },
     community: { findMany: vi.fn(async () => []), count: vi.fn(async () => 0), findUnique: vi.fn(async () => null) },
     organization: { findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
     event: { findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
     auditLog: { findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
-    category: { findMany: vi.fn(async () => []), findUnique: vi.fn(async () => null), create: vi.fn(async ({ data }: any) => ({ id: "cat-1", ...data })), update: vi.fn(), delete: vi.fn() },
-    notification: { create: vi.fn(async () => ({})), findMany: vi.fn(async () => []) },
+    report: { findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
+    activityHistory: { findMany: vi.fn(async () => []) },
+    notification: { create: vi.fn(async () => ({})), findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
+    notificationTemplate: { findMany: vi.fn(async () => []) },
+    category: { findUnique: vi.fn(async () => null), create: vi.fn(async ({ data }: any) => ({ id: "cat-1", ...data })), update: vi.fn(), delete: vi.fn() },
     $queryRaw: vi.fn(async () => [{ count: 0 }]),
     $transaction: vi.fn(async (fn: any) => { if (typeof fn === "function") return fn(prisma); return Promise.all(fn); }),
   };
@@ -176,7 +179,7 @@ describe("Admin Integration Tests", () => {
       (prisma.auditLog.findMany as any).mockResolvedValue([]);
       (prisma.auditLog.count as any).mockResolvedValue(0);
 
-      const res = await app.request("/api/v1/admin/audit", {
+      const res = await app.request("/api/v1/admin/audit-logs", {
         headers: { Authorization: `Bearer ${token}` },
       });
       expect(res.status).toBe(200);

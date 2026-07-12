@@ -239,9 +239,8 @@ describe("Contact Message Routes", () => {
   describe("GET /admin/:id", () => {
     it("should return message and mark as read if PENDING", async () => {
       const token = await generateToken({ sub: "admin-1", email: "a@b.com", name: "A", username: "a", type: "access" });
-      mockAuth();
-      (prisma.contactMessage.findUnique as any).mockResolvedValue({ id: "m1", name: "John", status: "PENDING" });
       (prisma.contactMessage.update as any).mockResolvedValue({ id: "m1", status: "READ" });
+      mockAuth({ id: "m1", name: "John", status: "PENDING" });
 
       const res = await app.request("/contact-messages/admin/m1", {
         headers: { Authorization: `Bearer ${token}` },
@@ -279,9 +278,8 @@ describe("Contact Message Routes", () => {
   describe("PUT /admin/:id", () => {
     it("should update message status", async () => {
       const token = await generateToken({ sub: "admin-1", email: "a@b.com", name: "A", username: "a", type: "access" });
-      mockAuth();
-      (prisma.contactMessage.findUnique as any).mockResolvedValue({ id: "m1", status: "READ" });
       (prisma.contactMessage.update as any).mockResolvedValue({ id: "m1", status: "REPLIED" });
+      mockAuth({ id: "m1", status: "READ" });
 
       const res = await app.request("/contact-messages/admin/m1", {
         method: "PUT",
@@ -295,9 +293,8 @@ describe("Contact Message Routes", () => {
 
     it("should handle reply", async () => {
       const token = await generateToken({ sub: "admin-1", email: "a@b.com", name: "A", username: "a", type: "access" });
-      mockAuth();
-      (prisma.contactMessage.findUnique as any).mockResolvedValue({ id: "m1", status: "READ" });
       (prisma.contactMessage.update as any).mockResolvedValue({ id: "m1", reply: "Thanks!" });
+      mockAuth({ id: "m1", status: "READ" });
 
       const res = await app.request("/contact-messages/admin/m1", {
         method: "PUT",
@@ -346,8 +343,7 @@ describe("Contact Message Routes", () => {
   describe("DELETE /admin/:id", () => {
     it("should delete a message", async () => {
       const token = await generateToken({ sub: "admin-1", email: "a@b.com", name: "A", username: "a", type: "access" });
-      mockAuth();
-      (prisma.contactMessage.findUnique as any).mockResolvedValue({ id: "m1", subject: "Test" });
+      mockAuth({ id: "m1", subject: "Test" });
 
       const res = await app.request("/contact-messages/admin/m1", {
         method: "DELETE",

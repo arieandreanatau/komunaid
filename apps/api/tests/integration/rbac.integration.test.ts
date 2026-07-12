@@ -52,7 +52,10 @@ describe("RBAC Integration Tests", () => {
     app = new Hono();
     app.onError((err, c) => {
       if (err.message === "Unauthorized") {
+      if (err.name?.startsWith("JWT") || err.name?.startsWith("JOSE")) {
         return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Unauthorized" } }, 401);
+      }
+      return c.json({ success: false, error: { code: "INTERNAL_SERVER_ERROR", message: "Internal Server Error" } }, 500);
       }
       if (err.message === "Forbidden") {
         return c.json({ success: false, error: { code: "FORBIDDEN", message: "Forbidden" } }, 403);
