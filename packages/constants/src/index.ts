@@ -117,7 +117,46 @@ export const ATTENDANCE_STATUSES = {
 export const NOTIFICATION_TYPES = {
   SYSTEM: "SYSTEM",
   COMMUNITY: "COMMUNITY",
+  ORGANIZATION: "ORGANIZATION",
   EVENT: "EVENT",
   REPORT: "REPORT",
   APPROVAL: "APPROVAL",
+} as const;
+
+export const MESSAGE_CATEGORIES = {
+  GENERAL: "GENERAL",
+  FEEDBACK: "FEEDBACK",
+  COMPLAINT: "COMPLAINT",
+  SUGGESTION: "SUGGESTION",
+  PARTNERSHIP: "PARTNERSHIP",
+  OTHER: "OTHER",
+} as const;
+
+export const MESSAGE_STATUSES = {
+  PENDING: "PENDING",
+  READ: "READ",
+  REPLIED: "REPLIED",
+  ARCHIVED: "ARCHIVED",
+} as const;
+
+// ==========================================
+// REPORT CONSTANTS
+// ==========================================
+
+export const REPORT_STATUSES = {
+  OPEN: "OPEN",
+  UNDER_REVIEW: "UNDER_REVIEW",
+  DISMISSED: "DISMISSED",
+  SUSPENDED: "SUSPENDED",
+} as const;
+
+// ==========================================
+// CATEGORY CONSTANTS
+// ==========================================
+
+export const CATEGORY_TYPES = {
+  COMMUNITY: "COMMUNITY",
+  EVENT: "EVENT",
+  ORGANIZATION: "ORGANIZATION",
+  VOLUNTEER: "VOLUNTEER",
 } as const;

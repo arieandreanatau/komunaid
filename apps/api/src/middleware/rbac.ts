@@ -4,13 +4,35 @@ import { prisma } from "@komunaid/database";
 type PlatformRole = "SUPER_ADMIN" | "PLATFORM_ADMIN" | "MEMBER";
 
 const roleCache = new Map<string, { roles: string[]; expiresAt: number }>();
-const ROLE_CACHE_TTL = 60 * 1000; // 1 minute
+const ROLE_CACHE_TTL = 10 * 1000; // 10 seconds
+const ROLE_CACHE_MAX_SIZE = 10000;
+let lastRoleCacheCleanup = 0;
+const ROLE_CACHE_CLEANUP_INTERVAL = 60 * 1000;
+
+function cleanupRoleCache() {
+  const now = Date.now();
+  if (now - lastRoleCacheCleanup < ROLE_CACHE_CLEANUP_INTERVAL) return;
+  lastRoleCacheCleanup = now;
+  for (const [key, record] of roleCache.entries()) {
+    if (now > record.expiresAt) {
+      roleCache.delete(key);
+    }
+  }
+  if (roleCache.size > ROLE_CACHE_MAX_SIZE) {
+    const entries = Array.from(roleCache.entries());
+    const toDelete = entries.slice(0, entries.length - ROLE_CACHE_MAX_SIZE);
+    for (const [key] of toDelete) {
+      roleCache.delete(key);
+    }
+  }
+}
 
 export function invalidateRoleCache(userId: string) {
   roleCache.delete(userId);
 }
 
 function getCachedRoles(userId: string): Promise<{ role: string }[]> {
+  cleanupRoleCache();
   const cached = roleCache.get(userId);
   if (cached && Date.now() < cached.expiresAt) {
     return Promise.resolve(cached.roles.map(r => ({ role: r })));

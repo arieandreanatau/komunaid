@@ -7,7 +7,6 @@ import api from "@/lib/api";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { Pagination } from "@/components/pagination";
-import { VolunteerCTA } from "@/components/volunteer-cta";
 
 interface Event {
   id: string;
@@ -234,7 +233,7 @@ export default function EventsPage() {
             <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
           </>
         )}
-        <VolunteerCTA />
+
       </main>
       <Footer />
     </div>

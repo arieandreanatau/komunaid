@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { prisma } from "@komunaid/database";
+import { CATEGORY_TYPES } from "@komunaid/constants";
 import { authMiddleware } from "../middleware/auth";
 import { requirePlatformAdmin } from "../middleware/rbac";
 import { validate } from "../middleware/validate";
@@ -55,7 +56,7 @@ categoryRoutes.post("/", authMiddleware, requirePlatformAdmin(), validate(adminC
       slug,
       description,
       icon,
-      type: (type as any) || "COMMUNITY",
+      type: (type as any) || CATEGORY_TYPES.COMMUNITY,
     },
   });
 

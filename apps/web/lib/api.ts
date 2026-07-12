@@ -3,52 +3,62 @@ import axios from "axios";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 let csrfToken: string | null = null;
+let isRefreshing = false;
+let failedQueue: Array<{ resolve: (value?: unknown) => void; reject: (reason?: unknown) => void }> = [];
 
-function getCsrfToken(): string | null {
-  if (typeof document === "undefined") return null;
-  const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
-  return match ? decodeURIComponent(match[1]) : null;
+function processQueue(error: unknown) {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve();
+    }
+  });
+  failedQueue = [];
 }
 
 async function fetchCsrfToken(): Promise<string | null> {
   try {
-    const res = await axios.get(`${API_URL}/api/v1/auth/me`, {
-      withCredentials: true,
-      timeout: 5000,
-    });
-    const setCookie = res.headers["set-cookie"];
-    if (setCookie) {
-      const cookieStr = Array.isArray(setCookie) ? setCookie.join("; ") : setCookie;
-      const tokenMatch = cookieStr.match(/csrf_token=([^;]+)/);
-      if (tokenMatch) {
-        csrfToken = decodeURIComponent(tokenMatch[1]);
-        return csrfToken;
-      }
+    const res = await axios.get(`${API_URL}/api/v1/auth/me`, { withCredentials: true });
+    const token = res.headers["x-csrf-token"];
+    if (token) {
+      csrfToken = token;
+      return token;
     }
-  } catch {}
-  return getCsrfToken();
+  } catch {
+    // Ignore errors during CSRF fetch
+  }
+  return null;
+}
+
+function getCsrfToken(): string | null {
+  if (csrfToken) return csrfToken;
+  if (typeof document !== "undefined") {
+    const match = document.cookie.match(/csrf_token=([^;]+)/);
+    if (match) {
+      csrfToken = match[1];
+      return csrfToken;
+    }
+  }
+  return null;
 }
 
 export const api = axios.create({
   baseURL: `${API_URL}/api/v1`,
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
   },
-  withCredentials: true,
-  timeout: 15000,
 });
 
 api.interceptors.request.use(async (config) => {
-  const method = config.method?.toUpperCase();
-  if (method && method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
-    if (!csrfToken) {
-      csrfToken = getCsrfToken();
+  if (config.method && config.method !== "get" && config.method !== "head" && config.method !== "options") {
+    let token = getCsrfToken();
+    if (!token) {
+      token = await fetchCsrfToken();
     }
-    if (!csrfToken) {
-      csrfToken = await fetchCsrfToken();
-    }
-    if (csrfToken) {
-      config.headers["x-csrf-token"] = csrfToken;
+    if (token) {
+      config.headers["X-CSRF-Token"] = token;
     }
   }
   return config;
@@ -56,27 +66,49 @@ api.interceptors.request.use(async (config) => {
 
 api.interceptors.response.use(
   (response) => {
-    const setCookie = response.headers["set-cookie"];
-    if (setCookie) {
-      const cookieStr = Array.isArray(setCookie) ? setCookie.join("; ") : setCookie;
-      const tokenMatch = cookieStr.match(/csrf_token=([^;]+)/);
-      if (tokenMatch) {
-        csrfToken = decodeURIComponent(tokenMatch[1]);
-      }
+    const newCsrfToken = response.headers["x-csrf-token"];
+    if (newCsrfToken) {
+      csrfToken = newCsrfToken;
     }
     return response;
   },
-  (error) => {
-    if (error.response) {
-      const setCookie = error.response.headers["set-cookie"];
-      if (setCookie) {
-        const cookieStr = Array.isArray(setCookie) ? setCookie.join("; ") : setCookie;
-        const tokenMatch = cookieStr.match(/csrf_token=([^;]+)/);
-        if (tokenMatch) {
-          csrfToken = decodeURIComponent(tokenMatch[1]);
-        }
+  async (error) => {
+    const originalRequest = error.config;
+
+    if (error.response?.status === 403 && error.response?.data?.message?.includes("CSRF") && !originalRequest._csrfRetry) {
+      originalRequest._csrfRetry = true;
+      const newToken = await fetchCsrfToken();
+      if (newToken) {
+        originalRequest.headers["X-CSRF-Token"] = newToken;
+        return api(originalRequest);
       }
     }
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then(() => api(originalRequest));
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        await api.post("/auth/refresh");
+        processQueue(null);
+        return api(originalRequest);
+      } catch (refreshError) {
+        processQueue(refreshError);
+        if (typeof window !== "undefined") {
+          window.location.href = "/login?error=session_expired";
+        }
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
     return Promise.reject(error);
   }
 );

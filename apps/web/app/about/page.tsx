@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { JsonLd } from "@/components/json-ld";
 
@@ -16,6 +17,7 @@ export default function AboutPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <JsonLd type="organization" />
+      <Header />
 
       <main className="flex-1">
         <section className="bg-gradient-to-br from-komuna-navy via-komuna-blue to-komuna-teal text-white py-20">
@@ -46,7 +48,7 @@ export default function AboutPage() {
                     </li>
                     <li className="flex items-start gap-3">
                       <span className="text-komuna-teal mt-1 shrink-0">&#10003;</span>
-                      <span>Menghubungkan individu dengan komunitas dan organisasi yang sesuai dengan minat mereka.</span>
+                      <span>Menghubungkan individu dengan komunitas yang sesuai dengan minat mereka.</span>
                     </li>
                     <li className="flex items-start gap-3">
                       <span className="text-komuna-teal mt-1 shrink-0">&#10003;</span>
@@ -54,7 +56,7 @@ export default function AboutPage() {
                     </li>
                     <li className="flex items-start gap-3">
                       <span className="text-komuna-teal mt-1 shrink-0">&#10003;</span>
-                      <span>Membangun ekosistem kolaborasi yang sehat, aman, dan produktif bagi seluruh anggota.</span>
+                      <span>Membangun ekosistem komunitas digital yang sehat, aman, dan produktif bagi seluruh anggota.</span>
                     </li>
                   </ul>
                 </div>
@@ -64,7 +66,7 @@ export default function AboutPage() {
                 <h2 className="text-2xl font-bold text-komuna-navy mb-6">Tentang KomunaID</h2>
                 <div className="prose prose-lg text-gray-600 space-y-4">
                   <p>
-                    KomunaID adalah platform digital yang menghubungkan individu, komunitas, organisasi, event, dan ekosistem kolaborasi secara terstruktur di Indonesia. Didirikan oleh PT Komuna Digital Indonesia, kami berkomitmen untuk membangun ekosistem komunitas digital yang inklusif, aman, dan bermanfaat bagi semua anggota.
+                    KomunaID adalah platform digital yang menghubungkan individu, komunitas, event, dan volunteer secara terstruktur di Indonesia. Didirikan oleh PT Komuna Digital Indonesia, kami berkomitmen untuk membangun ekosistem komunitas digital yang inklusif, aman, dan bermanfaat bagi semua anggota.
                   </p>
                   <p>
                     Platform ini hadir sebagai solusi atas tantangan pengelolaan komunitas digital yang selama ini masih terfragmentasi. Dengan fitur-fitur terintegrasi mulai dari manajemen keanggotaan, event management, volunteer matching, hingga analytics dashboard, KomunaID mempermudah setiap langkah dalam membangun dan mengembangkan komunitas.
@@ -97,14 +99,14 @@ export default function AboutPage() {
                 <h2 className="text-2xl font-bold text-komuna-navy mb-6">Nilai-Nilai Kami</h2>
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {[
-                    { title: "Terhubung", desc: "Membangun jaringan yang menghubungkan orang-orang dengan minat yang sama untuk berkolaborasi.", color: "komuna-blue" },
-                    { title: "Berdaya", desc: "Memberdayakan komunitas untuk tumbuh, berkembang, dan mengelola diri secara mandiri.", color: "komuna-teal" },
-                    { title: "Berdampak", desc: "Menciptakan dampak positif yang nyata bagi masyarakat melalui kolaborasi dan kontribusi.", color: "komuna-aqua" },
-                    { title: "Inklusif", desc: "Membuka pintu bagi semua orang untuk bergabung, berpartisipasi, dan berkontribusi tanpa diskriminasi.", color: "komuna-blue" },
-                    { title: "Aman", desc: "Menjamin keamanan dan privasi data seluruh pengguna melalui sistem moderasi dan keamanan yang ketat.", color: "komuna-teal" },
-                    { title: "Terstruktur", desc: "Menghadirkan sistem yang terorganisir dalam pengelolaan komunitas, event, dan keanggotaan.", color: "komuna-aqua" },
+                    { title: "Terhubung", desc: "Membangun jaringan yang menghubungkan orang-orang dengan minat yang sama untuk berkolaborasi.", bgClass: "bg-komuna-blue/5", borderClass: "border-komuna-blue" },
+                    { title: "Berdaya", desc: "Memberdayakan komunitas untuk tumbuh, berkembang, dan mengelola diri secara mandiri.", bgClass: "bg-komuna-teal/5", borderClass: "border-komuna-teal" },
+                    { title: "Berdampak", desc: "Menciptakan dampak positif yang nyata bagi masyarakat melalui kolaborasi dan kontribusi.", bgClass: "bg-komuna-aqua/5", borderClass: "border-komuna-aqua" },
+                    { title: "Inklusif", desc: "Membuka pintu bagi semua orang untuk bergabung, berpartisipasi, dan berkontribusi tanpa diskriminasi.", bgClass: "bg-komuna-blue/5", borderClass: "border-komuna-blue" },
+                    { title: "Aman", desc: "Menjamin keamanan dan privasi data seluruh pengguna melalui sistem moderasi dan keamanan yang ketat.", bgClass: "bg-komuna-teal/5", borderClass: "border-komuna-teal" },
+                    { title: "Terstruktur", desc: "Menghadirkan sistem yang terorganisir dalam pengelolaan komunitas, event, dan keanggotaan.", bgClass: "bg-komuna-aqua/5", borderClass: "border-komuna-aqua" },
                   ].map((value) => (
-                    <div key={value.title} className={`bg-${value.color}/5 border-l-4 border-${value.color} p-5 rounded-r-lg`}>
+                    <div key={value.title} className={`${value.bgClass} border-l-4 ${value.borderClass} p-5 rounded-r-lg`}>
                       <h3 className="font-semibold text-komuna-navy mb-2">{value.title}</h3>
                       <p className="text-sm text-gray-600">{value.desc}</p>
                     </div>

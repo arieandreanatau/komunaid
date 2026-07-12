@@ -13,11 +13,13 @@
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": true,
     "incremental": true,
+    "types": ["vitest/globals"],
     "paths": {
       "@komunaid/database": ["../../packages/database/src"],
-      "@komunaid/shared": ["../../packages/shared/src"]
+      "@komunaid/shared": ["../../packages/shared/src"],
+      "@komunaid/utils": ["../../packages/utils/src"]
     }
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "tests/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

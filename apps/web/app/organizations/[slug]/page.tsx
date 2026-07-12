@@ -8,6 +8,8 @@ import { useAuth } from "@/components/auth-provider";
 import { Header } from "@/components/header";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { Footer } from "@/components/footer";
+import { FeatureDisabledBanner } from "@/components/feature-disabled-banner";
+import { featureFlags } from "@/lib/feature-flags";
 
 interface OrganizationMember {
   id: string;
@@ -75,7 +77,12 @@ export default function OrganizationDetailPage() {
   const params = useParams();
   const router = useRouter();
   const slug = params.slug as string;
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
+
+  const hasOrgAccess =
+    user?.roles?.some((r: string) => ["SUPER_ADMIN", "PLATFORM_ADMIN"].includes(r)) ||
+    (user?.communitiesCount ?? 0) > 0 ||
+    (user?.organizationsCount ?? 0) > 0;
 
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
@@ -146,8 +153,8 @@ export default function OrganizationDetailPage() {
 
   const isOwner = user && organization && user.id === organization.owner.id;
   const isAdmin = user && organization && (isOwner || organization.userMembership?.role === "ADMIN");
-  const isMember = !!organization?.userMembership;
   const isPending = organization?.userMembership?.status === "PENDING";
+  const isMember = !!organization?.userMembership && !isPending;
 
   const renderActions = () => {
     if (!isAuthenticated) {
@@ -250,7 +257,7 @@ export default function OrganizationDetailPage() {
     );
   };
 
-  if (loading) {
+  if (loading || isLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />
@@ -260,6 +267,29 @@ export default function OrganizationDetailPage() {
             <p className="text-gray-500">Memuat organisasi...</p>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (!hasOrgAccess) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center max-w-md mx-auto px-4">
+            <div className="h-16 w-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="h-8 w-8 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-komuna-navy mb-2">Akses Terbatas</h2>
+            <p className="text-gray-500 mb-6">Halaman ini hanya dapat diakses oleh anggota komunitas atau organisasi.</p>
+            <Link href="/dashboard" className="inline-flex items-center gap-2 px-5 py-2.5 bg-komuna-blue text-white rounded-lg font-medium hover:bg-komuna-navy transition-colors">
+              Kembali ke Dashboard
+            </Link>
+          </div>
+        </div>
+        <Footer />
       </div>
     );
   }
@@ -290,6 +320,16 @@ export default function OrganizationDetailPage() {
   }
 
   const location = [organization.city, organization.province, organization.country].filter(Boolean).join(", ");
+
+  if (!featureFlags.organization) {
+    return (
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        <Header />
+        <FeatureDisabledBanner />
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">

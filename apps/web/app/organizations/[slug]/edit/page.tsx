@@ -7,6 +7,8 @@ import { useForm } from "react-hook-form";
 import api from "@/lib/api";
 import { Header } from "@/components/header";
 import { useAuth } from "@/components/auth-provider";
+import { FeatureDisabledBanner } from "@/components/feature-disabled-banner";
+import { featureFlags } from "@/lib/feature-flags";
 
 interface Category {
   id: string;
@@ -21,6 +23,11 @@ interface OrganizationDetail {
   description: string;
   logo: string | null;
   banner: string | null;
+  address1: string | null;
+  address2: string | null;
+  postalCode: string | null;
+  kelurahan: string | null;
+  district: string | null;
   country: string | null;
   province: string | null;
   city: string | null;
@@ -43,6 +50,11 @@ interface EditOrganizationForm {
   categoryIds: string[];
   logo: string;
   banner: string;
+  address1: string;
+  address2: string;
+  postalCode: string;
+  kelurahan: string;
+  district: string;
   country: string;
   province: string;
   city: string;
@@ -70,6 +82,12 @@ export default function EditOrganizationPage() {
   const [notAuthorized, setNotAuthorized] = useState(false);
   const [notEditable, setNotEditable] = useState(false);
 
+  const [countries, setCountries] = useState<string[]>([]);
+  const [provinces, setProvinces] = useState<string[]>([]);
+  const [cities, setCities] = useState<string[]>([]);
+  const [districts, setDistricts] = useState<string[]>([]);
+  const [kelurahanList, setKelurahanList] = useState<string[]>([]);
+
   const {
     register,
     handleSubmit,
@@ -84,6 +102,11 @@ export default function EditOrganizationPage() {
       categoryIds: [],
       logo: "",
       banner: "",
+      address1: "",
+      address2: "",
+      postalCode: "",
+      kelurahan: "",
+      district: "",
       country: "",
       province: "",
       city: "",
@@ -108,14 +131,25 @@ export default function EditOrganizationPage() {
 
     const fetchData = async () => {
       try {
-        const [orgRes, categoriesRes] = await Promise.all([
+        const [orgRes, categoriesRes, countryRes, provinceRes, cityRes, districtRes, kelurahanRes] = await Promise.all([
           api.get(`/organizations/${slug}`),
           api.get("/categories"),
+          api.get("/master-data/countries"),
+          api.get("/master-data/provinces"),
+          api.get("/master-data/cities"),
+          api.get("/master-data/districts"),
+          api.get("/master-data/kelurahan"),
         ]);
 
         const org = orgRes.data.organization || orgRes.data.data;
         setOrganization(org);
         setCategories(categoriesRes.data.data || []);
+        setCountries(countryRes.data.data || []);
+        setProvinces(provinceRes.data.data || []);
+        const cityData = cityRes.data.data;
+        setCities(Array.isArray(cityData) ? cityData : []);
+        setDistricts(districtRes.data.data || []);
+        setKelurahanList(kelurahanRes.data.data || []);
 
         if (org.status !== "DRAFT" && org.status !== "REVISION_REQUIRED") {
           setNotEditable(true);
@@ -136,6 +170,11 @@ export default function EditOrganizationPage() {
           categoryIds: org.categories?.map((c: { id: string }) => c.id) || [],
           logo: org.logo || "",
           banner: org.banner || "",
+          address1: org.address1 || "",
+          address2: org.address2 || "",
+          postalCode: org.postalCode || "",
+          kelurahan: org.kelurahan || "",
+          district: org.district || "",
           country: org.country || "",
           province: org.province || "",
           city: org.city || "",
@@ -193,6 +232,11 @@ export default function EditOrganizationPage() {
         categoryIds: data.categoryIds,
         logo: data.logo || undefined,
         banner: data.banner || undefined,
+        address1: data.address1 || undefined,
+        address2: data.address2 || undefined,
+        postalCode: data.postalCode || undefined,
+        kelurahan: data.kelurahan || undefined,
+        district: data.district || undefined,
         country: data.country || undefined,
         province: data.province || undefined,
         city: data.city || undefined,
@@ -218,6 +262,15 @@ export default function EditOrganizationPage() {
       setSubmitting(false);
     }
   };
+
+  if (!featureFlags.organization) {
+    return (
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        <Header />
+        <FeatureDisabledBanner />
+      </div>
+    );
+  }
 
   if (authLoading || loading) {
     return (
@@ -502,21 +555,93 @@ export default function EditOrganizationPage() {
                 </div>
               )}
 
+              <div>
+                <label
+                  htmlFor="address"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Alamat 1
+                </label>
+                <input
+                  id="address1"
+                  type="text"
+                  {...register("address1")}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
+                  placeholder="Contoh: Jl. Asia Afrika No. 1"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="address2"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Alamat 2 <span className="text-gray-400 font-normal">(opsional)</span>
+                </label>
+                <input
+                  id="address2"
+                  type="text"
+                  {...register("address2")}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
+                  placeholder="Contoh: Blok A No. 5, RT 01/RW 02"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="kelurahan"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Kelurahan <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="kelurahan"
+                  {...register("kelurahan")}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white"
+                >
+                  <option value="">-- Pilih Kelurahan --</option>
+                  {kelurahanList.map((k) => (
+                    <option key={k} value={k}>{k}</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label
-                    htmlFor="country"
+                    htmlFor="district"
                     className="block text-sm font-medium text-gray-700 mb-1"
                   >
-                    Negara
+                    Kecamatan <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    id="country"
-                    type="text"
-                    {...register("country")}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
-                    placeholder="Indonesia"
-                  />
+                  <select
+                    id="district"
+                    {...register("district")}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white"
+                  >
+                    <option value="">-- Pilih Kecamatan --</option>
+                    {districts.map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label
+                    htmlFor="city"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    Kota/Kabupaten
+                  </label>
+                  <select
+                    id="city"
+                    {...register("city")}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white"
+                  >
+                    <option value="">-- Pilih Kota/Kabupaten --</option>
+                    {cities.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label
@@ -525,29 +650,53 @@ export default function EditOrganizationPage() {
                   >
                     Provinsi
                   </label>
-                  <input
+                  <select
                     id="province"
-                    type="text"
                     {...register("province")}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
-                    placeholder="Jawa Barat"
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="city"
-                    className="block text-sm font-medium text-gray-700 mb-1"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white"
                   >
-                    Kota
-                  </label>
-                  <input
-                    id="city"
-                    type="text"
-                    {...register("city")}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
-                    placeholder="Bandung"
-                  />
+                    <option value="">-- Pilih Provinsi --</option>
+                    {provinces.map((p) => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
                 </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="country"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Negara
+                </label>
+                <select
+                  id="country"
+                  {...register("country")}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white"
+                >
+                  <option value="">-- Pilih Negara --</option>
+                  {countries.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="postalCode"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Kode Pos <span className="text-gray-400 font-normal">(auto generate)</span>
+                </label>
+                <input
+                  id="postalCode"
+                  type="text"
+                  {...register("postalCode")}
+                  maxLength={5}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-gray-50"
+                  placeholder="Otomatis terisi saat memilih kelurahan"
+                />
               </div>
 
               <div>

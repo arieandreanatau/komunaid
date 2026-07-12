@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import api from "@/lib/api";
+import { featureFlags } from "@/lib/feature-flags";
 
 interface OrgItem {
   id: string; name: string; slug: string; description: string | null; logo: string | null;
@@ -104,6 +105,21 @@ export default function OrganizationsPage() {
 
   return (
     <div className="space-y-6">
+      {!featureFlags.organization && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 bg-amber-100 rounded-lg flex items-center justify-center">
+              <svg className="h-5 w-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-semibold text-amber-800">Modul Dormant</h3>
+              <p className="text-sm text-amber-600">Organisasi module dinonaktifkan selama MVP. Modul akan diaktifkan pada fase pengembangan berikutnya.</p>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div><h1 className="text-2xl font-bold text-komuna-navy">Organization Approval</h1>
           <p className="text-sm text-gray-500 mt-1">Tinjau dan kelola pengajuan organisasi</p></div>

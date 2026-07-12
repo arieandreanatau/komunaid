@@ -1,0 +1,1 @@
+SELECT table_name FROM information_schema.tables WHERE table_schema = 'komunaid_dev' AND table_name IN ('login_history','cms_pages','cms_banners') ORDER BY table_name;

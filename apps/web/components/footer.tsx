@@ -1,9 +1,9 @@
 import Link from "next/link";
+import { featureFlags } from "@/lib/feature-flags";
 
-const platformLinks = [
+const basePlatformLinks = [
   { href: "/communities", label: "Komunitas" },
   { href: "/events", label: "Event" },
-  { href: "/organizations", label: "Organisasi" },
   { href: "/volunteer", label: "Volunteer" },
 ];
 
@@ -19,9 +19,16 @@ const aboutLinks = [
   { href: "/about", label: "Tentang Kami" },
   { href: "/faq", label: "FAQ" },
   { href: "/contact", label: "Kontak" },
+  { href: "/submit", label: "Submit Pesan" },
+  { href: "/organization-structure", label: "Struktur Organisasi" },
 ];
 
 export function Footer() {
+  const platformLinks = [
+    ...basePlatformLinks,
+    ...(featureFlags.organization ? [{ href: "/organizations", label: "Organisasi" }] : []),
+  ];
+
   return (
     <footer className="bg-komuna-navy text-white py-12">
       <div className="container mx-auto px-4">
@@ -33,7 +40,7 @@ export function Footer() {
             </Link>
             <p className="text-sm text-white/70 mb-4">Terhubung. Berdaya. Berdampak.</p>
             <p className="text-xs text-white/50">
-              Platform komunitas digital Indonesia yang menghubungkan individu, komunitas, organisasi, dan ekosistem kolaborasi.
+              Platform komunitas digital Indonesia yang menghubungkan individu, komunitas, dan komunitas digital.
             </p>
           </div>
           <div>

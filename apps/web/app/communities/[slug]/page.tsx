@@ -8,6 +8,7 @@ import { useAuth } from "@/components/auth-provider";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { Breadcrumbs } from "@/components/breadcrumbs";
+import { getInitial } from "@/lib/initial";
 
 interface CommunityMember {
   id: string;
@@ -126,8 +127,8 @@ export default function CommunityDetailPage() {
 
   const isOwner = user && community && user.id === community.owner.id;
   const isAdmin = user && community && (isOwner || community.userMembership?.role === "ADMIN");
-  const isMember = !!community?.userMembership;
   const isPending = community?.userMembership?.status === "PENDING";
+  const isMember = !!community?.userMembership && !isPending;
 
   if (loading) return (
     <div className="min-h-screen bg-gray-50">
@@ -194,9 +195,9 @@ export default function CommunityDetailPage() {
             <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
           </div>
         ) : (
-          <div className="relative h-64 md:h-80 w-full bg-gradient-to-br from-komuna-blue via-komuna-teal to-komuna-blue overflow-hidden">
-            <div className="absolute inset-0 flex items-center justify-center"><span className="text-white/20 text-[200px] font-bold leading-none select-none">{community.name[0]}</span></div>
-          </div>
+              <div className="relative h-64 md:h-80 w-full bg-gradient-to-br from-komuna-blue via-komuna-teal to-komuna-blue overflow-hidden">
+                <div className="absolute inset-0 flex items-center justify-center"><span className="text-white/20 text-[200px] font-bold leading-none select-none">{getInitial(community.name)}</span></div>
+              </div>
         )}
 
         <div className="container mx-auto px-4">
@@ -207,7 +208,7 @@ export default function CommunityDetailPage() {
                 {community.logo ? (
                   <img src={community.logo} alt={`${community.name} logo`} className="w-24 h-24 md:w-32 md:h-32 rounded-2xl border-4 border-white shadow-lg object-cover bg-white" />
                 ) : (
-                  <div className="w-24 h-24 md:w-32 md:h-32 rounded-2xl border-4 border-white shadow-lg bg-komuna-blue flex items-center justify-center"><span className="text-white text-3xl md:text-4xl font-bold">{community.name[0]}</span></div>
+                  <div className="w-24 h-24 md:w-32 md:h-32 rounded-2xl border-4 border-white shadow-lg bg-komuna-blue flex items-center justify-center"><span className="text-white text-3xl md:text-4xl font-bold">{getInitial(community.name)}</span></div>
                 )}
               </div>
               <div className="flex-1 min-w-0 pb-1">
@@ -295,6 +296,8 @@ export default function CommunityDetailPage() {
                   })()}
                 </div>
               )}
+              <CommunityMediaSection communityId={community.id} />
+
               <div className="bg-white rounded-xl shadow-sm p-6">
                 <div className="grid grid-cols-3 gap-4 text-center">
                   <Link href={`/communities/${slug}/members`} className="group rounded-lg p-2 -m-2 hover:bg-komuna-blue/5 transition-colors">
@@ -388,6 +391,75 @@ export default function CommunityDetailPage() {
         </div>
       )}
       <Footer />
+    </div>
+  );
+}
+
+interface MediaItem {
+  id: string;
+  title: string;
+  content: string;
+  type: "ANNOUNCEMENT" | "NEWS";
+  imageUrl: string | null;
+  isPublished: boolean;
+  publishedAt: string | null;
+  createdBy: { id: string; name: string; avatar: string | null };
+  createdAt: string;
+}
+
+function CommunityMediaSection({ communityId }: { communityId: string }) {
+  const [media, setMedia] = useState<MediaItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchMedia = async () => {
+      try {
+        const { data } = await api.get(`/communities/${communityId}/media`, {
+          params: { limit: 5, published: "true" },
+        });
+        setMedia(data.data || []);
+      } catch {}
+      finally { setLoading(false); }
+    };
+    fetchMedia();
+  }, [communityId]);
+
+  if (loading || media.length === 0) return null;
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm p-6">
+      <h2 className="text-lg font-semibold text-komuna-navy mb-4">Pengumuman & Berita</h2>
+      <div className="space-y-3">
+        {media.map((item) => (
+          <div key={item.id} className="p-4 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
+            <div className="flex items-start gap-3">
+              <div className={`h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 ${item.type === "ANNOUNCEMENT" ? "bg-blue-100" : "bg-emerald-100"}`}>
+                <svg className={`h-4 w-4 ${item.type === "ANNOUNCEMENT" ? "text-blue-600" : "text-emerald-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.type === "ANNOUNCEMENT" ? "M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" : "M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"} />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <h4 className="font-medium text-komuna-navy text-sm line-clamp-1">{item.title}</h4>
+                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${item.type === "ANNOUNCEMENT" ? "bg-blue-50 text-blue-600" : "bg-emerald-50 text-emerald-600"}`}>
+                    {item.type === "ANNOUNCEMENT" ? "Pengumuman" : "Berita"}
+                  </span>
+                </div>
+                <p className={`text-sm text-gray-600 ${expandedId === item.id ? "" : "line-clamp-2"}`}>{item.content}</p>
+                {item.content.length > 150 && (
+                  <button onClick={() => setExpandedId(expandedId === item.id ? null : item.id)} className="text-xs text-komuna-blue hover:underline mt-1">
+                    {expandedId === item.id ? "Sembunyikan" : "Selengkapnya"}
+                  </button>
+                )}
+                <p className="text-xs text-gray-400 mt-1">
+                  {item.createdBy.name} · {new Date(item.publishedAt || item.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
+                </p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

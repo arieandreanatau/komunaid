@@ -9,11 +9,19 @@ import { registerSchema, type RegisterInput } from "@komunaid/shared";
 import api from "@/lib/api";
 import { useAuth } from "@/components/auth-provider";
 
+const INTERNAL_PATHS = ["/dashboard", "/communities", "/events", "/organizations", "/volunteer", "/admin", "/settings"];
+
+function isSafeRedirect(path: string | null): boolean {
+  if (!path) return false;
+  if (path.startsWith("/")) return INTERNAL_PATHS.some((p) => path === p || path.startsWith(p + "/"));
+  return false;
+}
+
 export default function RegisterPage() {
   const router = useRouter();
   const { setUser } = useAuth();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirect") || "/dashboard";
+  const redirectTo = isSafeRedirect(searchParams.get("redirect")) ? searchParams.get("redirect")! : "/dashboard";
   const [error, setError] = useState("");
 
   const {

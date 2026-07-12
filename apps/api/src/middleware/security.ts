@@ -1,7 +1,5 @@
 import { Context, Next } from "hono";
-import { createChildLogger } from "../lib/logger";
-
-const log = createChildLogger("security");
+import { apiRateLimiter, rateLimitMiddleware } from "../services/rate-limiter";
 
 export async function securityHeaders(c: Context, next: Next) {
   c.header("X-Content-Type-Options", "nosniff");
@@ -9,100 +7,32 @@ export async function securityHeaders(c: Context, next: Next) {
   c.header("X-XSS-Protection", "1; mode=block");
   c.header("Referrer-Policy", "strict-origin-when-cross-origin");
   c.header("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-  c.header(
-    "Strict-Transport-Security",
-    "max-age=31536000; includeSubDomains"
-  );
+  if (process.env.NODE_ENV === "production") {
+    c.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
+  }
+  c.header("Content-Security-Policy", "default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';");
   await next();
 }
 
-// ==========================================
-// RATE LIMITER — Redis-backed with in-memory fallback
-// ==========================================
-
-let redis: { incr(key: string): Promise<number>; pexpire(key: string, ms: number): Promise<number>; on(event: string, cb: (err: Error) => void): void } | null = null;
-
-function getRedis(): typeof redis {
-  if (redis !== undefined && redis !== null) return redis;
-  try {
-    const url = process.env.REDIS_URL;
-    if (!url) return null;
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const Redis = require("ioredis");
-    const client = new Redis(url);
-    client.on("error", (err: Error) => {
-      log.error({ err }, "[rate-limiter] Redis error:");
-      redis = null;
-    });
-    redis = client;
-    return redis;
-  } catch {
-    // ioredis not installed or REDIS_URL not set
+export const rateLimiter = rateLimitMiddleware(
+  (ip: string) => apiRateLimiter(ip),
+  {
+    max: parseInt(process.env.API_RATE_MAX || "100", 10),
+    errorMessage: "Terlalu banyak request. Coba lagi nanti.",
   }
-  redis = null;
-  return null;
-}
-
-interface RateLimitRecord {
-  count: number;
-  resetTime: number;
-}
-
-const memoryHits = new Map<string, RateLimitRecord>();
-
-export function rateLimiter(options?: { windowMs?: number; max?: number }) {
-  const windowMs = options?.windowMs || 15 * 60 * 1000;
-  const max = options?.max || 100;
-
-  return async (c: Context, next: Next) => {
-    cleanupMemoryStore();
-
-    const isTrustedProxy = process.env.TRUSTED_PROXIES === "true";
-    const ip = isTrustedProxy
-      ? (c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || c.req.header("x-real-ip") || "unknown")
-      : (c.req.header("x-real-ip") || "unknown");
-
-    const key = `rl:${ip}`;
-    const redisClient = getRedis();
-
-    if (redisClient) {
-      try {
-        const current = await redisClient.incr(key);
-        if (current === 1) {
-          await redisClient.pexpire(key, windowMs);
-        }
-        if (current > max) {
-          return c.json({ success: false, message: "Terlalu banyak request. Coba lagi nanti." }, 429);
-        }
-        c.header("X-RateLimit-Limit", String(max));
-        c.header("X-RateLimit-Remaining", String(Math.max(0, max - current)));
-        return next();
-      } catch {
-        // Redis failed, fall through to in-memory
-      }
-    }
-
-    // In-memory fallback
-    const now = Date.now();
-    const record = memoryHits.get(ip);
-
-    if (!record || now > record.resetTime) {
-      memoryHits.set(ip, { count: 1, resetTime: now + windowMs });
-      return next();
-    }
-
-    record.count++;
-    if (record.count > max) {
-      return c.json({ success: false, message: "Terlalu banyak request. Coba lagi nanti." }, 429);
-    }
-
-    return next();
-  };
-}
+);
 
 export function requestSizeLimit(maxSize: string = "10mb") {
   return async (c: Context, next: Next) => {
+    const method = c.req.method;
+    if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
+      return next();
+    }
     const contentLength = c.req.header("content-length");
+    const transferEncoding = c.req.header("transfer-encoding");
+    if (!contentLength && !transferEncoding) {
+      return c.json({ success: false, message: "Request tanpa Content-Length atau Transfer-Encoding" }, 411);
+    }
     if (contentLength) {
       const size = parseInt(contentLength, 10);
       const maxBytes = parseSize(maxSize);
@@ -124,21 +54,4 @@ function parseSize(size: string): number {
   const match = size.match(/^(\d+(?:\.\d+)?)\s*(b|kb|mb|gb)$/i);
   if (!match) return 10 * 1024 * 1024;
   return parseFloat(match[1]) * units[match[2].toLowerCase()];
-}
-
-// ==========================================
-// Lazy cleanup of memory store (on each request, max once per 5 min)
-// ==========================================
-let lastCleanup = 0;
-const CLEANUP_INTERVAL = 5 * 60 * 1000;
-
-function cleanupMemoryStore() {
-  const now = Date.now();
-  if (now - lastCleanup < CLEANUP_INTERVAL) return;
-  lastCleanup = now;
-  for (const [key, record] of memoryHits.entries()) {
-    if (now > record.resetTime) {
-      memoryHits.delete(key);
-    }
-  }
 }

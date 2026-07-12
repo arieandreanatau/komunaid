@@ -1,6 +1,3 @@
-export { PrismaClient } from "@prisma/client";
-export type * from "@prisma/client";
-
 import { PrismaClient, Prisma } from "@prisma/client";
 
 const globalForPrisma = globalThis as unknown as {
@@ -8,7 +5,7 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createPrismaClient() {
-  return new PrismaClient({
+  const client = new PrismaClient({
     log:
       process.env.NODE_ENV === "development"
         ? ["query", "error", "warn"]
@@ -27,6 +24,30 @@ function createPrismaClient() {
         }
       : {}),
   });
+
+  const protectedClient = client.$extends({
+    query: {
+      auditLog: {
+        update({ args, query }) {
+          throw new Error("Audit log immutability violation: update is not allowed");
+        },
+        delete({ args, query }) {
+          throw new Error("Audit log immutability violation: delete is not allowed");
+        },
+        updateMany({ args, query }) {
+          throw new Error("Audit log immutability violation: updateMany is not allowed");
+        },
+        deleteMany({ args, query }) {
+          throw new Error("Audit log immutability violation: deleteMany is not allowed");
+        },
+        upsert({ args, query }) {
+          throw new Error("Audit log immutability violation: upsert is not allowed");
+        },
+      },
+    },
+  });
+
+  return protectedClient as unknown as PrismaClient;
 }
 
 export const prisma = globalForPrisma.prisma ?? createPrismaClient();

@@ -11,6 +11,8 @@ export interface User {
   location?: string | null;
   roles: string[];
   interests?: string[];
+  communitiesCount?: number;
+  organizationsCount?: number;
 }
 
 interface AuthState {

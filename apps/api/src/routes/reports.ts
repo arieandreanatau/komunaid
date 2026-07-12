@@ -1,9 +1,11 @@
 import { Hono } from "hono";
 import { prisma } from "@komunaid/database";
 import { createReportSchema } from "@komunaid/shared";
+import { REPORT_STATUSES } from "@komunaid/constants";
 import { authMiddleware } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import { createAuditLog, AuditActions } from "../services/audit";
+import { parsePagination, paginatedResponse } from "../lib/pagination";
 import type { AuthUser } from "../middleware/auth";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
@@ -23,7 +25,7 @@ reportRoutes.post("/", authMiddleware, validate(createReportSchema), async (c) =
       reporterId: authUser.id,
       targetType: data.targetType,
       targetId: data.targetId,
-      status: { in: ["OPEN", "UNDER_REVIEW"] },
+      status: { in: [REPORT_STATUSES.OPEN, REPORT_STATUSES.UNDER_REVIEW] },
     },
   });
 
@@ -60,14 +62,48 @@ reportRoutes.post("/", authMiddleware, validate(createReportSchema), async (c) =
 });
 
 // ==========================================
+// GET REPORT BY ID
+// ==========================================
+
+reportRoutes.get("/:reportId", authMiddleware, async (c) => {
+  const authUser = c.get("user");
+  const reportId = c.req.param("reportId") as string;
+
+  const report = await prisma.report.findUnique({
+    where: { id: reportId },
+  });
+
+  if (!report) {
+    return c.json({ success: false, message: "Laporan tidak ditemukan" }, 404);
+  }
+
+  if (report.reporterId !== authUser.id) {
+    return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
+  }
+
+  return c.json({
+    success: true,
+    data: {
+      id: report.id,
+      targetType: report.targetType,
+      targetId: report.targetId,
+      reason: report.reason,
+      description: report.description,
+      status: report.status,
+      reviewNote: report.reviewNote,
+      reviewedAt: report.reviewedAt,
+      createdAt: report.createdAt,
+    },
+  });
+});
+
+// ==========================================
 // GET MY REPORTS
 // ==========================================
 
 reportRoutes.get("/my", authMiddleware, async (c) => {
   const authUser = c.get("user");
-  const url = new URL(c.req.url);
-  const page = parseInt(url.searchParams.get("page") || "1");
-  const limit = parseInt(url.searchParams.get("limit") || "20");
+  const { page, limit } = parsePagination(c.req.url);
 
   const [reports, total] = await Promise.all([
     prisma.report.findMany({
@@ -79,14 +115,5 @@ reportRoutes.get("/my", authMiddleware, async (c) => {
     prisma.report.count({ where: { reporterId: authUser.id } }),
   ]);
 
-  return c.json({
-    success: true,
-    data: reports,
-    pagination: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-    },
-  });
+  return c.json(paginatedResponse(reports, total, page, limit));
 });

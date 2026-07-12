@@ -18,7 +18,7 @@ export default function EventGuidelinesPage() {
           <div className="space-y-8">
             <section className="bg-white border rounded-xl p-6">
               <h2 className="text-xl font-bold text-komuna-navy mb-3">1. Pembuatan Event</h2>
-              <p className="text-gray-600">Event hanya dapat dibuat oleh Community Owner/Admin atau Organization Owner/Admin yang telah terverifikasi. Event baru berstatus DRAFT dan harus dipublikasikan untuk terlihat oleh peserta.</p>
+              <p className="text-gray-600">Event hanya dapat dibuat oleh Community Owner/Admin yang telah terverifikasi. Event baru berstatus DRAFT dan harus dipublikasikan untuk terlihat oleh peserta.</p>
             </section>
             <section className="bg-white border rounded-xl p-6">
               <h2 className="text-xl font-bold text-komuna-navy mb-3">2. Informasi Event</h2>

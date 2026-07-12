@@ -129,9 +129,16 @@ export const createCommunitySchema = z.object({
   logo: z.string().url("URL logo tidak valid").optional(),
   banner: z.string().url("URL banner tidak valid").optional(),
   location: z.string().max(100, "Lokasi maksimal 100 karakter").optional(),
+  address: z.string().max(200).optional(),
+  address1: z.string().max(200).optional(),
+  address2: z.string().max(200).optional(),
+  postalCode: z.string().max(10).optional(),
+  village: z.string().max(100).optional(),
+  district: z.string().max(100).optional(),
   country: z.string().max(100).optional(),
   province: z.string().max(100).optional(),
   city: z.string().max(100).optional(),
+  customCategory: z.string().max(50).optional(),
   website: z.string().url("URL website tidak valid").optional(),
   instagram: z.string().max(100).optional(),
   contactEmail: z.string().email("Email tidak valid").optional(),
@@ -148,6 +155,15 @@ export const updateCommunityProfileSchema = z.object({
   name: z.string().min(3).max(100).optional(),
   description: z.string().max(2000).optional(),
   location: z.string().max(100).optional(),
+  address: z.string().max(200).optional(),
+  address1: z.string().max(200).optional(),
+  address2: z.string().max(200).optional(),
+  postalCode: z.string().max(10).optional(),
+  village: z.string().max(100).optional(),
+  district: z.string().max(100).optional(),
+  country: z.string().max(100).optional(),
+  province: z.string().max(100).optional(),
+  city: z.string().max(100).optional(),
   website: z.string().url("URL website tidak valid").optional().or(z.literal("")),
 });
 
@@ -178,6 +194,10 @@ export const communityQuerySchema = z.object({
   visibility: z.enum(["PUBLIC", "PRIVATE"]).optional(),
   membershipType: z.enum(["OPEN", "RESTRICTED"]).optional(),
   categoryId: z.string().optional(),
+  province: z.string().optional(),
+  city: z.string().optional(),
+  tag: z.string().optional(),
+  featured: z.coerce.boolean().optional(),
   sort: z.enum(["asc", "desc"]).default("desc"),
   orderBy: z.enum(["createdAt", "name", "memberCount"]).default("createdAt"),
 });
@@ -192,6 +212,34 @@ export const adminReviewCommunitySchema = z.object({
   note: z.string().max(2000, "Catatan maksimal 2000 karakter").optional(),
 });
 
+export const suspendCommunitySchema = z.object({
+  reason: z.string().min(1, "Alasan wajib diisi").max(2000, "Alasan maksimal 2000 karakter"),
+});
+
+// ==========================================
+// COMMUNITY MEDIA SCHEMAS
+// ==========================================
+
+export const createCommunityMediaSchema = z.object({
+  title: z.string().min(3, "Judul minimal 3 karakter").max(200, "Judul maksimal 200 karakter"),
+  content: z.string().min(10, "Konten minimal 10 karakter").max(5000, "Konten maksimal 5000 karakter"),
+  type: z.enum(["ANNOUNCEMENT", "NEWS"]).default("ANNOUNCEMENT"),
+  imageUrl: z.string().url("URL gambar tidak valid").optional(),
+  isPublished: z.boolean().default(false),
+});
+
+export const updateCommunityMediaSchema = createCommunityMediaSchema.partial();
+
+export const communityMediaQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().optional(),
+  type: z.enum(["ANNOUNCEMENT", "NEWS"]).optional(),
+  published: z.coerce.boolean().optional(),
+  sort: z.enum(["asc", "desc"]).default("desc"),
+  orderBy: z.enum(["createdAt", "title", "publishedAt"]).default("createdAt"),
+});
+
 // ==========================================
 // ORGANIZATION SCHEMAS
 // ==========================================
@@ -203,6 +251,12 @@ export const createOrganizationSchema = z.object({
   banner: z.string().url("URL banner tidak valid").optional(),
   website: z.string().url("URL website tidak valid").optional(),
   location: z.string().max(100, "Lokasi maksimal 100 karakter").optional(),
+  address: z.string().max(200).optional(),
+  address1: z.string().max(200).optional(),
+  address2: z.string().max(200).optional(),
+  postalCode: z.string().max(10).optional(),
+  kelurahan: z.string().max(100).optional(),
+  district: z.string().max(100).optional(),
   industry: z.string().max(100, "Industri maksimal 100 karakter").optional(),
   country: z.string().max(100).optional(),
   province: z.string().max(100).optional(),
@@ -249,11 +303,17 @@ export const updateOrganizationProfileSchema = z.object({
   name: z.string().min(3).max(100).optional(),
   description: z.string().max(2000).optional(),
   location: z.string().max(100).optional(),
-  website: z.string().url("URL website tidak valid").optional().or(z.literal("")),
-  industry: z.string().max(100).optional(),
+  address: z.string().max(200).optional(),
+  address1: z.string().max(200).optional(),
+  address2: z.string().max(200).optional(),
+  postalCode: z.string().max(10).optional(),
+  kelurahan: z.string().max(100).optional(),
+  district: z.string().max(100).optional(),
   country: z.string().max(100).optional(),
   province: z.string().max(100).optional(),
   city: z.string().max(100).optional(),
+  website: z.string().url("URL website tidak valid").optional().or(z.literal("")),
+  industry: z.string().max(100).optional(),
   instagram: z.string().max(100).optional(),
   contactEmail: z.string().email("Email tidak valid").optional().or(z.literal("")),
   contactPhone: z.string().max(20).optional(),
@@ -447,6 +507,233 @@ export const adminUpdateMasterDataSchema = z.object({
   data: z.array(z.string()),
 });
 
+export const forceLogoutSchema = z.object({
+  userId: z.string().min(1, "User ID wajib diisi"),
+  reason: z.string().min(1, "Alasan wajib diisi").max(500),
+});
+
+// ==========================================
+// ADMIN CMS SCHEMAS
+// ==========================================
+
+export const adminCreateCmsPageSchema = z.object({
+  slug: z.string().min(2, "Slug minimal 2 karakter").max(100).regex(/^[a-z0-9-]+$/, "Slug hanya boleh huruf kecil, angka, dan strip"),
+  title: z.string().min(2, "Judul minimal 2 karakter").max(200),
+  content: z.string().min(1, "Konten wajib diisi"),
+  metaTitle: z.string().max(200).optional(),
+  metaDesc: z.string().max(500).optional(),
+  isPublished: z.boolean().default(false),
+});
+
+export const adminUpdateCmsPageSchema = z.object({
+  title: z.string().min(2).max(200).optional(),
+  content: z.string().min(1).optional(),
+  metaTitle: z.string().max(200).optional(),
+  metaDesc: z.string().max(500).optional(),
+  isPublished: z.boolean().optional(),
+});
+
+export const adminCreateBannerSchema = z.object({
+  title: z.string().min(2, "Judul minimal 2 karakter").max(200),
+  imageUrl: z.string().url("URL gambar tidak valid"),
+  linkUrl: z.string().url("URL link tidak valid").optional(),
+  position: z.number().int().min(0).default(0),
+  isActive: z.boolean().default(true),
+});
+
+export const adminUpdateBannerSchema = z.object({
+  title: z.string().min(2).max(200).optional(),
+  imageUrl: z.string().url("URL gambar tidak valid").optional(),
+  linkUrl: z.string().url("URL link tidak valid").optional().or(z.literal("")),
+  position: z.number().int().min(0).optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const adminResetPasswordSchema = z.object({
+  newPassword: z
+    .string()
+    .min(8, "Password minimal 8 karakter")
+    .regex(/[A-Z]/, "Password harus mengandung minimal 1 huruf besar")
+    .regex(/[a-z]/, "Password harus mengandung minimal 1 huruf kecil")
+    .regex(/[0-9]/, "Password harus mengandung minimal 1 angka"),
+});
+
+export const adminModerationWarningSchema = z.object({
+  reason: z.string().min(1, "Alasan wajib diisi").max(2000, "Alasan maksimal 2000 karakter"),
+});
+
+// ==========================================
+// ADMIN USER MANAGEMENT SCHEMAS
+// ==========================================
+
+export const adminUpdateUserStatusSchema = z.object({
+  status: z.enum(["ACTIVE", "SUSPENDED", "DEACTIVATED"]),
+  reason: z.string().max(2000, "Alasan maksimal 2000 karakter").optional(),
+});
+
+export const adminBulkActionSchema = z.object({
+  ids: z.array(z.string()).min(1, "Minimal 1 item harus dipilih").max(100, "Maksimal 100 item per aksi"),
+  action: z.enum(["DELETE", "SUSPEND", "ACTIVATE", "ARCHIVE", "RESTORE"]),
+  reason: z.string().max(2000, "Alasan maksimal 2000 karakter").optional(),
+});
+
+// ==========================================
+// ADMIN VOLUNTEER SCHEMAS
+// ==========================================
+
+export const adminReviewVolunteerSchema = z.object({
+  action: z.enum(["ACCEPTED", "REJECTED"]),
+  note: z.string().max(2000, "Catatan maksimal 2000 karakter").optional(),
+});
+
+export const adminRejectVolunteerApplicationSchema = z.object({
+  note: z.string().max(2000, "Catatan maksimal 2000 karakter").optional(),
+});
+
+// ==========================================
+// ADMIN EVENT SCHEMAS
+// ==========================================
+
+export const adminReviewEventSchema = z.object({
+  action: z.enum(["PUBLISHED", "CANCELLED", "ARCHIVED"]),
+  note: z.string().max(2000, "Catatan maksimal 2000 karakter").optional(),
+});
+
+// ==========================================
+// ADMIN MASTER DATA SCHEMAS
+// ==========================================
+
+const masterDataStringArray = z.array(z.string().trim().min(1, "Item tidak boleh kosong").max(200)).max(500, "Maksimal 500 item");
+
+export const adminUpdateMasterDataProvincesSchema = z.object({
+  provinces: z.record(masterDataStringArray),
+});
+
+export const adminUpdateMasterDataCitiesSchema = z.object({
+  cities: z.record(masterDataStringArray),
+});
+
+export const adminUpdateMasterDataCountriesSchema = z.object({
+  countries: masterDataStringArray,
+});
+
+export const adminUpdateMasterDataInterestsSchema = z.object({
+  interests: masterDataStringArray,
+});
+
+export const adminUpdateMasterDataDistrictsSchema = z.object({
+  districts: z.record(masterDataStringArray),
+});
+
+export const adminUpdateMasterDataKelurahanSchema = z.object({
+  kelurahan: z.record(masterDataStringArray),
+});
+
+export const adminUpdateMasterDataTagsSchema = z.object({
+  tags: masterDataStringArray,
+});
+
+// ==========================================
+// ADMIN NOTIFICATION TEMPLATE SCHEMAS
+// ==========================================
+
+export const adminCreateNotificationTemplateSchema = z.object({
+  name: z.string().min(1, "Nama wajib diisi").max(100, "Nama maksimal 100 karakter").trim(),
+  title: z.string().min(1, "Judul wajib diisi").max(200, "Judul maksimal 200 karakter").trim(),
+  message: z.string().min(1, "Pesan wajib diisi").max(2000, "Pesan maksimal 2000 karakter").trim(),
+  type: z.enum(["SYSTEM", "COMMUNITY", "ORGANIZATION", "EVENT", "REPORT", "APPROVAL"]).optional(),
+});
+
+export const adminUpdateNotificationTemplateSchema = z.object({
+  name: z.string().min(1).max(100).trim().optional(),
+  title: z.string().min(1).max(200).trim().optional(),
+  message: z.string().min(1).max(2000).trim().optional(),
+  type: z.enum(["SYSTEM", "COMMUNITY", "ORGANIZATION", "EVENT", "REPORT", "APPROVAL"]).optional(),
+  isActive: z.boolean().optional(),
+});
+
+// ==========================================
+// ADMIN SECURITY SCHEMAS
+// ==========================================
+
+export const adminForceLogoutSchema = z.object({
+  userId: z.string().min(1, "User ID wajib diisi"),
+});
+
+export const adminLockUserSchema = z.object({
+  userId: z.string().min(1, "User ID wajib diisi"),
+});
+
+export const adminUnlockUserSchema = z.object({
+  userId: z.string().min(1, "User ID wajib diisi"),
+});
+
+export const adminSecuritySettingsSchema = z.object({
+  maxLoginAttempts: z.number().int().min(1, "Minimal 1 percobaan").max(100, "Maksimal 100 percobaan").optional(),
+  lockoutDurationMinutes: z.number().int().min(1, "Minimal 1 menit").max(1440, "Maksimal 1440 menit").optional(),
+  sessionTimeoutMinutes: z.number().int().min(5, "Minimal 5 menit").max(10080, "Maksimal 7 hari").optional(),
+  requirePasswordChange: z.boolean().optional(),
+  enforceStrongPasswords: z.boolean().optional(),
+  twoFactorEnabled: z.boolean().optional(),
+  ipWhitelist: z.array(z.string().max(50)).max(100, "Maksimal 100 IP").optional(),
+  ipBlacklist: z.array(z.string().max(50)).max(100, "Maksimal 100 IP").optional(),
+});
+
+// ==========================================
+// ADMIN CMS CONTACT SCHEMAS
+// ==========================================
+
+const cmsContactFields = {
+  companyName: z.string().min(1, "Nama perusahaan wajib diisi").max(200, "Nama perusahaan maksimal 200 karakter").trim(),
+  phone: z.string().max(20).optional(),
+  address: z.string().max(500).optional(),
+  email: z.string().email("Email tidak valid").optional().or(z.literal("")),
+  instagram: z.string().max(100).optional(),
+  facebook: z.string().max(100).optional(),
+  twitter: z.string().max(100).optional(),
+  threads: z.string().max(100).optional(),
+  website: z.string().url("URL website tidak valid").optional().or(z.literal("")),
+  mapsUrl: z.string().url("URL maps tidak valid").optional().or(z.literal("")),
+};
+
+export const adminCreateCmsContactSchema = z.object(cmsContactFields);
+
+export const adminUpdateCmsContactSchema = z.object({
+  ...Object.fromEntries(Object.entries(cmsContactFields).map(([k, v]) => [k, (v as any).optional()])),
+  isActive: z.boolean().optional(),
+});
+
+// ==========================================
+// TYPE EXPORTS (APPEND)
+// ==========================================
+
+export type AdminCreateCmsPageInput = z.infer<typeof adminCreateCmsPageSchema>;
+export type AdminUpdateCmsPageInput = z.infer<typeof adminUpdateCmsPageSchema>;
+export type AdminCreateBannerInput = z.infer<typeof adminCreateBannerSchema>;
+export type AdminUpdateBannerInput = z.infer<typeof adminUpdateBannerSchema>;
+export type AdminResetPasswordInput = z.infer<typeof adminResetPasswordSchema>;
+export type AdminModerationWarningInput = z.infer<typeof adminModerationWarningSchema>;
+export type AdminUpdateUserStatusInput = z.infer<typeof adminUpdateUserStatusSchema>;
+export type AdminBulkActionInput = z.infer<typeof adminBulkActionSchema>;
+export type AdminReviewVolunteerInput = z.infer<typeof adminReviewVolunteerSchema>;
+export type AdminRejectVolunteerApplicationInput = z.infer<typeof adminRejectVolunteerApplicationSchema>;
+export type AdminReviewEventInput = z.infer<typeof adminReviewEventSchema>;
+export type AdminUpdateMasterDataProvincesInput = z.infer<typeof adminUpdateMasterDataProvincesSchema>;
+export type AdminUpdateMasterDataCitiesInput = z.infer<typeof adminUpdateMasterDataCitiesSchema>;
+export type AdminUpdateMasterDataCountriesInput = z.infer<typeof adminUpdateMasterDataCountriesSchema>;
+export type AdminUpdateMasterDataInterestsInput = z.infer<typeof adminUpdateMasterDataInterestsSchema>;
+export type AdminUpdateMasterDataDistrictsInput = z.infer<typeof adminUpdateMasterDataDistrictsSchema>;
+export type AdminUpdateMasterDataKelurahanInput = z.infer<typeof adminUpdateMasterDataKelurahanSchema>;
+export type AdminUpdateMasterDataTagsInput = z.infer<typeof adminUpdateMasterDataTagsSchema>;
+export type AdminCreateNotificationTemplateInput = z.infer<typeof adminCreateNotificationTemplateSchema>;
+export type AdminUpdateNotificationTemplateInput = z.infer<typeof adminUpdateNotificationTemplateSchema>;
+export type AdminForceLogoutInput = z.infer<typeof adminForceLogoutSchema>;
+export type AdminLockUserInput = z.infer<typeof adminLockUserSchema>;
+export type AdminUnlockUserInput = z.infer<typeof adminUnlockUserSchema>;
+export type AdminSecuritySettingsInput = z.infer<typeof adminSecuritySettingsSchema>;
+export type AdminCreateCmsContactInput = z.infer<typeof adminCreateCmsContactSchema>;
+export type AdminUpdateCmsContactInput = z.infer<typeof adminUpdateCmsContactSchema>;
+
 // ==========================================
 // TYPE EXPORTS
 // ==========================================
@@ -488,6 +775,10 @@ export type ChangeMemberRoleInput = z.infer<typeof changeMemberRoleSchema>;
 export type CommunityQueryInput = z.infer<typeof communityQuerySchema>;
 export type SubmitCommunityInput = z.infer<typeof submitCommunitySchema>;
 export type AdminReviewCommunityInput = z.infer<typeof adminReviewCommunitySchema>;
+export type SuspendCommunityInput = z.infer<typeof suspendCommunitySchema>;
+export type CreateCommunityMediaInput = z.infer<typeof createCommunityMediaSchema>;
+export type UpdateCommunityMediaInput = z.infer<typeof updateCommunityMediaSchema>;
+export type CommunityMediaQueryInput = z.infer<typeof communityMediaQuerySchema>;
 export type CreateVolunteerOpportunityInput = z.infer<typeof createVolunteerOpportunitySchema>;
 export type UpdateVolunteerOpportunityInput = z.infer<typeof updateVolunteerOpportunitySchema>;
 export type VolunteerOpportunityQueryInput = z.infer<typeof volunteerOpportunityQuerySchema>;
@@ -500,3 +791,17 @@ export type AdminBroadcastNotificationInput = z.infer<typeof adminBroadcastNotif
 export type AdminCreateCategoryInput = z.infer<typeof adminCreateCategorySchema>;
 export type AdminUpdateCategoryInput = z.infer<typeof adminUpdateCategorySchema>;
 export type AdminUpdateSettingInput = z.infer<typeof adminUpdateSettingSchema>;
+
+// ==========================================
+// CONTACT MESSAGE SCHEMA
+// ==========================================
+
+export const contactMessageSchema = z.object({
+  name: z.string().min(2, "Nama minimal 2 karakter").max(100),
+  email: z.string().email("Email tidak valid"),
+  subject: z.string().min(3, "Subjek minimal 3 karakter").max(200),
+  message: z.string().min(10, "Pesan minimal 10 karakter").max(5000),
+  category: z.enum(["GENERAL", "FEEDBACK", "COMPLAINT", "SUGGESTION", "PARTNERSHIP", "OTHER"]).default("GENERAL"),
+});
+
+export type ContactMessageInput = z.infer<typeof contactMessageSchema>;

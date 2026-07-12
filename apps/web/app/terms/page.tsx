@@ -25,8 +25,8 @@ export default function TermsPage() {
               <p className="text-gray-600">Anda bertanggung jawab untuk menjaga kerahasiaan akun Anda. Satu email hanya dapat digunakan untuk satu akun. Anda wajib memberikan informasi yang benar saat pendaftaran.</p>
             </section>
             <section className="bg-white border rounded-xl p-6">
-              <h2 className="text-xl font-bold text-komuna-navy mb-3">3. Komunitas & Organisasi</h2>
-              <p className="text-gray-600">Komunitas dan organisasi yang dibuat harus mematuhi pedoman platform. Admin berhak menangguhkan atau menolak komunitas yang melanggar ketentuan. Komunitas baru akan melalui proses review sebelum tampil di direktori publik.</p>
+              <h2 className="text-xl font-bold text-komuna-navy mb-3">3. Komunitas</h2>
+              <p className="text-gray-600">Komunitas yang dibuat harus mematuhi pedoman platform. Admin berhak menangguhkan atau menolak komunitas yang melanggar ketentuan. Komunitas baru akan melalui proses review sebelum tampil di direktori publik.</p>
             </section>
             <section className="bg-white border rounded-xl p-6">
               <h2 className="text-xl font-bold text-komuna-navy mb-3">4. Event</h2>

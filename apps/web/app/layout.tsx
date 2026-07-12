@@ -15,16 +15,14 @@ export const metadata: Metadata = {
     template: "%s | KomunaID",
   },
   description:
-    "Platform digital untuk menghubungkan individu, komunitas, organisasi, event, dan ekosistem kolaborasi secara terstruktur di Indonesia.",
+    "Platform digital untuk menghubungkan individu, komunitas, event, dan volunteer secara terstruktur di Indonesia.",
   keywords: [
     "komunitas",
     "digital",
     "indonesia",
     "event",
-    "organisasi",
     "volunteer",
     "komuna",
-    "kolaborasi",
   ],
   authors: [{ name: "PT Komuna Digital Indonesia" }],
   creator: "PT Komuna Digital Indonesia",

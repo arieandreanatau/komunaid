@@ -1,9 +1,12 @@
 import { Hono } from "hono";
 import { prisma } from "@komunaid/database";
 import { updateProfileSchema, paginationSchema } from "@komunaid/shared";
+import { MAX_INTERESTS, COMMUNITY_STATUSES } from "@komunaid/constants";
 import { authMiddleware } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import { createAuditLog, AuditActions } from "../services/audit";
+import { parsePagination, paginatedResponse } from "../lib/pagination";
+import { sanitizeText } from "../lib/xss";
 import type { AuthUser } from "../middleware/auth";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
@@ -25,6 +28,13 @@ userRoutes.get("/profile", authMiddleware, async (c) => {
       joinedCommunities: {
         include: {
           community: {
+            select: { id: true, name: true, slug: true, logo: true, status: true },
+          },
+        },
+      },
+      organizationMembers: {
+        include: {
+          organization: {
             select: { id: true, name: true, slug: true, logo: true, status: true },
           },
         },
@@ -77,6 +87,14 @@ userRoutes.get("/profile", authMiddleware, async (c) => {
           role: m.role,
           status: m.community.status,
         })),
+        organizations: user.organizationMembers.map((m) => ({
+          id: m.organization.id,
+          name: m.organization.name,
+          slug: m.organization.slug,
+          logo: m.organization.logo,
+          role: m.role,
+          status: m.organization.status,
+        })),
         events: user.registeredEvents.map((r) => ({
           id: r.event.id,
           title: r.event.title,
@@ -101,6 +119,13 @@ userRoutes.put("/profile", authMiddleware, validate(updateProfileSchema), async 
   const authUser = c.get("user");
   const data = c.get("validated");
 
+  const sanitizedData: Record<string, unknown> = {};
+  if (data.name !== undefined) sanitizedData.name = sanitizeText(data.name) || data.name;
+  if (data.phone !== undefined) sanitizedData.phone = data.phone;
+  if (data.bio !== undefined) sanitizedData.bio = sanitizeText(data.bio);
+  if (data.location !== undefined) sanitizedData.location = sanitizeText(data.location) || data.location;
+  if (data.avatar !== undefined) sanitizedData.avatar = data.avatar;
+
   const before = await prisma.user.findUnique({
     where: { id: authUser.id },
     select: { name: true, phone: true, bio: true, location: true, avatar: true },
@@ -108,7 +133,7 @@ userRoutes.put("/profile", authMiddleware, validate(updateProfileSchema), async 
 
   const updated = await prisma.user.update({
     where: { id: authUser.id },
-    data,
+    data: sanitizedData,
   });
 
   await createAuditLog({
@@ -167,7 +192,7 @@ userRoutes.get("/:id", async (c) => {
             select: { id: true, name: true, slug: true, logo: true },
           },
         },
-        where: { community: { status: "APPROVED" } },
+        where: { community: { status: COMMUNITY_STATUSES.APPROVED } },
         take: 10,
       },
     },
@@ -194,17 +219,21 @@ userRoutes.put("/interests", authMiddleware, async (c) => {
     return c.json({ success: false, message: "Interests harus berupa array" }, 400);
   }
 
-  if (interests.length > 20) {
-    return c.json({ success: false, message: "Maksimal 20 interests" }, 400);
+  if (interests.length > MAX_INTERESTS) {
+    return c.json({ success: false, message: `Maksimal ${MAX_INTERESTS} interests` }, 400);
   }
+
+  const sanitizedInterests = interests
+    .map((i) => sanitizeText(i))
+    .filter((i): i is string => i !== null && i.length > 0);
 
   await prisma.userInterest.deleteMany({
     where: { userId: authUser.id },
   });
 
-  if (interests.length > 0) {
+  if (sanitizedInterests.length > 0) {
     await prisma.userInterest.createMany({
-      data: interests.map((interest) => ({
+      data: sanitizedInterests.map((interest) => ({
         userId: authUser.id,
         interest,
       })),
@@ -213,7 +242,7 @@ userRoutes.put("/interests", authMiddleware, async (c) => {
 
   await createAuditLog({
     userId: authUser.id,
-    actionType: "USER_UPDATE_INTERESTS",
+    actionType: AuditActions.USER_UPDATE_INTERESTS,
     resourceName: "User",
     resourceId: authUser.id,
     afterData: { interests },
@@ -232,9 +261,8 @@ userRoutes.put("/interests", authMiddleware, async (c) => {
 
 userRoutes.get("/notifications", authMiddleware, async (c) => {
   const authUser = c.get("user");
+  const { page, limit } = parsePagination(c.req.url);
   const url = new URL(c.req.url);
-  const page = Math.max(1, parseInt(url.searchParams.get("page") || "1"));
-  const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") || "20")));
   const unreadOnly = url.searchParams.get("unread") === "true";
 
   const where: Record<string, unknown> = { userId: authUser.id };
@@ -252,16 +280,7 @@ userRoutes.get("/notifications", authMiddleware, async (c) => {
     prisma.notification.count({ where }),
   ]);
 
-  return c.json({
-    success: true,
-    data: notifications,
-    pagination: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-    },
-  });
+  return c.json(paginatedResponse(notifications, total, page, limit));
 });
 
 // ==========================================
@@ -309,9 +328,7 @@ userRoutes.put("/notifications/read-all", authMiddleware, async (c) => {
 
 userRoutes.get("/activity", authMiddleware, async (c) => {
   const authUser = c.get("user");
-  const url = new URL(c.req.url);
-  const page = Math.max(1, parseInt(url.searchParams.get("page") || "1"));
-  const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") || "20")));
+  const { page, limit } = parsePagination(c.req.url);
 
   const [activities, total] = await Promise.all([
     prisma.activityHistory.findMany({
@@ -323,14 +340,5 @@ userRoutes.get("/activity", authMiddleware, async (c) => {
     prisma.activityHistory.count({ where: { userId: authUser.id } }),
   ]);
 
-  return c.json({
-    success: true,
-    data: activities,
-    pagination: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-    },
-  });
+  return c.json(paginatedResponse(activities, total, page, limit));
 });

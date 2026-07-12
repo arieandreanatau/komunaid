@@ -7,10 +7,12 @@ const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || "localhost",
   port: parseInt(process.env.SMTP_PORT || "587"),
   secure: process.env.SMTP_SECURE === "true",
-  auth: process.env.SMTP_USER ? {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  } : undefined,
+  auth: process.env.SMTP_USER
+    ? {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      }
+    : undefined,
   tls: {
     rejectUnauthorized: process.env.NODE_ENV === "production",
   },
@@ -24,29 +26,47 @@ interface SendEmailParams {
 }
 
 export async function sendEmail(params: SendEmailParams): Promise<boolean> {
-  try {
-    if (!process.env.SMTP_HOST) {
-      log.warn({ to: params.to, subject: params.subject }, "SMTP not configured, email not sent");
-      return false;
+  const from = process.env.EMAIL_FROM || "noreply@komuna.id";
+
+  // Try SMTP (fallback for Resend)
+  if (process.env.SMTP_HOST) {
+    try {
+      await transporter.sendMail({
+        from,
+        to: params.to,
+        subject: params.subject,
+        html: params.html,
+        text: params.text,
+      });
+      log.info({ to: params.to, subject: params.subject }, "email sent via SMTP");
+      return true;
+    } catch (error) {
+      log.error({ err: error, to: params.to }, "failed to send email via SMTP");
     }
-
-    await transporter.sendMail({
-      from: process.env.EMAIL_FROM || "noreply@komuna.id",
-      to: params.to,
-      subject: params.subject,
-      html: params.html,
-      text: params.text,
-    });
-
-    log.info({ to: params.to, subject: params.subject }, "email sent");
-    return true;
-  } catch (error) {
-    log.error({ err: error, to: params.to }, "failed to send email");
-    return false;
   }
+
+  // Dev fallback — log to console
+  if (process.env.NODE_ENV !== "production") {
+    console.log("\n========================================");
+    console.log("📧 DEV EMAIL (not actually sent)");
+    console.log("To:", params.to);
+    console.log("Subject:", params.subject);
+    console.log("HTML:\n", params.html);
+    console.log("========================================\n");
+    return true;
+  }
+
+  log.warn(
+    { to: params.to, subject: params.subject },
+    "no email provider configured (set RESEND_API_KEY or SMTP_HOST), email not sent"
+  );
+  return false;
 }
 
-export function buildResetPasswordEmail(resetUrl: string): { subject: string; html: string } {
+export function buildResetPasswordEmail(resetUrl: string): {
+  subject: string;
+  html: string;
+} {
   return {
     subject: "Reset Password - KomunaID",
     html: `

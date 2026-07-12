@@ -11,18 +11,13 @@ import {
 import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import { createAuditLog, AuditActions } from "../services/audit";
+import { xssSanitize, sanitizeText } from "../lib/xss";
+import { slugify } from "@komunaid/utils";
 import type { AuthUser } from "../middleware/auth";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
 
 export const volunteerRoutes = new Hono<Env>();
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-}
 
 async function getEventOrganizerRole(userId: string, event: any): Promise<string | null> {
   if (event.communityId) {
@@ -64,11 +59,16 @@ function isValidOpportunityTransition(from: string, to: string): boolean {
 // ==========================================
 
 volunteerRoutes.get("/", optionalAuthMiddleware, validate(volunteerOpportunityQuerySchema, "query"), async (c) => {
+  const user = c.get("user");
   const q = c.get("validated");
   const page = q.page as number;
   const limit = q.limit as number;
 
   const where: any = { deletedAt: null };
+
+  if (!user) {
+    where.status = { notIn: ["DRAFT", "ARCHIVED"] };
+  }
 
   if (q.search) {
     where.OR = [
@@ -138,8 +138,8 @@ volunteerRoutes.get("/", optionalAuthMiddleware, validate(volunteerOpportunityQu
 volunteerRoutes.get("/my/applications", authMiddleware, async (c) => {
   const authUser = c.get("user");
   const url = new URL(c.req.url);
-  const page = parseInt(url.searchParams.get("page") || "1");
-  const limit = parseInt(url.searchParams.get("limit") || "20");
+  const page = Math.max(1, parseInt(url.searchParams.get("page") || "1") || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") || "20") || 20));
   const status = url.searchParams.get("status") || "";
 
   const where: any = { userId: authUser.id };
@@ -328,6 +328,10 @@ volunteerRoutes.get("/detail/:slug", optionalAuthMiddleware, async (c) => {
     return c.json({ success: false, message: "Volunteer opportunity tidak ditemukan" }, 404);
   }
 
+  if (!user && ["DRAFT", "ARCHIVED"].includes(opportunity.status)) {
+    return c.json({ success: false, message: "Volunteer opportunity tidak ditemukan" }, 404);
+  }
+
   let userApplication = null;
   if (user) {
     userApplication = await prisma.volunteerApplication.findUnique({
@@ -410,9 +414,16 @@ volunteerRoutes.post("/", authMiddleware, validate(createVolunteerOpportunitySch
 
   const { positions, ...opportunityData } = data;
 
+  const sanitizedOpportunityData = {
+    ...opportunityData,
+    title: sanitizeText(opportunityData.title),
+    description: sanitizeText(opportunityData.description),
+    contactEmail: sanitizeText(opportunityData.contactEmail),
+  };
+
   const opportunity = await prisma.volunteerOpportunity.create({
     data: {
-      ...opportunityData,
+      ...sanitizedOpportunityData,
       slug,
       createdById: authUser.id,
       registrationDeadline: data.registrationDeadline ? new Date(data.registrationDeadline) : null,
@@ -485,10 +496,17 @@ volunteerRoutes.patch("/:opportunityId", authMiddleware, validate(updateVoluntee
 
   const { positions, ...updateData } = data;
 
+  const sanitizedUpdateData = {
+    ...updateData,
+    title: sanitizeText(updateData.title),
+    description: sanitizeText(updateData.description),
+    contactEmail: sanitizeText(updateData.contactEmail),
+  };
+
   const updated = await prisma.volunteerOpportunity.update({
     where: { id: opportunityId },
     data: {
-      ...updateData,
+      ...sanitizedUpdateData,
       registrationDeadline: data.registrationDeadline ? new Date(data.registrationDeadline) : undefined,
       briefingDate: data.briefingDate ? new Date(data.briefingDate) : undefined,
       activityStartDate: data.activityStartDate ? new Date(data.activityStartDate) : undefined,
@@ -559,11 +577,24 @@ volunteerRoutes.delete("/:opportunityId", authMiddleware, async (c) => {
 
   const opportunity = await prisma.volunteerOpportunity.findUnique({
     where: { id: opportunityId },
-    include: { event: true },
+    include: {
+      event: true,
+      _count: { select: { applications: true } },
+    },
   });
 
   if (!opportunity || opportunity.deletedAt) {
     return c.json({ success: false, message: "Volunteer opportunity tidak ditemukan" }, 404);
+  }
+
+  if (opportunity._count.applications > 0) {
+    return c.json(
+      {
+        success: false,
+        message: "Tidak dapat menghapus opportunity yang masih memiliki pendaftaran aktif",
+      },
+      400
+    );
   }
 
   const role = await getEventOrganizerRole(authUser.id, opportunity.event);
@@ -884,8 +915,8 @@ volunteerRoutes.get("/:opportunityId/applications", authMiddleware, async (c) =>
   const authUser = c.get("user");
   const opportunityId = c.req.param("opportunityId") as string;
   const url = new URL(c.req.url);
-  const page = parseInt(url.searchParams.get("page") || "1");
-  const limit = parseInt(url.searchParams.get("limit") || "20");
+  const page = Math.max(1, parseInt(url.searchParams.get("page") || "1") || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") || "20") || 20));
   const status = url.searchParams.get("status") || "";
   const positionId = url.searchParams.get("positionId") || "";
 

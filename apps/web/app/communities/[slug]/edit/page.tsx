@@ -23,6 +23,14 @@ interface CommunityDetail {
   logo: string | null;
   banner: string | null;
   location: string | null;
+  address1: string | null;
+  address2: string | null;
+  postalCode: string | null;
+  kelurahan: string | null;
+  district: string | null;
+  country: string | null;
+  province: string | null;
+  city: string | null;
   website: string | null;
   membershipType: string;
   visibility: string;
@@ -37,6 +45,14 @@ interface EditCommunityForm {
   name: string;
   description: string;
   location: string;
+  address1: string;
+  address2: string;
+  postalCode: string;
+  kelurahan: string;
+  district: string;
+  country: string;
+  province: string;
+  city: string;
   website: string;
   membershipType: "OPEN" | "RESTRICTED";
   visibility: "PUBLIC" | "PRIVATE";
@@ -60,6 +76,12 @@ export default function EditCommunityPage() {
   const [success, setSuccess] = useState("");
   const [notAuthorized, setNotAuthorized] = useState(false);
 
+  const [countries, setCountries] = useState<string[]>([]);
+  const [provinces, setProvinces] = useState<string[]>([]);
+  const [cities, setCities] = useState<string[]>([]);
+  const [districts, setDistricts] = useState<string[]>([]);
+  const [kelurahanList, setKelurahanList] = useState<string[]>([]);
+
   const {
     register,
     handleSubmit,
@@ -72,6 +94,14 @@ export default function EditCommunityPage() {
       name: "",
       description: "",
       location: "",
+      address1: "",
+      address2: "",
+      postalCode: "",
+      kelurahan: "",
+      district: "",
+      country: "",
+      province: "",
+      city: "",
       website: "",
       membershipType: "OPEN",
       visibility: "PUBLIC",
@@ -93,14 +123,25 @@ export default function EditCommunityPage() {
 
     const fetchData = async () => {
       try {
-        const [communityRes, categoriesRes] = await Promise.all([
+        const [communityRes, categoriesRes, countryRes, provinceRes, cityRes, districtRes, kelurahanRes] = await Promise.all([
           api.get(`/communities/${slug}`),
           api.get("/categories"),
+          api.get("/master-data/countries"),
+          api.get("/master-data/provinces"),
+          api.get("/master-data/cities"),
+          api.get("/master-data/districts"),
+          api.get("/master-data/kelurahan"),
         ]);
 
         const comm = communityRes.data.community;
         setCommunity(comm);
         setCategories(categoriesRes.data.data || []);
+        setCountries(countryRes.data.data || []);
+        setProvinces(provinceRes.data.data || []);
+        const cityData = cityRes.data.data;
+        setCities(Array.isArray(cityData) ? cityData : []);
+        setDistricts(districtRes.data.data || []);
+        setKelurahanList(kelurahanRes.data.data || []);
 
         if (user && comm.owner.id !== user.id) {
           const hasAdminRole = user.roles?.includes("admin") || user.roles?.includes("SUPER_ADMIN");
@@ -114,6 +155,14 @@ export default function EditCommunityPage() {
           name: comm.name,
           description: comm.description || "",
           location: comm.location || "",
+          address1: comm.address1 || "",
+          address2: comm.address2 || "",
+          postalCode: comm.postalCode || "",
+          kelurahan: comm.kelurahan || "",
+          district: comm.district || "",
+          country: comm.country || "",
+          province: comm.province || "",
+          city: comm.city || "",
           website: comm.website || "",
           membershipType: comm.membershipType as "OPEN" | "RESTRICTED",
           visibility: comm.visibility as "PUBLIC" | "PRIVATE",
@@ -167,6 +216,14 @@ export default function EditCommunityPage() {
         name: data.name,
         description: data.description || undefined,
         location: data.location || undefined,
+        address1: data.address1 || undefined,
+        address2: data.address2 || undefined,
+        postalCode: data.postalCode || undefined,
+        kelurahan: data.kelurahan || undefined,
+        district: data.district || undefined,
+        country: data.country || undefined,
+        province: data.province || undefined,
+        city: data.city || undefined,
         website: data.website || undefined,
         membershipType: data.membershipType,
         visibility: data.visibility,
@@ -391,28 +448,146 @@ export default function EditCommunityPage() {
 
               <div>
                 <label
-                  htmlFor="location"
+                  htmlFor="address1"
                   className="block text-sm font-medium text-gray-700 mb-1"
                 >
-                  Lokasi
+                  Alamat 1
                 </label>
                 <input
-                  id="location"
+                  id="address1"
                   type="text"
-                  {...register("location", {
-                    maxLength: {
-                      value: 100,
-                      message: "Lokasi maksimal 100 karakter",
-                    },
-                  })}
+                  {...register("address1")}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
-                  placeholder="Contoh: Jakarta, Indonesia"
+                  placeholder="Contoh: Jl. Asia Afrika No. 1"
                 />
-                {errors.location && (
-                  <p className="mt-1 text-xs text-red-500">
-                    {errors.location.message}
-                  </p>
-                )}
+              </div>
+
+              <div>
+                <label
+                  htmlFor="address2"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Alamat 2 <span className="text-gray-400 font-normal">(opsional)</span>
+                </label>
+                <input
+                  id="address2"
+                  type="text"
+                  {...register("address2")}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
+                  placeholder="Contoh: Blok A No. 5, RT 01/RW 02"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="kelurahan"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Kelurahan <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="kelurahan"
+                  {...register("kelurahan")}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white"
+                >
+                  <option value="">-- Pilih Kelurahan --</option>
+                  {kelurahanList.map((k) => (
+                    <option key={k} value={k}>{k}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="district"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Kecamatan <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="district"
+                  {...register("district")}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white"
+                >
+                  <option value="">-- Pilih Kecamatan --</option>
+                  {districts.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label
+                    htmlFor="city"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    Kota/Kabupaten
+                  </label>
+                  <select
+                    id="city"
+                    {...register("city")}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white"
+                  >
+                    <option value="">-- Pilih Kota/Kabupaten --</option>
+                    {cities.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label
+                    htmlFor="province"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    Provinsi
+                  </label>
+                  <select
+                    id="province"
+                    {...register("province")}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white"
+                  >
+                    <option value="">-- Pilih Provinsi --</option>
+                    {provinces.map((p) => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label
+                    htmlFor="country"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    Negara
+                  </label>
+                  <select
+                    id="country"
+                    {...register("country")}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white"
+                  >
+                    <option value="">-- Pilih Negara --</option>
+                    {countries.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="postalCode"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Kode Pos <span className="text-gray-400 font-normal">(auto generate)</span>
+                </label>
+                <input
+                  id="postalCode"
+                  type="text"
+                  {...register("postalCode")}
+                  maxLength={5}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-gray-50"
+                  placeholder="Otomatis terisi saat memilih kelurahan"
+                />
               </div>
 
               <div>

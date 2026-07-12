@@ -17,18 +17,13 @@ import {
 } from "../middleware/rbac";
 import { validate } from "../middleware/validate";
 import { createAuditLog, AuditActions } from "../services/audit";
+import { xssSanitize, sanitizeText } from "../lib/xss";
+import { slugify } from "@komunaid/utils";
 import type { AuthUser } from "../middleware/auth";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
 
 export const organizationRoutes = new Hono<Env>();
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-}
 
 // ==========================================
 // 1. LIST ORGANIZATIONS (Public)
@@ -119,8 +114,8 @@ organizationRoutes.get("/", optionalAuthMiddleware, validate(organizationQuerySc
 organizationRoutes.get("/my/submissions", authMiddleware, async (c) => {
   const authUser = c.get("user");
   const url = new URL(c.req.url);
-  const page = parseInt(url.searchParams.get("page") || "1");
-  const limit = parseInt(url.searchParams.get("limit") || "10");
+  const page = Math.max(1, parseInt(url.searchParams.get("page") || "1") || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") || "10") || 10));
   const status = url.searchParams.get("status") || "";
 
   const where: any = {
@@ -320,9 +315,22 @@ organizationRoutes.post("/", authMiddleware, validate(createOrganizationSchema),
 
   const { categoryIds, tags, ...orgData } = data;
 
+  const sanitizedOrgData = {
+    ...orgData,
+    name: sanitizeText(orgData.name),
+    description: sanitizeText(orgData.description),
+    location: sanitizeText(orgData.location),
+    address1: sanitizeText(orgData.address1),
+    address2: sanitizeText(orgData.address2),
+    postalCode: sanitizeText(orgData.postalCode),
+    website: sanitizeText(orgData.website),
+    contactEmail: sanitizeText(orgData.contactEmail),
+    contactPhone: sanitizeText(orgData.contactPhone),
+  };
+
   const organization = await prisma.organization.create({
     data: {
-      ...orgData,
+      ...sanitizedOrgData,
       slug: finalSlug,
       ownerId: authUser.id,
       status: "DRAFT",
@@ -432,9 +440,22 @@ organizationRoutes.patch(
 
     const { categoryIds, tags, ...updateData } = data as any;
 
+    const sanitizedUpdate = {
+      ...updateData,
+      name: sanitizeText(updateData.name),
+      description: sanitizeText(updateData.description),
+      location: sanitizeText(updateData.location),
+      address1: sanitizeText(updateData.address1),
+      address2: sanitizeText(updateData.address2),
+      postalCode: sanitizeText(updateData.postalCode),
+      website: sanitizeText(updateData.website),
+      contactEmail: sanitizeText(updateData.contactEmail),
+      contactPhone: sanitizeText(updateData.contactPhone),
+    };
+
     const updated = await prisma.organization.update({
       where: { id: organizationId },
-      data: updateData,
+      data: sanitizedUpdate,
     });
 
     if (categoryIds !== undefined) {
@@ -573,9 +594,22 @@ organizationRoutes.put(
 
     const { categoryIds, tags, ...updateData } = data;
 
+    const sanitizedUpdate = {
+      ...updateData,
+      name: sanitizeText(updateData.name),
+      description: sanitizeText(updateData.description),
+      location: sanitizeText(updateData.location),
+      address1: sanitizeText(updateData.address1),
+      address2: sanitizeText(updateData.address2),
+      postalCode: sanitizeText(updateData.postalCode),
+      website: sanitizeText(updateData.website),
+      contactEmail: sanitizeText(updateData.contactEmail),
+      contactPhone: sanitizeText(updateData.contactPhone),
+    };
+
     const organization = await prisma.organization.update({
       where: { id: organizationId },
-      data: updateData,
+      data: sanitizedUpdate,
     });
 
     if (categoryIds !== undefined) {
@@ -1299,7 +1333,7 @@ organizationRoutes.post(
     if (membership.role === "OWNER") {
       return c.json(
         { success: false, message: "Owner tidak bisa meninggalkan organisasi" },
-        400
+        403
       );
     }
 
@@ -1360,8 +1394,8 @@ organizationRoutes.get(
   async (c) => {
     const organizationId = c.req.param("organizationId") as string;
     const url = new URL(c.req.url);
-    const page = parseInt(url.searchParams.get("page") || "1");
-    const limit = parseInt(url.searchParams.get("limit") || "20");
+    const page = Math.max(1, parseInt(url.searchParams.get("page") || "1") || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") || "20") || 20));
     const search = url.searchParams.get("search") || "";
     const statusFilter = url.searchParams.get("status") || "PENDING";
 
@@ -1526,8 +1560,8 @@ organizationRoutes.get(
   async (c) => {
     const organizationId = c.req.param("organizationId") as string;
     const url = new URL(c.req.url);
-    const page = parseInt(url.searchParams.get("page") || "1");
-    const limit = parseInt(url.searchParams.get("limit") || "20");
+    const page = Math.max(1, parseInt(url.searchParams.get("page") || "1") || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") || "20") || 20));
     const search = url.searchParams.get("search") || "";
     const roleFilter = url.searchParams.get("role") || "";
     const sort = url.searchParams.get("sort") || "asc";
@@ -1784,8 +1818,8 @@ organizationRoutes.get(
   async (c) => {
     const organizationId = c.req.param("organizationId") as string;
     const url = new URL(c.req.url);
-    const page = parseInt(url.searchParams.get("page") || "1");
-    const limit = parseInt(url.searchParams.get("limit") || "20");
+    const page = Math.max(1, parseInt(url.searchParams.get("page") || "1") || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") || "20") || 20));
     const actionFilter = url.searchParams.get("action") || "";
 
     const where: any = {

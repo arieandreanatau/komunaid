@@ -1,136 +1,105 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import api from "@/lib/api";
 import { useAuth } from "@/components/auth-provider";
 
-type TabKey = "provinces" | "cities" | "countries" | "interests" | "tabs";
+interface MasterDataStats {
+  totalCategories: number;
+  totalLocations: number;
+  totalRoles: number;
+  totalPermissions: number;
+}
 
-const tabs: { key: TabKey; label: string }[] = [
-  { key: "provinces", label: "Provinsi" }, { key: "cities", label: "Kota" },
-  { key: "countries", label: "Negara" }, { key: "interests", label: "Interest" }, { key: "tabs", label: "Tags" },
+const quickActions = [
+  { label: "Kategori", desc: "Kelola kategori komunitas, organisasi, event", href: "/admin/master-data/categories", color: "bg-komuna-blue" },
+  { label: "Lokasi", desc: "Negara, provinsi, kota, kecamatan, kelurahan", href: "/admin/master-data/locations", color: "bg-komuna-teal" },
+  { label: "Role", desc: "Kelola role dan assignment pengguna", href: "/admin/master-data/roles", color: "bg-purple-500" },
+  { label: "Permission", desc: "Manajemen hak akses", href: "/admin/master-data/permissions", color: "bg-orange-500" },
 ];
 
-export default function MasterDataPage() {
+export default function MasterDataOverviewPage() {
+  const router = useRouter();
   const { user } = useAuth();
   const isSuperAdmin = user?.roles?.includes("SUPER_ADMIN");
-  const [activeTab, setActiveTab] = useState<TabKey>("provinces");
-  const [data, setData] = useState<any[]>([]);
-  const [newItem, setNewItem] = useState("");
+  const [stats, setStats] = useState<MasterDataStats>({ totalCategories: 0, totalLocations: 0, totalRoles: 0, totalPermissions: 0 });
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  const fetchData = useCallback(async () => {
+  const fetchStats = useCallback(async () => {
     setLoading(true);
     try {
-      const { data: res } = await api.get(`/admin/master-data/${activeTab}`);
-      setData(Array.isArray(res.data) ? res.data : []);
-    } catch { setData([]); }
+      const { data } = await api.get("/admin/master-data/stats");
+      setStats(data.data || { totalCategories: 0, totalLocations: 0, totalRoles: 0, totalPermissions: 0 });
+    } catch { /* empty */ }
     finally { setLoading(false); }
-  }, [activeTab]);
+  }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { fetchStats(); }, [fetchStats]);
 
-  useEffect(() => {
-    if (message) { const t = setTimeout(() => setMessage(null), 3000); return () => clearTimeout(t); }
-  }, [message]);
+  if (!isSuperAdmin) {
+    return <div className="text-center py-16 text-gray-500">Hanya Super Admin yang dapat mengakses halaman ini.</div>;
+  }
 
-  if (!isSuperAdmin) return <div className="text-center py-16 text-gray-500">Hanya Super Admin yang dapat mengakses halaman ini.</div>;
-
-  const handleAdd = () => {
-    if (!newItem.trim()) return;
-    if (data.some((d) => typeof d === "string" ? d.toLowerCase() === newItem.toLowerCase() : false)) {
-      setMessage({ type: "error", text: "Item sudah ada" }); return;
-    }
-    setData([...data, newItem.trim()]);
-    setNewItem("");
-  };
-
-  const handleRemove = (index: number) => {
-    setData(data.filter((_, i) => i !== index));
-  };
-
-  const handleSave = async () => {
-    setSaving(true); setMessage(null);
-    try {
-      await api.put(`/admin/master-data/${activeTab}`, { [activeTab]: data });
-      setMessage({ type: "success", text: `${tabs.find((t) => t.key === activeTab)?.label} berhasil disimpan` });
-    } catch { setMessage({ type: "error", text: "Gagal menyimpan" }); }
-    finally { setSaving(false); }
-  };
+  const statCards = [
+    { label: "Kategori", value: stats.totalCategories, icon: "M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z", color: "text-komuna-blue bg-komuna-blue/10" },
+    { label: "Lokasi", value: stats.totalLocations, icon: "M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z M15 11a3 3 0 11-6 0 3 3 0 016 0z", color: "text-komuna-teal bg-komuna-teal/10" },
+    { label: "Role", value: stats.totalRoles, icon: "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z", color: "text-purple-500 bg-purple-500/10" },
+    { label: "Permission", value: stats.totalPermissions, icon: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z", color: "text-orange-500 bg-orange-500/10" },
+  ];
 
   return (
     <div className="space-y-6">
-      <div><h1 className="text-2xl font-bold text-komuna-navy">Master Data</h1>
-        <p className="text-sm text-gray-500 mt-1">Kelola data referensi platform</p></div>
+      <div>
+        <h1 className="text-2xl font-bold text-komuna-navy">Master Data</h1>
+        <p className="text-sm text-gray-500 mt-1">Kelola data referensi platform</p>
+      </div>
 
-      {message && (
-        <div className={`px-4 py-3 rounded-lg text-sm font-medium ${message.type === "success" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
-          {message.text}
-        </div>
-      )}
-
-      <div className="flex flex-col lg:flex-row gap-6">
-        <div className="lg:w-48 shrink-0">
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-2">
-            {tabs.map((tab) => (
-              <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-                className={`w-full px-3 py-2.5 rounded-lg text-sm font-medium text-left transition-colors ${activeTab === tab.key ? "bg-komuna-blue/10 text-komuna-blue" : "text-gray-600 hover:bg-gray-50"}`}>
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex-1">
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-komuna-navy mb-4">{tabs.find((t) => t.key === activeTab)?.label}</h2>
-
-            {loading ? (
-              <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="h-10 bg-gray-100 rounded-lg animate-pulse" />
-              ))}</div>
-            ) : (
-              <>
-                <div className="flex gap-2 mb-4">
-                  <input type="text" value={newItem} onChange={(e) => setNewItem(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-                    placeholder={`Tambah ${tabs.find((t) => t.key === activeTab)?.label} baru...`}
-                    className="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-komuna-blue/30" />
-                  <button onClick={handleAdd}
-                    className="px-4 py-2.5 text-sm font-medium text-white bg-komuna-blue rounded-lg hover:bg-komuna-navy transition-colors shrink-0">
-                    Tambah
-                  </button>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-white rounded-xl p-5 shadow-sm animate-pulse">
+              <div className="h-4 bg-gray-200 rounded w-1/3 mb-2" />
+              <div className="h-8 bg-gray-200 rounded w-1/2" />
+            </div>
+          ))
+        ) : (
+          statCards.map((card) => (
+            <div key={card.label} className="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
+              <div className="flex items-center gap-4">
+                <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${card.color}`}>
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={card.icon} />
+                  </svg>
                 </div>
-
-                <div className="space-y-1 max-h-96 overflow-y-auto">
-                  {data.length === 0 ? (
-                    <p className="text-sm text-gray-400 text-center py-8">Belum ada data</p>
-                  ) : (
-                    data.map((item, index) => (
-                      <div key={index} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 group">
-                        <span className="h-2 w-2 rounded-full bg-komuna-blue/30 shrink-0" />
-                        <span className="flex-1 text-sm text-gray-700">{item}</span>
-                        <button onClick={() => handleRemove(index)}
-                          className="px-2 py-1 text-xs font-medium text-red-600 bg-red-50 rounded opacity-0 group-hover:opacity-100 hover:bg-red-100 transition-all">
-                          Hapus
-                        </button>
-                      </div>
-                    ))
-                  )}
+                <div>
+                  <p className="text-sm text-gray-500">{card.label}</p>
+                  <p className="text-2xl font-bold text-komuna-navy">{card.value}</p>
                 </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
 
-                <div className="flex justify-between items-center mt-4 pt-4 border-t">
-                  <span className="text-sm text-gray-500">{data.length} item</span>
-                  <button onClick={handleSave} disabled={saving}
-                    className="px-6 py-2.5 text-sm font-medium text-white bg-komuna-blue rounded-lg hover:bg-komuna-navy transition-colors disabled:opacity-50">
-                    {saving ? "Menyimpan..." : "Simpan"}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+      <div>
+        <h2 className="text-lg font-semibold text-komuna-navy mb-4">Aksi Cepat</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {quickActions.map((action) => (
+            <button
+              key={action.href}
+              onClick={() => router.push(action.href)}
+              className="bg-white rounded-xl shadow-sm p-5 border border-gray-100 hover:shadow-md transition-shadow text-left"
+            >
+              <div className={`h-10 w-10 rounded-lg ${action.color} flex items-center justify-center mb-3`}>
+                <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+              <h3 className="font-semibold text-komuna-navy">{action.label}</h3>
+              <p className="text-xs text-gray-500 mt-1">{action.desc}</p>
+            </button>
+          ))}
         </div>
       </div>
     </div>

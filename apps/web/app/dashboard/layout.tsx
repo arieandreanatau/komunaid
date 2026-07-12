@@ -6,6 +6,7 @@ import { Header } from "@/components/header";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { api } from "@/lib/api";
+import { featureFlags } from "@/lib/feature-flags";
 
 interface Community {
   id: string;
@@ -56,7 +57,7 @@ export default function DashboardLayout({
         try {
           const response = await api.get("/users/profile");
           const profile: UserProfile = response.data;
-          const ownedApproved = profile.communities.find(
+          const ownedApproved = profile.communities?.find(
             (c) => c.role === "OWNER" && c.community.status === "APPROVED"
           );
           if (ownedApproved) {
@@ -94,8 +95,6 @@ export default function DashboardLayout({
     { href: "/communities", label: "Komunitas Saya", icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" },
     { href: "/dashboard/my-submissions", label: "Pengajuan Komunitas", icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
     { href: "/dashboard/events", label: "Event Saya", icon: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" },
-    { href: "/dashboard/my-organization-submissions", label: "Pengajuan Organisasi", icon: "M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" },
-    { href: "/organizations/create", label: "Buat Organisasi", icon: "M12 4v16m8-8H4" },
     { href: "/dashboard/profile", label: "Profil", icon: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" },
     { href: "/dashboard/notifications", label: "Notifikasi", icon: "M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" },
     { href: "/dashboard/activity", label: "Aktivitas", icon: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" },
@@ -169,14 +168,6 @@ export default function DashboardLayout({
                 </div>
               </div>
             )}
-            {organizationItems.length > 0 && (
-              <div>
-                <h3 className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Organisasi Saya</h3>
-                <div className="space-y-1">
-                  {organizationItems.map(renderSidebarItem)}
-                </div>
-              </div>
-            )}
           </nav>
         </aside>
 
@@ -217,14 +208,6 @@ export default function DashboardLayout({
                     <h3 className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Komunitas Saya</h3>
                     <div className="space-y-1">
                       {communityItems.map(renderSidebarItem)}
-                    </div>
-                  </div>
-                )}
-                {organizationItems.length > 0 && (
-                  <div>
-                    <h3 className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Organisasi Saya</h3>
-                    <div className="space-y-1">
-                      {organizationItems.map(renderSidebarItem)}
                     </div>
                   </div>
                 )}

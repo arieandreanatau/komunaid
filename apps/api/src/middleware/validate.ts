@@ -9,7 +9,14 @@ export function validate(schema: ZodSchema, source: "body" | "query" | "param" =
       try {
         data = await c.req.json();
       } catch {
-        return c.json({ success: false, message: "Invalid JSON body" }, 400);
+        return c.json(
+          {
+            success: false,
+            message: "Validation Error",
+            errors: [{ field: "body", message: "Invalid JSON body" }],
+          },
+          400
+        );
       }
     } else if (source === "query") {
       const url = new URL(c.req.url);

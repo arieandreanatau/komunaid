@@ -19,11 +19,12 @@ model User {
   name            String
   avatar          String?
   phone           String?
-  bio             String?
+  bio             String?    @db.Text
   location        String?
   emailVerifiedAt DateTime?
   status          UserStatus @default(ACTIVE)
   deletedAt       DateTime?
+  tokenVersion    Int        @default(0)
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
@@ -47,8 +48,12 @@ model User {
   volunteerApplications VolunteerApplication[]
   reviewedVolunteerApps VolunteerApplication[] @relation("ReviewedVolunteerApps")
   picAssignments        VolunteerAssignment[]
+  communityMedias       CommunityMedia[]
+  loginHistory          LoginHistory[]
+  refreshTokens         RefreshToken[]
 
   @@index([status])
+  @@index([deletedAt])
   @@map("users")
 }
 
@@ -84,7 +89,7 @@ model Community {
   id             String              @id @default(cuid())
   name           String
   slug           String              @unique
-  description    String?
+  description    String?             @db.Text
   coverImage     String?
   logo           String?
   location       String?
@@ -93,13 +98,19 @@ model Community {
   status         CommunityStatus     @default(PENDING)
   visibility     CommunityVisibility @default(PUBLIC)
   banner         String?
+  address        String?
+  address1       String?
+  address2       String?
+  postalCode     String?
+  district       String?
+  village        String?             @map("kelurahan")
   country        String?
   province       String?
   city           String?
   instagram      String?
   contactEmail   String?
   contactPhone   String?
-  adminNote      String?
+  adminNote      String?             @db.Text
   submittedAt    DateTime?
   reviewedAt     DateTime?
   deletedAt      DateTime?
@@ -108,18 +119,21 @@ model Community {
 
   // Relations
   ownerId             String
-  owner               User                @relation(fields: [ownerId], references: [id])
+  owner               User                 @relation(fields: [ownerId], references: [id])
   members             CommunityMember[]
   events              Event[]
   categories          CommunityCategory[]
   joinRequests        JoinRequest[]
   tags                CommunityTag[]
   settings            CommunitySettings?
+  media               CommunityMedia[]
+  statistics          CommunityStatistic[]
   membershipHistories MembershipHistory[]
 
   @@index([ownerId])
   @@index([status])
   @@index([submittedAt])
+  @@index([deletedAt])
   @@map("communities")
 }
 
@@ -158,6 +172,8 @@ model CommunityMember {
   @@unique([communityId, userId])
   @@index([communityId])
   @@index([userId])
+  @@index([deletedAt])
+  @@index([communityId, status])
   @@map("community_members")
 }
 
@@ -175,13 +191,16 @@ enum MembershipStatus {
   BANNED
 }
 
+// NOTE: The @@unique constraints below do not fully prevent duplicate join requests
+// when communityId or organizationId is NULL, because MySQL treats NULL != NULL in
+// unique indexes. Duplicate check MUST be done at the application level before insert.
 model JoinRequest {
   id             String            @id @default(cuid())
   communityId    String?
   organizationId String?
   userId         String
   status         JoinRequestStatus @default(PENDING)
-  message        String?
+  message        String?           @db.Text
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
@@ -190,6 +209,7 @@ model JoinRequest {
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([communityId, userId])
+  @@unique([organizationId, userId])
   @@index([communityId])
   @@index([organizationId])
   @@index([userId])
@@ -250,6 +270,61 @@ model CommunitySettings {
 }
 
 // ==========================================
+// COMMUNITY MEDIA (Announcements & News)
+// ==========================================
+
+enum CommunityMediaType {
+  ANNOUNCEMENT
+  NEWS
+}
+
+model CommunityMedia {
+  id          String             @id @default(cuid())
+  communityId String
+  title       String
+  content     String             @db.Text
+  type        CommunityMediaType @default(ANNOUNCEMENT)
+  imageUrl    String?
+  isPublished Boolean            @default(false)
+  publishedAt DateTime?
+  createdById String
+  deletedAt   DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  createdBy User      @relation(fields: [createdById], references: [id])
+
+  @@index([communityId])
+  @@index([type])
+  @@index([isPublished])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@map("community_media")
+}
+
+// ==========================================
+// COMMUNITY STATISTICS
+// ==========================================
+
+model CommunityStatistic {
+  id              String   @id @default(cuid())
+  communityId     String
+  totalMembers    Int      @default(0)
+  totalEvents     Int      @default(0)
+  totalVolunteers Int      @default(0)
+  snapshotDate    DateTime @default(now())
+  metadata        Json?
+  createdAt       DateTime @default(now())
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@index([communityId])
+  @@index([snapshotDate])
+  @@map("community_statistics")
+}
+
+// ==========================================
 // ORGANIZATION
 // ==========================================
 
@@ -257,12 +332,18 @@ model Organization {
   id           String                 @id @default(cuid())
   name         String
   slug         String                 @unique
-  description  String?
+  description  String?                @db.Text
   logo         String?
   banner       String?
   website      String?
   location     String?
   industry     String?
+  address      String?
+  address1     String?
+  address2     String?
+  postalCode   String?
+  kelurahan    String?
+  district     String?
   country      String?
   province     String?
   city         String?
@@ -271,7 +352,7 @@ model Organization {
   contactPhone String?
   visibility   OrganizationVisibility @default(PUBLIC)
   status       OrganizationStatus     @default(DRAFT)
-  adminNote    String?
+  adminNote    String?                @db.Text
   submittedAt  DateTime?
   reviewedAt   DateTime?
   deletedAt    DateTime?
@@ -291,6 +372,7 @@ model Organization {
   @@index([ownerId])
   @@index([status])
   @@index([submittedAt])
+  @@index([deletedAt])
   @@map("organizations")
 }
 
@@ -324,6 +406,8 @@ model OrganizationMember {
   @@unique([organizationId, userId])
   @@index([organizationId])
   @@index([userId])
+  @@index([deletedAt])
+  @@index([organizationId, status])
   @@map("organization_members")
 }
 
@@ -384,7 +468,7 @@ model Event {
   id            String          @id @default(cuid())
   title         String
   slug          String          @unique
-  description   String?
+  description   String?         @db.Text
   coverImage    String?
   thumbnail     String?
   location      String?
@@ -423,7 +507,9 @@ model Event {
   @@index([createdById])
   @@index([eventDate])
   @@index([status])
+  @@index([deletedAt])
   @@index([communityId, status, eventDate])
+  @@index([organizationId, status, eventDate])
   @@map("events")
 }
 
@@ -468,6 +554,7 @@ model EventRegistration {
   @@index([eventId])
   @@index([userId])
   @@index([attendance])
+  @@index([eventId, status])
   @@map("event_registrations")
 }
 
@@ -507,7 +594,7 @@ model VolunteerOpportunity {
   id                   String                     @id @default(cuid())
   title                String
   slug                 String                     @unique
-  description          String?
+  description          String?                    @db.Text
   status               VolunteerOpportunityStatus @default(DRAFT)
   registrationDeadline DateTime?
   briefingDate         DateTime?
@@ -529,6 +616,7 @@ model VolunteerOpportunity {
   @@index([createdById])
   @@index([status])
   @@index([createdAt])
+  @@index([deletedAt])
   @@map("volunteer_opportunities")
 }
 
@@ -544,9 +632,9 @@ model VolunteerPosition {
   id            String   @id @default(cuid())
   opportunityId String
   name          String
-  description   String?
+  description   String?  @db.Text
   requiredQty   Int      @default(1)
-  requirement   String?
+  requirement   String?  @db.Text
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -563,14 +651,14 @@ model VolunteerApplication {
   opportunityId String
   positionId    String
   userId        String
-  motivation    String?
-  experience    String?
-  availability  String?
+  motivation    String?                    @db.Text
+  experience    String?                    @db.Text
+  availability  String?                    @db.Text
   agreement     Boolean                    @default(false)
   status        VolunteerApplicationStatus @default(APPLIED)
   reviewedAt    DateTime?
   reviewedById  String?
-  reviewNote    String?
+  reviewNote    String?                    @db.Text
   createdAt     DateTime                   @default(now())
   updatedAt     DateTime                   @updatedAt
 
@@ -603,7 +691,7 @@ model VolunteerAssignment {
   picUserId     String?
   shiftStart    DateTime?
   shiftEnd      DateTime?
-  notes         String?
+  notes         String?   @db.Text
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -649,7 +737,7 @@ model Category {
   id          String       @id @default(cuid())
   name        String       @unique
   slug        String       @unique
-  description String?
+  description String?      @db.Text
   icon        String?
   type        CategoryType @default(COMMUNITY)
   isActive    Boolean      @default(true)
@@ -675,11 +763,11 @@ model Report {
   targetType  ReportTargetType
   targetId    String
   reason      ReportReason
-  description String?
+  description String?          @db.Text
   status      ReportStatus     @default(OPEN)
   reviewedBy  String?
   reviewedAt  DateTime?
-  reviewNote  String?
+  reviewNote  String?          @db.Text
   deletedAt   DateTime?
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
@@ -691,6 +779,7 @@ model Report {
   @@index([reporterId])
   @@index([targetType, targetId])
   @@index([createdAt])
+  @@index([deletedAt])
   @@map("reports")
 }
 
@@ -732,7 +821,7 @@ model AuditLog {
   ipAddress    String?
   createdAt    DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@index([userId])
   @@index([resourceName, resourceId])
@@ -790,7 +879,7 @@ model NotificationTemplate {
 // ==========================================
 
 model MembershipHistory {
-  id             String             @id @default(cuid())
+  id             String           @id @default(cuid())
   communityId    String?
   organizationId String?
   userId         String
@@ -799,7 +888,7 @@ model MembershipHistory {
   newRole        String?
   details        Json?
   performedBy    String?
-  createdAt      DateTime           @default(now())
+  createdAt      DateTime         @default(now())
 
   community    Community?    @relation(fields: [communityId], references: [id], onDelete: Cascade)
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -833,6 +922,22 @@ enum MembershipAction {
   ORG_MEMBER_LEAVE
   ORG_MEMBER_REMOVE
   ORG_ROLE_CHANGE
+}
+
+enum MessageCategory {
+  GENERAL
+  FEEDBACK
+  COMPLAINT
+  SUGGESTION
+  PARTNERSHIP
+  OTHER
+}
+
+enum MessageStatus {
+  PENDING
+  READ
+  REPLIED
+  ARCHIVED
 }
 
 // ==========================================
@@ -870,6 +975,90 @@ model ActivityHistory {
 }
 
 // ==========================================
+// LOGIN HISTORY
+// ==========================================
+
+model LoginHistory {
+  id            String   @id @default(cuid())
+  userId        String
+  ipAddress     String?
+  userAgent     String?
+  success       Boolean  @default(true)
+  failureReason String?
+  createdAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([success])
+  @@map("login_history")
+}
+
+// ==========================================
+// CMS PAGES
+// ==========================================
+
+model CmsPage {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  title       String
+  content     String    @db.LongText
+  metaTitle   String?
+  metaDesc    String?
+  isPublished Boolean   @default(false)
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([slug])
+  @@index([isPublished])
+  @@map("cms_pages")
+}
+
+// ==========================================
+// CMS BANNERS
+// ==========================================
+
+model CmsBanner {
+  id        String   @id @default(cuid())
+  title     String
+  imageUrl  String
+  linkUrl   String?
+  position  Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([position])
+  @@map("cms_banners")
+}
+
+// ==========================================
+// CMS CONTACT
+// ==========================================
+
+model CmsContact {
+  id          String   @id @default(cuid())
+  companyName String
+  phone       String?
+  address     String?  @db.Text
+  email       String?
+  instagram   String?
+  facebook    String?
+  twitter     String?
+  threads     String?
+  website     String?
+  mapsUrl     String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("cms_contacts")
+}
+
+// ==========================================
 // SETTINGS
 // ==========================================
 
@@ -880,4 +1069,100 @@ model Setting {
   updatedAt DateTime @updatedAt
 
   @@map("settings")
+}
+
+// ==========================================
+// ORGANIZATION STRUCTURE (PT Komuna Digital Indonesia)
+// ==========================================
+
+model OrganizationStructure {
+  id          String   @id @default(cuid())
+  title       String
+  description String?  @db.Text
+  imageUrl    String?
+  parentId    String?
+  position    Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  parent                       OrganizationStructure?        @relation("OrgStructHierarchy", fields: [parentId], references: [id])
+  children                     OrganizationStructure[]       @relation("OrgStructHierarchy")
+  organizationStructureMembers OrganizationStructureMember[]
+
+  @@index([parentId])
+  @@index([position])
+  @@index([isActive])
+  @@map("organization_structures")
+}
+
+model OrganizationStructureMember {
+  id          String   @id @default(cuid())
+  structureId String
+  name        String
+  position    String
+  email       String?
+  phone       String?
+  avatar      String?
+  bio         String?  @db.Text
+  order       Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  structure OrganizationStructure @relation(fields: [structureId], references: [id], onDelete: Cascade)
+
+  @@index([structureId])
+  @@index([order])
+  @@map("organization_structure_members")
+}
+
+// ==========================================
+// CONTACT MESSAGES (Guest Submit)
+// ==========================================
+
+model ContactMessage {
+  id        String          @id @default(cuid())
+  name      String
+  email     String
+  subject   String
+  message   String          @db.Text
+  category  MessageCategory @default(GENERAL)
+  status    MessageStatus   @default(PENDING)
+  reply     String?         @db.Text
+  repliedAt DateTime?
+  repliedBy String?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("contact_messages")
+}
+
+// ==========================================
+// REFRESH TOKEN (Rotation + Family Tracking)
+// ==========================================
+
+model RefreshToken {
+  id           String   @id @default(cuid())
+  userId       String
+  tokenHash    String   @unique
+  familyId     String
+  fingerprint  String?
+  ipAddress    String?
+  userAgent    String?
+  isRevoked    Boolean  @default(false)
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+  @@index([userId, isRevoked])
+  @@map("refresh_tokens")
 }

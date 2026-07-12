@@ -1,20 +1,43 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useAuth } from "./auth-provider";
 import { useRouter } from "next/navigation";
+import { featureFlags } from "@/lib/feature-flags";
 
 export function Header() {
   const { user, isAuthenticated, isLoading, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [tentangOpen, setTentangOpen] = useState(false);
+  const tentangRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (tentangRef.current && !tentangRef.current.contains(e.target as Node)) {
+        setTentangOpen(false);
+      }
+    }
+    if (tentangOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [tentangOpen]);
 
   const handleLogout = async () => {
     await logout();
     router.push("/");
   };
+
+  const tentangItems = [
+    { href: "/about", label: "Tentang Kami" },
+    { href: "/faq", label: "FAQ" },
+    { href: "/contact", label: "Kontak" },
+    { href: "/submit", label: "Submit Pesan" },
+    { href: "/organization-structure", label: "Struktur Organisasi" },
+  ];
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
@@ -25,30 +48,66 @@ export function Header() {
         </Link>
 
         {/* Desktop Nav */}
-        <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
+        <nav className="hidden md:flex items-center gap-6 text-sm font-medium" aria-label="Navigasi utama">
           <Link href="/communities" className="text-gray-600 hover:text-komuna-blue transition-colors">
             Komunitas
           </Link>
           <Link href="/events" className="text-gray-600 hover:text-komuna-blue transition-colors">
             Event
           </Link>
-          <Link href="/organizations" className="text-gray-600 hover:text-komuna-blue transition-colors">
-            Organisasi
+          <Link href="/volunteer" className="text-gray-600 hover:text-komuna-blue transition-colors">
+            Volunteer
           </Link>
-          {!user?.roles?.some((r: string) => ["SUPER_ADMIN", "PLATFORM_ADMIN"].includes(r)) && (
-            <Link
-              href="/admin/login"
-              className="flex items-center gap-1.5 text-gray-400 hover:text-komuna-navy transition-colors"
-              title="Admin Panel"
+          <div className="relative" ref={tentangRef}>
+            <button
+              onClick={() => setTentangOpen(!tentangOpen)}
+              className="flex items-center gap-1 text-gray-600 hover:text-komuna-blue transition-colors"
+              aria-expanded={tentangOpen}
+              aria-haspopup="true"
             >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              Tentang
+              <svg className={`h-4 w-4 transition-transform ${tentangOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
-            </Link>
-          )}
+            </button>
+            {tentangOpen && (
+              <div
+                className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50"
+                role="menu"
+                aria-label="Menu Tentang"
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") { setTentangOpen(false); }
+                }}
+              >
+                {tentangItems.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    role="menuitem"
+                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-komuna-blue transition-colors"
+                    onClick={() => setTentangOpen(false)}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
         </nav>
 
         <div className="flex items-center gap-3">
+          {/* Admin Panel icon — always visible, links to /admin/login */}
+          <Link
+            href="/admin/login"
+            className="flex items-center gap-1.5 text-gray-400 hover:text-komuna-navy transition-colors"
+            title="Admin Panel"
+            aria-label="Admin Panel"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+          </Link>
+
           {isLoading ? (
             <div className="h-8 w-8 rounded-full bg-gray-200 animate-pulse" />
           ) : isAuthenticated && user ? (
@@ -56,6 +115,8 @@ export function Header() {
               <button
                 onClick={() => setDropdownOpen(!dropdownOpen)}
                 className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+                aria-expanded={dropdownOpen}
+                aria-haspopup="true"
               >
                 {user.avatar ? (
                   <img src={user.avatar} alt={user.name} className="h-8 w-8 rounded-full object-cover" />
@@ -69,8 +130,13 @@ export function Header() {
 
               {dropdownOpen && (
                 <>
-                  <div className="fixed inset-0 z-40" onClick={() => setDropdownOpen(false)} />
-                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50">
+                  <div className="fixed inset-0 z-40" onClick={() => setDropdownOpen(false)} aria-hidden="true" />
+                  <div
+                    className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50"
+                    role="menu"
+                    aria-label="Menu pengguna"
+                    onKeyDown={(e) => { if (e.key === "Escape") setDropdownOpen(false); }}
+                  >
                     <div className="px-4 py-2 border-b">
                       <p className="text-sm font-medium text-gray-900">{user.name}</p>
                       <p className="text-xs text-gray-500">@{user.username}</p>
@@ -78,6 +144,7 @@ export function Header() {
                     </div>
                     <Link
                       href="/dashboard"
+                      role="menuitem"
                       className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                       onClick={() => setDropdownOpen(false)}
                     >
@@ -87,6 +154,7 @@ export function Header() {
                     {user?.roles?.some((r: string) => ["SUPER_ADMIN", "PLATFORM_ADMIN"].includes(r)) && (
                       <Link
                         href="/admin"
+                        role="menuitem"
                         className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                         onClick={() => setDropdownOpen(false)}
                       >
@@ -96,6 +164,7 @@ export function Header() {
                     )}
                     <Link
                       href="/dashboard/profile"
+                      role="menuitem"
                       className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                       onClick={() => setDropdownOpen(false)}
                     >
@@ -104,6 +173,7 @@ export function Header() {
                     </Link>
                     <Link
                       href="/dashboard/notifications"
+                      role="menuitem"
                       className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                       onClick={() => setDropdownOpen(false)}
                     >
@@ -113,6 +183,7 @@ export function Header() {
                     <hr className="my-1" />
                     <button
                       onClick={handleLogout}
+                      role="menuitem"
                       className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50"
                     >
                       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
@@ -143,6 +214,8 @@ export function Header() {
           <button
             className="md:hidden p-2 rounded-lg hover:bg-gray-100"
             onClick={() => setMenuOpen(!menuOpen)}
+            aria-label={menuOpen ? "Tutup menu" : "Buka menu"}
+            aria-expanded={menuOpen}
           >
             <svg className="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               {menuOpen ? (
@@ -157,21 +230,35 @@ export function Header() {
 
       {/* Mobile Nav */}
       {menuOpen && (
-        <div className="md:hidden border-t bg-white px-4 py-3 space-y-2">
+        <nav className="md:hidden border-t bg-white px-4 py-3 space-y-2" aria-label="Navigasi mobile">
           <Link href="/communities" className="block py-2 text-sm text-gray-600 hover:text-komuna-blue" onClick={() => setMenuOpen(false)}>
             Komunitas
           </Link>
           <Link href="/events" className="block py-2 text-sm text-gray-600 hover:text-komuna-blue" onClick={() => setMenuOpen(false)}>
             Event
           </Link>
-          <Link href="/organizations" className="block py-2 text-sm text-gray-600 hover:text-komuna-blue" onClick={() => setMenuOpen(false)}>
-            Organisasi
+          <Link href="/volunteer" className="block py-2 text-sm text-gray-600 hover:text-komuna-blue" onClick={() => setMenuOpen(false)}>
+            Volunteer
           </Link>
-          {!user?.roles?.some((r: string) => ["SUPER_ADMIN", "PLATFORM_ADMIN"].includes(r)) && (
-            <Link href="/admin/login" className="block py-2 text-sm text-gray-400 hover:text-komuna-navy" onClick={() => setMenuOpen(false)}>
-              Admin Panel
-            </Link>
-          )}
+          <div className="border-t pt-2 mt-2">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1 px-2">Tentang</p>
+            {tentangItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="block py-2 text-sm text-gray-600 hover:text-komuna-blue pl-4"
+                onClick={() => setMenuOpen(false)}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </div>
+          <Link href="/admin/login" className="flex items-center gap-2 py-2 text-sm text-gray-400 hover:text-komuna-navy pl-4" onClick={() => setMenuOpen(false)}>
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+            Admin Panel
+          </Link>
           {isAuthenticated && user && (
             <>
               <Link href="/dashboard" className="block py-2 text-sm text-gray-600 hover:text-komuna-blue" onClick={() => setMenuOpen(false)}>
@@ -185,7 +272,7 @@ export function Header() {
               </button>
             </>
           )}
-        </div>
+        </nav>
       )}
     </header>
   );

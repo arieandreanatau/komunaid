@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { JsonLd } from "@/components/json-ld";
 
@@ -11,7 +12,7 @@ export const metadata: Metadata = {
 const faqs = [
   {
     q: "Apa itu KomunaID?",
-    a: "KomunaID adalah platform digital untuk menghubungkan individu, komunitas, organisasi, dan event di Indonesia. Platform ini menyediakan tools terintegrasi untuk manajemen keanggotaan, event management, volunteer matching, dan masih banyak lagi.",
+    a: "KomunaID adalah platform digital untuk menghubungkan individu, komunitas, event, dan volunteer di Indonesia. Platform ini menyediakan tools terintegrasi untuk manajemen keanggotaan, event management, volunteer matching, dan masih banyak lagi.",
   },
   {
     q: "Bagaimana cara bergabung dengan komunitas?",
@@ -47,6 +48,7 @@ export default function FAQPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <JsonLd type="website" data={{ potentialAction: { "@type": "SearchAction", target: "https://komuna.id/search?q={search_term_string}" } }} />
+      <Header />
 
       <main className="container mx-auto px-4 py-16 flex-1">
         <div className="max-w-3xl mx-auto">

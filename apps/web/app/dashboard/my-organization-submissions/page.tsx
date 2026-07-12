@@ -6,6 +6,8 @@ import Link from "next/link";
 import { Header } from "@/components/header";
 import { useAuth } from "@/components/auth-provider";
 import api from "@/lib/api";
+import { FeatureDisabledBanner } from "@/components/feature-disabled-banner";
+import { featureFlags } from "@/lib/feature-flags";
 
 interface Submission {
   id: string;
@@ -136,6 +138,15 @@ export default function MyOrganizationSubmissionsPage() {
       year: "numeric",
     });
   };
+
+  if (!featureFlags.organization) {
+    return (
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        <Header />
+        <FeatureDisabledBanner />
+      </div>
+    );
+  }
 
   if (authLoading || (!isAuthenticated && !authLoading)) {
     return (

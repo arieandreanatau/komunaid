@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useCallback } from "react";
+import { createContext, useContext, useEffect, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 import { useAuthStore, type User } from "@/lib/auth";
 
@@ -16,13 +16,24 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading, setUser, setLoading } = useAuthStore();
+  const loginTimestampRef = useRef<number>(0);
 
   const fetchUser = useCallback(async () => {
+    if (loginTimestampRef.current && Date.now() - loginTimestampRef.current < 5000) {
+      setLoading(false);
+      return;
+    }
     try {
       const { data } = await api.get("/auth/me");
+      if (loginTimestampRef.current && Date.now() - loginTimestampRef.current < 5000) {
+        setLoading(false);
+        return;
+      }
       setUser(data.data?.user || data.user);
     } catch {
-      setUser(null);
+      if (!loginTimestampRef.current || Date.now() - loginTimestampRef.current >= 5000) {
+        setUser(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -32,7 +43,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     fetchUser();
   }, [fetchUser]);
 
+  const setUserSafe = useCallback((u: User | null) => {
+    if (u) {
+      loginTimestampRef.current = Date.now();
+    } else {
+      loginTimestampRef.current = 0;
+    }
+    setUser(u);
+  }, [setUser]);
+
   const logout = useCallback(async () => {
+    loginTimestampRef.current = 0;
     try {
       await api.post("/auth/logout");
     } catch {
@@ -48,7 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         isAuthenticated,
         isLoading,
-        setUser,
+        setUser: setUserSafe,
         logout,
       }}
     >

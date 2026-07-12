@@ -1,6 +1,6 @@
 interface JsonLdProps {
   type: "website" | "organization" | "event" | "community";
-  data?: Record<string, unknown>;
+  data?: Record<string, string | number | boolean | null | undefined>;
 }
 
 const BASE_URL = "https://komuna.id";
@@ -16,7 +16,7 @@ export function JsonLd({ type, data = {} }: JsonLdProps) {
         name: "KomunaID",
         alternateName: "KomunaID - Platform Komunitas Digital Indonesia",
         url: BASE_URL,
-        description: "Platform digital untuk menghubungkan individu, komunitas, organisasi, event, dan ekosistem kolaborasi secara terstruktur di Indonesia.",
+        description: "Platform digital untuk menghubungkan individu, komunitas, event, dan volunteer secara terstruktur di Indonesia.",
         inLanguage: "id",
         ...data,
       };

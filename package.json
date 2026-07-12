@@ -12,6 +12,8 @@
     "build:web": "pnpm --filter @komunaid/web build",
     "build:api": "pnpm --filter @komunaid/api build",
     "lint": "pnpm -r lint",
+    "test:e2e": "pnpm --filter @komunaid/web test:e2e",
+    "test:e2e:ui": "pnpm --filter @komunaid/web test:e2e:ui",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "typecheck": "pnpm -r exec tsc --noEmit",
     "db:generate": "pnpm --filter @komunaid/database generate",
@@ -21,7 +23,14 @@
     "db:seed": "pnpm --filter @komunaid/database seed",
     "db:studio": "pnpm --filter @komunaid/database studio",
     "db:reset": "pnpm --filter @komunaid/database reset",
-    "clean": "rm -rf node_modules && pnpm -r exec rm -rf node_modules"
+    "clean": "rm -rf node_modules && pnpm -r exec rm -rf node_modules",
+    "test": "pnpm --filter @komunaid/api test",
+    "test:coverage": "pnpm --filter @komunaid/api test:coverage",
+    "test:watch": "pnpm --filter @komunaid/api test:watch",
+    "test:web": "pnpm --filter @komunaid/web test",
+    "validate": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "security:audit": "pnpm audit --audit-level=high",
+    "ci": "pnpm install --frozen-lockfile && pnpm validate"
   },
   "engines": {
     "node": ">=20.0.0",

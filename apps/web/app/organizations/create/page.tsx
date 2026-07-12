@@ -6,6 +6,8 @@ import Link from "next/link";
 import api from "@/lib/api";
 import { Header } from "@/components/header";
 import { useAuth } from "@/components/auth-provider";
+import { FeatureDisabledBanner } from "@/components/feature-disabled-banner";
+import { featureFlags } from "@/lib/feature-flags";
 
 interface Category {
   id: string;
@@ -19,6 +21,11 @@ interface WizardForm {
   categoryIds: string[];
   logo: string;
   banner: string;
+  address1: string;
+  address2: string;
+  postalCode: string;
+  kelurahan: string;
+  district: string;
   country: string;
   province: string;
   city: string;
@@ -45,6 +52,11 @@ const initialForm: WizardForm = {
   categoryIds: [],
   logo: "",
   banner: "",
+  address1: "",
+  address2: "",
+  postalCode: "",
+  kelurahan: "",
+  district: "",
   country: "",
   province: "",
   city: "",
@@ -65,6 +77,12 @@ export default function CreateOrganizationPage() {
   const [error, setError] = useState("");
   const [stepErrors, setStepErrors] = useState<string[]>([]);
 
+  const [countries, setCountries] = useState<string[]>([]);
+  const [provinces, setProvinces] = useState<string[]>([]);
+  const [cities, setCities] = useState<string[]>([]);
+  const [districts, setDistricts] = useState<string[]>([]);
+  const [kelurahan, setKelurahan] = useState<string[]>([]);
+
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
       router.push("/login");
@@ -81,6 +99,29 @@ export default function CreateOrganizationPage() {
       }
     };
     fetchCategories();
+  }, []);
+
+  useEffect(() => {
+    const fetchMasterData = async () => {
+      try {
+        const [countryRes, provinceRes, cityRes, districtRes, kelurahanRes] = await Promise.all([
+          api.get("/master-data/countries"),
+          api.get("/master-data/provinces"),
+          api.get("/master-data/cities"),
+          api.get("/master-data/districts"),
+          api.get("/master-data/kelurahan"),
+        ]);
+        setCountries(countryRes.data.data || []);
+        setProvinces(provinceRes.data.data || []);
+        const cityData = cityRes.data.data;
+        setCities(Array.isArray(cityData) ? cityData : []);
+        setDistricts(districtRes.data.data || []);
+        setKelurahan(kelurahanRes.data.data || []);
+      } catch {
+        console.error("Gagal memuat data master");
+      }
+    };
+    fetchMasterData();
   }, []);
 
   const updateField = (field: keyof WizardForm, value: string | string[]) => {
@@ -146,6 +187,11 @@ export default function CreateOrganizationPage() {
         categoryIds: form.categoryIds,
         logo: form.logo || undefined,
         banner: form.banner || undefined,
+        address1: form.address1 || undefined,
+        address2: form.address2 || undefined,
+        postalCode: form.postalCode || undefined,
+        kelurahan: form.kelurahan || undefined,
+        district: form.district || undefined,
         country: form.country || undefined,
         province: form.province || undefined,
         city: form.city || undefined,
@@ -182,6 +228,15 @@ export default function CreateOrganizationPage() {
   }
 
   if (!isAuthenticated) return null;
+
+  if (!featureFlags.organization) {
+    return (
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        <Header />
+        <FeatureDisabledBanner />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -396,40 +451,121 @@ export default function CreateOrganizationPage() {
               <div className="space-y-5">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Negara
+                    Negara <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={form.country}
                     onChange={(e) => updateField("country", e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white"
+                  >
+                    <option value="">-- Pilih Negara --</option>
+                    {countries.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Alamat 1 <span className="text-gray-400 font-normal">(opsional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={form.address1}
+                    onChange={(e) => updateField("address1", e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
-                    placeholder="Contoh: Indonesia"
+                    placeholder="Contoh: Jl. Asia Afrika No. 1"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Provinsi
+                    Alamat 2 <span className="text-gray-400 font-normal">(opsional)</span>
                   </label>
                   <input
                     type="text"
+                    value={form.address2}
+                    onChange={(e) => updateField("address2", e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
+                    placeholder="Contoh: Blok A No. 5, RT 01/RW 02"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Provinsi <span className="text-red-500">*</span>
+                  </label>
+                  <select
                     value={form.province}
                     onChange={(e) => updateField("province", e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
-                    placeholder="Contoh: Jawa Barat"
-                  />
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white"
+                  >
+                    <option value="">-- Pilih Provinsi --</option>
+                    {provinces.map((p) => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Kota
+                    Kota/Kabupaten <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={form.city}
+                    onChange={(e) => updateField("city", e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white"
+                  >
+                    <option value="">-- Pilih Kota/Kabupaten --</option>
+                    {cities.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Kecamatan <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={form.district}
+                    onChange={(e) => updateField("district", e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white"
+                  >
+                    <option value="">-- Pilih Kecamatan --</option>
+                    {districts.map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Kelurahan <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={form.kelurahan}
+                    onChange={(e) => updateField("kelurahan", e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white"
+                  >
+                    <option value="">-- Pilih Kelurahan --</option>
+                    {kelurahan.map((k) => (
+                      <option key={k} value={k}>{k}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Kode Pos <span className="text-gray-400 font-normal">(auto generate)</span>
                   </label>
                   <input
                     type="text"
-                    value={form.city}
-                    onChange={(e) => updateField("city", e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
-                    placeholder="Contoh: Bandung"
+                    value={form.postalCode}
+                    onChange={(e) => updateField("postalCode", e.target.value)}
+                    maxLength={5}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-gray-50"
+                    placeholder="Otomatis terisi saat memilih kelurahan"
                   />
                 </div>
               </div>
@@ -524,9 +660,16 @@ export default function CreateOrganizationPage() {
                   </div>
                   <div className="p-3">
                     <span className="text-xs font-medium text-gray-500 uppercase">Lokasi</span>
-                    <p className="text-sm text-gray-900">
-                      {[form.city, form.province, form.country].filter(Boolean).join(", ") || "-"}
-                    </p>
+                    <div className="text-sm text-gray-900 space-y-1">
+                      {form.address1 && <p>Alamat 1: {form.address1}</p>}
+                      {form.address2 && <p>Alamat 2: {form.address2}</p>}
+                      {form.province && <p>Provinsi: {form.province}</p>}
+                      {form.city && <p>Kota/Kabupaten: {form.city}</p>}
+                      {form.district && <p>Kecamatan: {form.district}</p>}
+                      {form.kelurahan && <p>Kelurahan: {form.kelurahan}</p>}
+                      {form.postalCode && <p>Kode Pos: {form.postalCode}</p>}
+                      {!form.address1 && !form.address2 && !form.kelurahan && !form.city && !form.province && <p>-</p>}
+                    </div>
                   </div>
                   <div className="p-3">
                     <span className="text-xs font-medium text-gray-500 uppercase">Website</span>

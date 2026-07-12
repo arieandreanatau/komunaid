@@ -17,8 +17,14 @@ interface WizardForm {
   name: string;
   description: string;
   categoryIds: string[];
+  customCategory: string;
   logo: string;
   banner: string;
+  address1: string;
+  address2: string;
+  postalCode: string;
+  village: string;
+  district: string;
   country: string;
   province: string;
   city: string;
@@ -44,8 +50,14 @@ const initialForm: WizardForm = {
   name: "",
   description: "",
   categoryIds: [],
+  customCategory: "",
   logo: "",
   banner: "",
+  address1: "",
+  address2: "",
+  postalCode: "",
+  village: "",
+  district: "",
   country: "",
   province: "",
   city: "",
@@ -66,6 +78,21 @@ export default function CreateCommunityPage() {
   const [error, setError] = useState("");
   const [stepErrors, setStepErrors] = useState<string[]>([]);
 
+  const [countries, setCountries] = useState<string[]>([]);
+  const [provinces, setProvinces] = useState<string[]>([]);
+  const [cities, setCities] = useState<string[]>([]);
+  const [districts, setDistricts] = useState<string[]>([]);
+  const [villages, setVillages] = useState<string[]>([]);
+  const [loadingProvinces, setLoadingProvinces] = useState(false);
+  const [loadingCities, setLoadingCities] = useState(false);
+  const [loadingDistricts, setLoadingDistricts] = useState(false);
+  const [loadingVillages, setLoadingVillages] = useState(false);
+
+  const [loadingPostalCode, setLoadingPostalCode] = useState(false);
+
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [bannerUploading, setBannerUploading] = useState(false);
+
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
       router.push("/login");
@@ -84,6 +111,131 @@ export default function CreateCommunityPage() {
     fetchCategories();
   }, []);
 
+  useEffect(() => {
+    const fetchCountries = async () => {
+      try {
+        const { data } = await api.get("/master-data/countries");
+        setCountries(data.data || []);
+      } catch {
+        console.error("Gagal memuat negara");
+      }
+    };
+    fetchCountries();
+  }, []);
+
+  useEffect(() => {
+    if (!form.country) {
+      setProvinces([]);
+      setCities([]);
+      setDistricts([]);
+      setVillages([]);
+      return;
+    }
+    const fetchProvinces = async () => {
+      setLoadingProvinces(true);
+      try {
+        const { data } = await api.get(`/master-data/provinces?country=${encodeURIComponent(form.country)}`);
+        setProvinces(data.data || []);
+      } catch {
+        setProvinces([]);
+      } finally {
+        setLoadingProvinces(false);
+      }
+    };
+    fetchProvinces();
+    setForm((prev) => ({ ...prev, province: "", city: "", district: "", village: "" }));
+  }, [form.country]);
+
+  useEffect(() => {
+    if (!form.province) {
+      setCities([]);
+      setDistricts([]);
+      setVillages([]);
+      return;
+    }
+    const fetchCities = async () => {
+      setLoadingCities(true);
+      try {
+        const { data } = await api.get(`/master-data/cities?province=${encodeURIComponent(form.province)}`);
+        setCities(data.data || []);
+      } catch {
+        setCities([]);
+      } finally {
+        setLoadingCities(false);
+      }
+    };
+    fetchCities();
+    setForm((prev) => ({ ...prev, city: "", district: "", village: "" }));
+  }, [form.province]);
+
+  useEffect(() => {
+    if (!form.city) {
+      setDistricts([]);
+      setVillages([]);
+      return;
+    }
+    const fetchDistricts = async () => {
+      setLoadingDistricts(true);
+      try {
+        const { data } = await api.get(`/master-data/districts?city=${encodeURIComponent(form.city)}`);
+        setDistricts(data.data || []);
+      } catch {
+        setDistricts([]);
+      } finally {
+        setLoadingDistricts(false);
+      }
+    };
+    fetchDistricts();
+    setForm((prev) => ({ ...prev, district: "", village: "" }));
+  }, [form.city]);
+
+  useEffect(() => {
+    if (!form.district) {
+      setVillages([]);
+      return;
+    }
+    const fetchVillages = async () => {
+      setLoadingVillages(true);
+      try {
+        const { data } = await api.get(`/master-data/villages?district=${encodeURIComponent(form.district)}`);
+        setVillages(data.data || []);
+      } catch {
+        setVillages([]);
+      } finally {
+        setLoadingVillages(false);
+      }
+    };
+    fetchVillages();
+    setForm((prev) => ({ ...prev, village: "" }));
+  }, [form.district]);
+
+  useEffect(() => {
+    if (!form.village) {
+      return;
+    }
+    const fetchPostalCode = async () => {
+      setLoadingPostalCode(true);
+      try {
+        const params = new URLSearchParams({ village: form.village });
+        if (form.district) params.set("district", form.district);
+        const { data } = await api.get(`/master-data/postal-codes?${params.toString()}`);
+        if (data.success && data.data && data.data.length > 0) {
+          const matched = data.data.find(
+            (item: any) =>
+              item.village?.toLowerCase() === form.village.toLowerCase() &&
+              (!form.district || item.district?.toLowerCase() === form.district.toLowerCase())
+          ) || data.data[0];
+          setForm((prev) => ({ ...prev, postalCode: matched.code || "" }));
+        }
+      } catch {
+        // silent
+      } finally {
+        setLoadingPostalCode(false);
+      }
+    };
+    fetchPostalCode();
+  }, [form.village, form.district]);
+
   const updateField = (field: keyof WizardForm, value: string | string[]) => {
     setForm((prev) => ({ ...prev, [field]: value }));
     setStepErrors([]);
@@ -101,6 +253,30 @@ export default function CreateCommunityPage() {
     }
   };
 
+  const handleFileUpload = async (file: File, type: "logo" | "banner") => {
+    if (type === "logo") setLogoUploading(true);
+    else setBannerUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const { data } = await api.post("/upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      if (data.success) {
+        updateField(type, data.data.url);
+      } else {
+        setError(data.message || "Gagal upload file");
+      }
+    } catch (err: any) {
+      const msg = err.response?.data?.message || "Gagal upload file";
+      setError(msg);
+    } finally {
+      if (type === "logo") setLogoUploading(false);
+      else setBannerUploading(false);
+    }
+  };
+
   const validateStep = (s: number): string[] => {
     const errs: string[] = [];
     if (s === 1) {
@@ -109,7 +285,15 @@ export default function CreateCommunityPage() {
       else if (form.name.trim().length > 100) errs.push("Nama maksimal 100 karakter");
       if (!form.description.trim()) errs.push("Deskripsi wajib diisi");
       else if (form.description.trim().length > 2000) errs.push("Deskripsi maksimal 2000 karakter");
-      if (form.categoryIds.length === 0) errs.push("Pilih minimal satu kategori");
+      if (form.categoryIds.length === 0 && !form.customCategory.trim()) errs.push("Pilih minimal satu kategori");
+      if (form.customCategory.trim() && form.customCategory.trim().length > 50) errs.push("Nama kategori custom maksimal 50 karakter");
+    }
+    if (s === 3) {
+      if (!form.country) errs.push("Negara wajib dipilih");
+      if (!form.province) errs.push("Provinsi wajib dipilih");
+      if (!form.city) errs.push("Kota/Kabupaten wajib dipilih");
+      if (!form.district) errs.push("Kecamatan wajib dipilih");
+      if (!form.village) errs.push("Desa/Kelurahan wajib dipilih");
     }
     if (s === 4) {
       if (form.website && !/^https?:\/\/.+/.test(form.website)) {
@@ -141,12 +325,18 @@ export default function CreateCommunityPage() {
     setSubmitting(true);
     setError("");
     try {
-      const payload = {
+      const payload: Record<string, any> = {
         name: form.name.trim(),
         description: form.description.trim(),
-        categoryIds: form.categoryIds,
+        categoryIds: form.categoryIds.length > 0 ? form.categoryIds : undefined,
+        customCategory: form.customCategory.trim() || undefined,
         logo: form.logo || undefined,
         banner: form.banner || undefined,
+        address1: form.address1 || undefined,
+        address2: form.address2 || undefined,
+        postalCode: form.postalCode || undefined,
+        village: form.village || undefined,
+        district: form.district || undefined,
         country: form.country || undefined,
         province: form.province || undefined,
         city: form.city || undefined,
@@ -158,7 +348,6 @@ export default function CreateCommunityPage() {
         visibility: "PUBLIC",
       };
       const response = await api.post("/communities", payload);
-      const slug = response.data.data?.slug || response.data.community?.slug;
       router.push("/dashboard/my-submissions");
     } catch (err: any) {
       const msg =
@@ -170,10 +359,11 @@ export default function CreateCommunityPage() {
   };
 
   const getSelectedCategoryNames = () => {
-    return categories
+    const names = categories
       .filter((c) => form.categoryIds.includes(c.id))
-      .map((c) => `${c.icon ? c.icon + " " : ""}${c.name}`)
-      .join(", ");
+      .map((c) => `${c.icon ? c.icon + " " : ""}${c.name}`);
+    if (form.customCategory.trim()) names.push(form.customCategory.trim());
+    return names.join(", ");
   };
 
   if (authLoading) {
@@ -322,7 +512,38 @@ export default function CreateCommunityPage() {
                           </button>
                         );
                       })}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (form.customCategory.trim()) {
+                            updateField("customCategory", "");
+                          } else {
+                            updateField("customCategory", " ");
+                          }
+                        }}
+                        className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                          form.customCategory.trim()
+                            ? "bg-komuna-blue text-white border-komuna-blue"
+                            : "bg-white text-gray-600 border-gray-200 hover:border-komuna-blue/50 hover:text-komuna-blue"
+                        }`}
+                      >
+                        Lainnya
+                      </button>
                     </div>
+                    {form.customCategory.trim() || form.customCategory === " " ? (
+                      <div className="mt-3">
+                        <input
+                          type="text"
+                          value={form.customCategory === " " ? "" : form.customCategory}
+                          onChange={(e) => updateField("customCategory", e.target.value)}
+                          maxLength={50}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
+                          placeholder="Masukkan nama kategori..."
+                          autoFocus
+                        />
+                        <p className="mt-1 text-xs text-gray-400">{(form.customCategory === " " ? "" : form.customCategory).length}/50</p>
+                      </div>
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -332,52 +553,128 @@ export default function CreateCommunityPage() {
               <div className="space-y-5">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    URL Logo
+                    Logo <span className="text-gray-400 font-normal">(opsional)</span>
                   </label>
-                  <input
-                    type="text"
-                    value={form.logo}
-                    onChange={(e) => updateField("logo", e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
-                    placeholder="/logo_komunaid.png"
-                  />
-                  {form.logo && (
-                    <div className="mt-2">
-                      <img
-                        src={form.logo}
-                        alt="Logo preview"
-                        className="h-16 w-16 object-contain rounded border border-gray-200"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = "none";
+                  <div className="flex items-center gap-3">
+                    <label className="flex-1 flex items-center justify-center px-4 py-6 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-komuna-blue/50 transition-colors">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleFileUpload(file, "logo");
                         }}
+                        disabled={logoUploading}
                       />
-                    </div>
-                  )}
+                      {logoUploading ? (
+                        <div className="flex items-center gap-2 text-sm text-gray-500">
+                          <div className="h-4 w-4 border-2 border-komuna-blue border-t-transparent rounded-full animate-spin" />
+                          Mengupload...
+                        </div>
+                      ) : (
+                        <div className="text-center">
+                          <svg className="mx-auto h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          <p className="mt-1 text-sm text-gray-500">Klik untuk upload logo</p>
+                          <p className="mt-1 text-xs text-gray-400">JPG, PNG, GIF, WebP (maks. 5MB)</p>
+                        </div>
+                      )}
+                    </label>
+                    {form.logo && !logoUploading && (
+                      <div className="relative">
+                        <img
+                          src={form.logo}
+                          alt="Logo preview"
+                          className="h-20 w-20 object-contain rounded border border-gray-200"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = "none";
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => updateField("logo", "")}
+                          className="absolute -top-2 -right-2 h-5 w-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600"
+                        >
+                          &times;
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-2">
+                    <p className="text-xs text-gray-400 mb-1">Atau masukkan URL:</p>
+                    <input
+                      type="text"
+                      value={form.logo.startsWith("data:") ? "" : form.logo}
+                      onChange={(e) => updateField("logo", e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
+                      placeholder="https://example.com/logo.png"
+                    />
+                  </div>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    URL Banner
+                    Banner <span className="text-gray-400 font-normal">(opsional)</span>
                   </label>
-                  <input
-                    type="text"
-                    value={form.banner}
-                    onChange={(e) => updateField("banner", e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
-                    placeholder="https://example.com/banner.jpg"
-                  />
-                  {form.banner && (
-                    <div className="mt-2">
-                      <img
-                        src={form.banner}
-                        alt="Banner preview"
-                        className="w-full h-32 object-cover rounded border border-gray-200"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = "none";
+                  <div>
+                    <label className="flex items-center justify-center px-4 py-6 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-komuna-blue/50 transition-colors">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleFileUpload(file, "banner");
                         }}
+                        disabled={bannerUploading}
                       />
-                    </div>
-                  )}
+                      {bannerUploading ? (
+                        <div className="flex items-center gap-2 text-sm text-gray-500">
+                          <div className="h-4 w-4 border-2 border-komuna-blue border-t-transparent rounded-full animate-spin" />
+                          Mengupload...
+                        </div>
+                      ) : (
+                        <div className="text-center">
+                          <svg className="mx-auto h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          <p className="mt-1 text-sm text-gray-500">Klik untuk upload banner</p>
+                          <p className="mt-1 text-xs text-gray-400">JPG, PNG, GIF, WebP (maks. 5MB)</p>
+                        </div>
+                      )}
+                    </label>
+                    {form.banner && !bannerUploading && (
+                      <div className="mt-2 relative">
+                        <img
+                          src={form.banner}
+                          alt="Banner preview"
+                          className="w-full h-32 object-cover rounded border border-gray-200"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = "none";
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => updateField("banner", "")}
+                          className="absolute top-2 right-2 h-5 w-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600"
+                        >
+                          &times;
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-2">
+                    <p className="text-xs text-gray-400 mb-1">Atau masukkan URL:</p>
+                    <input
+                      type="text"
+                      value={form.banner.startsWith("data:") ? "" : form.banner}
+                      onChange={(e) => updateField("banner", e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
+                      placeholder="https://example.com/banner.jpg"
+                    />
+                  </div>
                 </div>
               </div>
             )}
@@ -386,41 +683,175 @@ export default function CreateCommunityPage() {
               <div className="space-y-5">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Negara
+                    Negara <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={form.country}
                     onChange={(e) => updateField("country", e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white"
+                  >
+                    <option value="">-- Pilih Negara --</option>
+                    {countries.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Alamat 1 <span className="text-gray-400 font-normal">(opsional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={form.address1}
+                    onChange={(e) => updateField("address1", e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
-                    placeholder="Contoh: Indonesia"
+                    placeholder="Contoh: Jl. Asia Afrika No. 1"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Provinsi
+                    Alamat 2 <span className="text-gray-400 font-normal">(opsional)</span>
                   </label>
                   <input
                     type="text"
-                    value={form.province}
-                    onChange={(e) => updateField("province", e.target.value)}
+                    value={form.address2}
+                    onChange={(e) => updateField("address2", e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
-                    placeholder="Contoh: Jawa Barat"
+                    placeholder="Contoh: Blok A No. 5, RT 01/RW 02"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Kota
+                    Provinsi <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
-                    value={form.city}
-                    onChange={(e) => updateField("city", e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
-                    placeholder="Contoh: Bandung"
-                  />
+                  {form.country ? (
+                    <select
+                      value={form.province}
+                      onChange={(e) => updateField("province", e.target.value)}
+                      disabled={loadingProvinces}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white disabled:bg-gray-100"
+                    >
+                      <option value="">{loadingProvinces ? "Memuat..." : "-- Pilih Provinsi --"}</option>
+                      {provinces.map((p) => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={form.province}
+                      onChange={(e) => updateField("province", e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
+                      placeholder="Pilih negara terlebih dahulu"
+                      disabled
+                    />
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Kota/Kabupaten <span className="text-red-500">*</span>
+                  </label>
+                  {form.province ? (
+                    <select
+                      value={form.city}
+                      onChange={(e) => updateField("city", e.target.value)}
+                      disabled={loadingCities}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white disabled:bg-gray-100"
+                    >
+                      <option value="">{loadingCities ? "Memuat..." : "-- Pilih Kota/Kabupaten --"}</option>
+                      {cities.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={form.city}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
+                      placeholder="Pilih provinsi terlebih dahulu"
+                      disabled
+                    />
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Kecamatan <span className="text-red-500">*</span>
+                  </label>
+                  {form.city ? (
+                    <select
+                      value={form.district}
+                      onChange={(e) => updateField("district", e.target.value)}
+                      disabled={loadingDistricts}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white disabled:bg-gray-100"
+                    >
+                      <option value="">{loadingDistricts ? "Memuat..." : "-- Pilih Kecamatan --"}</option>
+                      {districts.map((d) => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={form.district}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
+                      placeholder="Pilih kota terlebih dahulu"
+                      disabled
+                    />
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Desa/Kelurahan <span className="text-red-500">*</span>
+                  </label>
+                  {form.district ? (
+                    <select
+                      value={form.village}
+                      onChange={(e) => updateField("village", e.target.value)}
+                      disabled={loadingVillages}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white disabled:bg-gray-100"
+                    >
+                      <option value="">{loadingVillages ? "Memuat..." : "-- Pilih Desa/Kelurahan --"}</option>
+                      {villages.map((v) => (
+                        <option key={v} value={v}>{v}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={form.village}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
+                      placeholder="Pilih kecamatan terlebih dahulu"
+                      disabled
+                    />
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Kode Pos <span className="text-gray-400 font-normal">(auto generate)</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={form.postalCode}
+                      onChange={(e) => updateField("postalCode", e.target.value)}
+                      maxLength={5}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-gray-50"
+                      placeholder={loadingPostalCode ? "Mencari kode pos..." : "Otomatis terisi saat memilih kelurahan"}
+                      disabled={loadingPostalCode}
+                    />
+                    {loadingPostalCode && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <div className="h-4 w-4 border-2 border-komuna-blue border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -552,17 +983,32 @@ export default function CreateCommunityPage() {
                   </div>
                   <div className="p-3">
                     <span className="text-xs font-medium text-gray-500 uppercase">Logo</span>
-                    <p className="text-sm text-gray-900">{form.logo || "-"}</p>
+                    {form.logo ? (
+                      <img src={form.logo} alt="Logo" className="h-12 w-12 object-contain rounded border border-gray-200 mt-1" />
+                    ) : (
+                      <p className="text-sm text-gray-900">-</p>
+                    )}
                   </div>
                   <div className="p-3">
                     <span className="text-xs font-medium text-gray-500 uppercase">Banner</span>
-                    <p className="text-sm text-gray-900">{form.banner || "-"}</p>
+                    {form.banner ? (
+                      <img src={form.banner} alt="Banner" className="w-full h-20 object-cover rounded border border-gray-200 mt-1" />
+                    ) : (
+                      <p className="text-sm text-gray-900">-</p>
+                    )}
                   </div>
                   <div className="p-3">
                     <span className="text-xs font-medium text-gray-500 uppercase">Lokasi</span>
-                    <p className="text-sm text-gray-900">
-                      {[form.city, form.province, form.country].filter(Boolean).join(", ") || "-"}
-                    </p>
+                    <div className="text-sm text-gray-900 space-y-1">
+                      {form.address1 && <p>Alamat 1: {form.address1}</p>}
+                      {form.address2 && <p>Alamat 2: {form.address2}</p>}
+                      {form.province && <p>Provinsi: {form.province}</p>}
+                      {form.city && <p>Kota/Kabupaten: {form.city}</p>}
+                      {form.district && <p>Kecamatan: {form.district}</p>}
+                      {form.village && <p>Kelurahan: {form.village}</p>}
+                      {form.postalCode && <p>Kode Pos: {form.postalCode}</p>}
+                      {!form.address1 && !form.address2 && !form.village && !form.city && !form.province && <p>-</p>}
+                    </div>
                   </div>
                   <div className="p-3">
                     <span className="text-xs font-medium text-gray-500 uppercase">Website</span>

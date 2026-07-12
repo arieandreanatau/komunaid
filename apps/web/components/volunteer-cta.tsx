@@ -12,7 +12,7 @@ export function VolunteerCTA() {
           </div>
           <div>
             <h2 className="text-xl font-bold text-white">Ingin jadi relawan?</h2>
-            <p className="text-white/80 mt-0.5">Temukan peluang volunteer dari komunitas dan organisasi di seluruh Indonesia.</p>
+            <p className="text-white/80 mt-0.5">Temukan peluang volunteer dari komunitas di seluruh Indonesia.</p>
           </div>
         </div>
         <Link

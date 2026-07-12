@@ -6,6 +6,8 @@ import Link from "next/link";
 import api from "@/lib/api";
 import { Header } from "@/components/header";
 import { useAuth } from "@/components/auth-provider";
+import { FeatureDisabledBanner } from "@/components/feature-disabled-banner";
+import { featureFlags } from "@/lib/feature-flags";
 
 interface DashboardData {
   organization: {
@@ -175,6 +177,15 @@ export default function OrganizationDashboardPage() {
       setSettingsSaving(false);
     }
   };
+
+  if (!featureFlags.organization) {
+    return (
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        <Header />
+        <FeatureDisabledBanner />
+      </div>
+    );
+  }
 
   if (authLoading || loading) {
     return (

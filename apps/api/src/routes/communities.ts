@@ -12,6 +12,10 @@ import {
   updateCommunityProfileSchema,
   updateCommunityBannerSchema,
   updateCommunityLogoSchema,
+  suspendCommunitySchema,
+  createCommunityMediaSchema,
+  updateCommunityMediaSchema,
+  communityMediaQuerySchema,
 } from "@komunaid/shared";
 import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth";
 import {
@@ -20,18 +24,13 @@ import {
 } from "../middleware/rbac";
 import { validate } from "../middleware/validate";
 import { createAuditLog, AuditActions } from "../services/audit";
+import { xssSanitize, sanitizeText } from "../lib/xss";
+import { slugify } from "@komunaid/utils";
 import type { AuthUser } from "../middleware/auth";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
 
 export const communityRoutes = new Hono<Env>();
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-}
 
 // ==========================================
 // 1. LIST COMMUNITIES (Public)
@@ -59,6 +58,18 @@ communityRoutes.get("/", optionalAuthMiddleware, validate(communityQuerySchema, 
 
   if (q.categoryId) {
     where.categories = { some: { categoryId: q.categoryId } };
+  }
+
+  if (q.city) {
+    where.city = q.city;
+  }
+
+  if (q.province) {
+    where.province = q.province;
+  }
+
+  if (q.tag) {
+    where.tags = { some: { tag: { contains: q.tag } } };
   }
 
   const orderBy: any =
@@ -99,6 +110,15 @@ communityRoutes.get("/", optionalAuthMiddleware, validate(communityQuerySchema, 
       logo: c.logo,
       banner: c.banner,
       location: c.location,
+      address: c.address,
+      address1: c.address1,
+      address2: c.address2,
+      postalCode: c.postalCode,
+      district: c.district,
+      village: c.village,
+      country: c.country,
+      province: c.province,
+      city: c.city,
       website: c.website,
       membershipType: c.membershipType,
       status: c.status,
@@ -117,6 +137,181 @@ communityRoutes.get("/", optionalAuthMiddleware, validate(communityQuerySchema, 
       total,
       totalPages: Math.ceil(total / limit),
     },
+  });
+});
+
+// ==========================================
+// STATIC ROUTES (must be before /:communityId and /:slug)
+// ==========================================
+
+// ==========================================
+// FEATURED COMMUNITIES (Public)
+// ==========================================
+
+communityRoutes.get("/featured/list", async (c) => {
+  const communities = await prisma.community.findMany({
+    where: {
+      deletedAt: null,
+      status: "APPROVED",
+      visibility: "PUBLIC",
+    },
+    include: {
+      owner: {
+        select: { id: true, name: true, avatar: true },
+      },
+      _count: {
+        select: { members: true, events: true },
+      },
+      categories: {
+        include: { category: true },
+      },
+      tags: true,
+    },
+    orderBy: [
+      { members: { _count: "desc" } },
+      { createdAt: "desc" },
+    ],
+    take: 6,
+  });
+
+  return c.json({
+    success: true,
+    data: communities.map((comm) => ({
+      id: comm.id,
+      name: comm.name,
+      slug: comm.slug,
+      description: comm.description,
+      coverImage: comm.coverImage,
+      logo: comm.logo,
+      banner: comm.banner,
+      membershipType: comm.membershipType,
+      owner: comm.owner,
+      memberCount: comm._count.members,
+      eventCount: comm._count.events,
+      categories: comm.categories.map((cc) => cc.category),
+      tags: comm.tags.map((t) => t.tag),
+      createdAt: comm.createdAt,
+    })),
+  });
+});
+
+// ==========================================
+// NEW COMMUNITIES (Public)
+// ==========================================
+
+communityRoutes.get("/new/list", async (c) => {
+  const communities = await prisma.community.findMany({
+    where: {
+      deletedAt: null,
+      status: "APPROVED",
+      visibility: "PUBLIC",
+    },
+    include: {
+      owner: {
+        select: { id: true, name: true, avatar: true },
+      },
+      _count: {
+        select: { members: true, events: true },
+      },
+      categories: {
+        include: { category: true },
+      },
+      tags: true,
+    },
+    orderBy: { createdAt: "desc" },
+    take: 6,
+  });
+
+  return c.json({
+    success: true,
+    data: communities.map((comm) => ({
+      id: comm.id,
+      name: comm.name,
+      slug: comm.slug,
+      description: comm.description,
+      coverImage: comm.coverImage,
+      logo: comm.logo,
+      membershipType: comm.membershipType,
+      owner: comm.owner,
+      memberCount: comm._count.members,
+      eventCount: comm._count.events,
+      categories: comm.categories.map((cc) => cc.category),
+      tags: comm.tags.map((t) => t.tag),
+      createdAt: comm.createdAt,
+    })),
+  });
+});
+
+// ==========================================
+// POPULAR COMMUNITIES (Public)
+// ==========================================
+
+communityRoutes.get("/popular/list", async (c) => {
+  const communities = await prisma.community.findMany({
+    where: {
+      deletedAt: null,
+      status: "APPROVED",
+      visibility: "PUBLIC",
+    },
+    include: {
+      owner: {
+        select: { id: true, name: true, avatar: true },
+      },
+      _count: {
+        select: { members: true, events: true },
+      },
+      categories: {
+        include: { category: true },
+      },
+      tags: true,
+    },
+    orderBy: { members: { _count: "desc" } },
+    take: 6,
+  });
+
+  return c.json({
+    success: true,
+    data: communities.map((comm) => ({
+      id: comm.id,
+      name: comm.name,
+      slug: comm.slug,
+      description: comm.description,
+      coverImage: comm.coverImage,
+      logo: comm.logo,
+      membershipType: comm.membershipType,
+      owner: comm.owner,
+      memberCount: comm._count.members,
+      eventCount: comm._count.events,
+      categories: comm.categories.map((cc) => cc.category),
+      tags: comm.tags.map((t) => t.tag),
+      createdAt: comm.createdAt,
+    })),
+  });
+});
+
+// ==========================================
+// PROVINCES LIST (Public)
+// ==========================================
+
+communityRoutes.get("/meta/provinces", async (c) => {
+  const provinces = await prisma.community.findMany({
+    where: {
+      deletedAt: null,
+      status: "APPROVED",
+      province: { not: null },
+    },
+    select: { province: true },
+    distinct: ["province"],
+  });
+
+  const uniqueProvinces = provinces
+    .map((p) => p.province)
+    .filter((p): p is string => p !== null)
+    .sort();
+
+  return c.json({
+    success: true,
+    data: uniqueProvinces,
   });
 });
 
@@ -284,6 +479,15 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
       logo: community.logo,
       banner: community.banner,
       location: community.location,
+      address: community.address,
+      address1: community.address1,
+      address2: community.address2,
+      postalCode: community.postalCode,
+      district: community.district,
+      village: community.village,
+      country: community.country,
+      province: community.province,
+      city: community.city,
       website: community.website,
       membershipType: community.membershipType,
       status: community.status,
@@ -341,11 +545,25 @@ communityRoutes.post("/", authMiddleware, validate(createCommunitySchema), async
   const existingSlug = await prisma.community.findUnique({ where: { slug } });
   const finalSlug = existingSlug ? `${slug}-${Date.now()}` : slug;
 
-  const { categoryIds, tags, ...communityData } = data;
+  const { categoryIds, tags, customCategory, ...communityData } = data;
+
+  const sanitizedData = {
+    ...communityData,
+    name: sanitizeText(communityData.name),
+    description: sanitizeText(communityData.description),
+    location: sanitizeText(communityData.location),
+    address: sanitizeText(communityData.address),
+    address1: sanitizeText(communityData.address1),
+    address2: sanitizeText(communityData.address2),
+    postalCode: sanitizeText(communityData.postalCode),
+    website: sanitizeText(communityData.website),
+    contactEmail: sanitizeText(communityData.contactEmail),
+    contactPhone: sanitizeText(communityData.contactPhone),
+  };
 
   const community = await prisma.community.create({
     data: {
-      ...communityData,
+      ...sanitizedData,
       slug: finalSlug,
       ownerId: authUser.id,
       status: "DRAFT",
@@ -385,6 +603,24 @@ communityRoutes.post("/", authMiddleware, validate(createCommunitySchema), async
       tags: true,
     },
   });
+
+  if (customCategory && customCategory.trim()) {
+    const trimmedName = customCategory.trim();
+    const catSlug = slugify(trimmedName);
+    let category = await prisma.category.findUnique({ where: { slug: catSlug } });
+    if (!category) {
+      category = await prisma.category.create({
+        data: {
+          name: trimmedName,
+          slug: catSlug,
+          type: "COMMUNITY",
+        },
+      });
+    }
+    await prisma.communityCategory.create({
+      data: { communityId: community.id, categoryId: category.id },
+    });
+  }
 
   await createAuditLog({
     userId: authUser.id,
@@ -456,9 +692,23 @@ communityRoutes.patch(
 
     const { categoryIds, tags, ...updateData } = data as any;
 
+    const sanitizedUpdate = {
+      ...updateData,
+      name: sanitizeText(updateData.name),
+      description: sanitizeText(updateData.description),
+      location: sanitizeText(updateData.location),
+      address: sanitizeText(updateData.address),
+      address1: sanitizeText(updateData.address1),
+      address2: sanitizeText(updateData.address2),
+      postalCode: sanitizeText(updateData.postalCode),
+      website: sanitizeText(updateData.website),
+      contactEmail: sanitizeText(updateData.contactEmail),
+      contactPhone: sanitizeText(updateData.contactPhone),
+    };
+
     const updated = await prisma.community.update({
       where: { id: communityId },
-      data: updateData,
+      data: sanitizedUpdate,
     });
 
     // Update categories if provided
@@ -535,7 +785,7 @@ communityRoutes.post(
 
     await createAuditLog({
       userId: authUser.id,
-      actionType: "COMMUNITY_SUBMITTED",
+      actionType: AuditActions.COMMUNITY_SUBMITTED,
       resourceName: "Community",
       resourceId: communityId,
       beforeData: { status: community.status },
@@ -601,9 +851,23 @@ communityRoutes.put(
 
     const { categoryIds, tags, ...updateData } = data;
 
+    const sanitizedUpdate = {
+      ...updateData,
+      name: sanitizeText(updateData.name),
+      description: sanitizeText(updateData.description),
+      location: sanitizeText(updateData.location),
+      address: sanitizeText(updateData.address),
+      address1: sanitizeText(updateData.address1),
+      address2: sanitizeText(updateData.address2),
+      postalCode: sanitizeText(updateData.postalCode),
+      website: sanitizeText(updateData.website),
+      contactEmail: sanitizeText(updateData.contactEmail),
+      contactPhone: sanitizeText(updateData.contactPhone),
+    };
+
     const community = await prisma.community.update({
       where: { id: communityId },
-      data: updateData,
+      data: sanitizedUpdate,
     });
 
     if (categoryIds !== undefined) {
@@ -1325,7 +1589,7 @@ communityRoutes.post(
     if (membership.role === "OWNER") {
       return c.json(
         { success: false, message: "Owner tidak bisa meninggalkan komunitas" },
-        400
+        403
       );
     }
 
@@ -1894,3 +2158,536 @@ communityRoutes.get(
     });
   }
 );
+
+// ==========================================
+// 21. CANCEL JOIN REQUEST
+// ==========================================
+
+communityRoutes.post(
+  "/:communityId/cancel-request",
+  authMiddleware,
+  async (c) => {
+    const authUser = c.get("user");
+    const communityId = c.req.param("communityId") as string;
+
+    const request = await prisma.joinRequest.findFirst({
+      where: {
+        communityId,
+        userId: authUser.id,
+        status: "PENDING",
+      },
+    });
+
+    if (!request) {
+      return c.json(
+        { success: false, message: "Tidak ada permintaan bergabung yang tertunda" },
+        404
+      );
+    }
+
+    await prisma.joinRequest.update({
+      where: { id: request.id },
+      data: { status: "REJECTED" },
+    });
+
+    await createAuditLog({
+      userId: authUser.id,
+      actionType: AuditActions.COMMUNITY_MEMBER_JOIN,
+      resourceName: "Community",
+      resourceId: communityId,
+      afterData: { action: "request_cancelled", requestId: request.id },
+    });
+
+    return c.json({
+      success: true,
+      message: "Permintaan bergabung berhasil dibatalkan",
+    });
+  }
+);
+
+// ==========================================
+// 22. SUSPEND COMMUNITY (Owner)
+// ==========================================
+
+communityRoutes.post(
+  "/:communityId/suspend",
+  authMiddleware,
+  requireCommunityOwner,
+  validate(suspendCommunitySchema),
+  async (c) => {
+    const authUser = c.get("user");
+    const communityId = c.req.param("communityId") as string;
+    const data = c.get("validated");
+
+    const community = await prisma.community.findUnique({
+      where: { id: communityId },
+    });
+
+    if (!community || community.deletedAt) {
+      return c.json({ success: false, message: "Komunitas tidak ditemukan" }, 404);
+    }
+
+    if (community.status === "SUSPENDED") {
+      return c.json({ success: false, message: "Komunitas sudah ditangguhkan" }, 400);
+    }
+
+    if (community.status === "ARCHIVED") {
+      return c.json({ success: false, message: "Komunitas sudah diarsipkan" }, 400);
+    }
+
+    const beforeStatus = community.status;
+
+    await prisma.community.update({
+      where: { id: communityId },
+      data: { status: "SUSPENDED" },
+    });
+
+    await createAuditLog({
+      userId: authUser.id,
+      actionType: AuditActions.COMMUNITY_SUSPEND,
+      resourceName: "Community",
+      resourceId: communityId,
+      beforeData: { status: beforeStatus, reason: data.reason },
+      afterData: { status: "SUSPENDED" },
+    });
+
+    await prisma.membershipHistory.create({
+      data: {
+        communityId,
+        userId: authUser.id,
+        action: "COMMUNITY_SUSPENDED",
+        details: { reason: data.reason, communityName: community.name },
+        performedBy: authUser.id,
+      },
+    });
+
+    return c.json({
+      success: true,
+      message: "Komunitas berhasil ditangguhkan",
+      data: { id: communityId, status: "SUSPENDED" },
+    });
+  }
+);
+
+// ==========================================
+// 23. GET COMMUNITY STATISTICS
+// ==========================================
+
+communityRoutes.get(
+  "/:communityId/statistics",
+  authMiddleware,
+  requireCommunityAdmin,
+  async (c) => {
+    const communityId = c.req.param("communityId") as string;
+
+    const community = await prisma.community.findUnique({
+      where: { id: communityId },
+    });
+
+    if (!community || community.deletedAt) {
+      return c.json({ success: false, message: "Komunitas tidak ditemukan" }, 404);
+    }
+
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const [
+      totalMembers,
+      activeMembers,
+      memberGrowthLast7,
+      memberGrowthPrev7,
+      totalEvents,
+      activeEvents,
+      totalPendingRequests,
+      recentActivity,
+      memberRoleBreakdown,
+      volunteerCount,
+    ] = await Promise.all([
+      prisma.communityMember.count({
+        where: { communityId, deletedAt: null },
+      }),
+      prisma.communityMember.count({
+        where: { communityId, status: "ACTIVE", deletedAt: null },
+      }),
+      prisma.communityMember.count({
+        where: {
+          communityId,
+          status: "ACTIVE",
+          deletedAt: null,
+          joinedAt: { gte: sevenDaysAgo },
+        },
+      }),
+      prisma.communityMember.count({
+        where: {
+          communityId,
+          status: "ACTIVE",
+          deletedAt: null,
+          joinedAt: { gte: thirtyDaysAgo, lt: sevenDaysAgo },
+        },
+      }),
+      prisma.event.count({
+        where: { communityId, deletedAt: null },
+      }),
+      prisma.event.count({
+        where: {
+          communityId,
+          status: { in: ["PUBLISHED", "REGISTRATION_OPEN", "ONGOING"] },
+          deletedAt: null,
+        },
+      }),
+      prisma.joinRequest.count({
+        where: { communityId, status: "PENDING" },
+      }),
+      prisma.membershipHistory.findMany({
+        where: { communityId },
+        include: {
+          user: { select: { id: true, name: true, avatar: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      }),
+      prisma.communityMember.groupBy({
+        by: ["role"],
+        where: { communityId, status: "ACTIVE", deletedAt: null },
+        _count: true,
+      }),
+      prisma.volunteerOpportunity.count({
+        where: {
+          event: { communityId },
+          deletedAt: null,
+        },
+      }),
+    ]);
+
+    const growthRate =
+      memberGrowthPrev7 > 0
+        ? ((memberGrowthLast7 - memberGrowthPrev7) / memberGrowthPrev7) * 100
+        : memberGrowthLast7 > 0
+          ? 100
+          : 0;
+
+    await prisma.communityStatistic.create({
+      data: {
+        communityId,
+        totalMembers: activeMembers,
+        totalEvents,
+        totalVolunteers: volunteerCount,
+        metadata: {
+          memberGrowthLast7,
+          growthRate,
+          totalPendingRequests,
+          activeEvents,
+        },
+      },
+    });
+
+    return c.json({
+      success: true,
+      data: {
+        totalMembers,
+        activeMembers,
+        totalEvents,
+        activeEvents,
+        totalVolunteers: volunteerCount,
+        totalPendingRequests,
+        memberGrowth: {
+          last7Days: memberGrowthLast7,
+          previous7Days: memberGrowthPrev7,
+          growthRate,
+        },
+        memberRoleBreakdown: memberRoleBreakdown.map((r) => ({
+          role: r.role,
+          count: r._count,
+        })),
+        recentActivity: recentActivity.map((a) => ({
+          id: a.id,
+          userId: a.userId,
+          user: a.user,
+          action: a.action,
+          oldRole: a.oldRole,
+          newRole: a.newRole,
+          details: a.details,
+          performedBy: a.performedBy,
+          createdAt: a.createdAt,
+        })),
+      },
+    });
+  }
+);
+
+// ==========================================
+// 24. COMMUNITY MEDIA - LIST
+// ==========================================
+
+communityRoutes.get(
+  "/:communityId/media",
+  optionalAuthMiddleware,
+  validate(communityMediaQuerySchema, "query"),
+  async (c) => {
+    const communityId = c.req.param("communityId") as string;
+    const user = c.get("user");
+    const q = c.get("validated");
+
+    const community = await prisma.community.findUnique({
+      where: { id: communityId },
+    });
+
+    if (!community || community.deletedAt) {
+      return c.json({ success: false, message: "Komunitas tidak ditemukan" }, 404);
+    }
+
+    if (community.status !== "APPROVED") {
+      if (!user || community.ownerId !== user.id) {
+        return c.json({ success: false, message: "Komunitas tidak ditemukan" }, 404);
+      }
+    }
+
+    const isOwnerOrAdmin = user
+      ? await prisma.communityMember.findFirst({
+          where: {
+            communityId,
+            userId: user.id,
+            role: { in: ["OWNER", "ADMIN"] },
+            status: "ACTIVE",
+          },
+        })
+      : null;
+
+    const where: any = { communityId, deletedAt: null };
+
+    if (!isOwnerOrAdmin) {
+      where.isPublished = true;
+    }
+
+    if (q.type) {
+      where.type = q.type;
+    }
+
+    if (q.search) {
+      where.OR = [
+        { title: { contains: q.search } },
+        { content: { contains: q.search } },
+      ];
+    }
+
+    if (q.published !== undefined) {
+      where.isPublished = q.published;
+    }
+
+    const orderBy: any = { [q.orderBy]: q.sort };
+
+    const page = q.page as number;
+    const limit = q.limit as number;
+
+    const [media, total] = await Promise.all([
+      prisma.communityMedia.findMany({
+        where,
+        include: {
+          createdBy: {
+            select: { id: true, name: true, avatar: true },
+          },
+        },
+        orderBy,
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.communityMedia.count({ where }),
+    ]);
+
+    return c.json({
+      success: true,
+      data: media.map((m) => ({
+        id: m.id,
+        title: m.title,
+        content: m.content,
+        type: m.type,
+        imageUrl: m.imageUrl,
+        isPublished: m.isPublished,
+        publishedAt: m.publishedAt,
+        createdBy: m.createdBy,
+        createdAt: m.createdAt,
+        updatedAt: m.updatedAt,
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  }
+);
+
+// ==========================================
+// 25. COMMUNITY MEDIA - CREATE
+// ==========================================
+
+communityRoutes.post(
+  "/:communityId/media",
+  authMiddleware,
+  requireCommunityAdmin,
+  validate(createCommunityMediaSchema),
+  async (c) => {
+    const authUser = c.get("user");
+    const communityId = c.req.param("communityId") as string;
+    const data = c.get("validated");
+
+    const community = await prisma.community.findUnique({
+      where: { id: communityId },
+    });
+
+    if (!community || community.deletedAt) {
+      return c.json({ success: false, message: "Komunitas tidak ditemukan" }, 404);
+    }
+
+    const media = await prisma.communityMedia.create({
+      data: {
+        communityId,
+        title: sanitizeText(data.title) || data.title,
+        content: sanitizeText(data.content) || data.content,
+        type: data.type,
+        imageUrl: data.imageUrl,
+        isPublished: data.isPublished,
+        publishedAt: data.isPublished ? new Date() : null,
+        createdById: authUser.id,
+      },
+    });
+
+    await createAuditLog({
+      userId: authUser.id,
+      actionType: AuditActions.COMMUNITY_UPDATE,
+      resourceName: "CommunityMedia",
+      resourceId: media.id,
+      afterData: {
+        action: "media_created",
+        communityId,
+        title: media.title,
+        type: media.type,
+        isPublished: media.isPublished,
+      },
+    });
+
+    return c.json(
+      {
+        success: true,
+        message: "Media komunitas berhasil dibuat",
+        data: {
+          id: media.id,
+          title: media.title,
+          type: media.type,
+          isPublished: media.isPublished,
+        },
+      },
+      201
+    );
+  }
+);
+
+// ==========================================
+// 26. COMMUNITY MEDIA - UPDATE
+// ==========================================
+
+communityRoutes.put(
+  "/:communityId/media/:mediaId",
+  authMiddleware,
+  requireCommunityAdmin,
+  validate(updateCommunityMediaSchema),
+  async (c) => {
+    const authUser = c.get("user");
+    const communityId = c.req.param("communityId") as string;
+    const mediaId = c.req.param("mediaId") as string;
+    const data = c.get("validated");
+
+    const existingMedia = await prisma.communityMedia.findUnique({
+      where: { id: mediaId },
+    });
+
+    if (!existingMedia || existingMedia.communityId !== communityId || existingMedia.deletedAt) {
+      return c.json({ success: false, message: "Media tidak ditemukan" }, 404);
+    }
+
+    const beforeData = {
+      title: existingMedia.title,
+      isPublished: existingMedia.isPublished,
+    };
+
+    const updateData: any = { ...data };
+    if (data.title) updateData.title = sanitizeText(data.title);
+    if (data.content) updateData.content = sanitizeText(data.content);
+
+    if (data.isPublished === true && !existingMedia.isPublished) {
+      updateData.publishedAt = new Date();
+    }
+
+    const updated = await prisma.communityMedia.update({
+      where: { id: mediaId },
+      data: updateData,
+    });
+
+    await createAuditLog({
+      userId: authUser.id,
+      actionType: AuditActions.COMMUNITY_UPDATE,
+      resourceName: "CommunityMedia",
+      resourceId: mediaId,
+      beforeData,
+      afterData: {
+        title: updated.title,
+        isPublished: updated.isPublished,
+      },
+    });
+
+    return c.json({
+      success: true,
+      message: "Media komunitas berhasil diupdate",
+      data: {
+        id: updated.id,
+        title: updated.title,
+        type: updated.type,
+        isPublished: updated.isPublished,
+      },
+    });
+  }
+);
+
+// ==========================================
+// 27. COMMUNITY MEDIA - DELETE (Soft)
+// ==========================================
+
+communityRoutes.delete(
+  "/:communityId/media/:mediaId",
+  authMiddleware,
+  requireCommunityAdmin,
+  async (c) => {
+    const authUser = c.get("user");
+    const communityId = c.req.param("communityId") as string;
+    const mediaId = c.req.param("mediaId") as string;
+
+    const existingMedia = await prisma.communityMedia.findUnique({
+      where: { id: mediaId },
+    });
+
+    if (!existingMedia || existingMedia.communityId !== communityId || existingMedia.deletedAt) {
+      return c.json({ success: false, message: "Media tidak ditemukan" }, 404);
+    }
+
+    await prisma.communityMedia.update({
+      where: { id: mediaId },
+      data: { deletedAt: new Date() },
+    });
+
+    await createAuditLog({
+      userId: authUser.id,
+      actionType: AuditActions.COMMUNITY_UPDATE,
+      resourceName: "CommunityMedia",
+      resourceId: mediaId,
+      afterData: { action: "media_deleted", communityId },
+    });
+
+    return c.json({
+      success: true,
+      message: "Media komunitas berhasil dihapus",
+    });
+  }
+);
+

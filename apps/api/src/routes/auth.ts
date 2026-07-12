@@ -1,55 +1,38 @@
 import { Hono } from "hono";
 import bcrypt from "bcryptjs";
-import { SignJWT, jwtVerify } from "jose";
+import { parse } from "cookie";
 import { prisma } from "@komunaid/database";
 import { registerSchema, loginSchema, changePasswordSchema, forgotPasswordSchema, resetPasswordSchema } from "@komunaid/shared";
 import type { AuthUser } from "../middleware/auth";
 import {
   generateAccessToken,
-  generateRefreshToken,
   verifyToken,
   setTokenCookies,
   clearTokenCookies,
-  getRefreshToken,
   authMiddleware,
+  generateResetToken,
 } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import { createAuditLog, AuditActions } from "../services/audit";
 import { sendEmail, buildResetPasswordEmail } from "../services/email";
+import {
+  createRefreshTokenFamily,
+  rotateRefreshToken,
+  hashToken,
+  revokeAllUserTokens,
+  revokeToken,
+  getActiveSessions,
+  revokeSession,
+} from "../services/refresh-token";
+import {
+  loginRateLimiter,
+  registrationRateLimiter,
+  forgotPasswordRateLimiter,
+  refreshTokenRateLimiter,
+} from "../services/rate-limiter";
 import { createChildLogger } from "../lib/logger";
 
 const log = createChildLogger("auth");
-
-// ==========================================
-// BRUTE-FORCE PROTECTION
-// ==========================================
-const loginAttempts = new Map<string, { count: number; resetAt: number }>();
-const MAX_LOGIN_ATTEMPTS = 5;
-const LOGIN_LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
-
-function checkLoginAttempts(identifier: string): boolean {
-  const record = loginAttempts.get(identifier);
-  if (!record) return true;
-  if (Date.now() > record.resetAt) {
-    loginAttempts.delete(identifier);
-    return true;
-  }
-  return record.count < MAX_LOGIN_ATTEMPTS;
-}
-
-function recordLoginAttempt(identifier: string): void {
-  const record = loginAttempts.get(identifier);
-  if (!record || Date.now() > record.resetAt) {
-    loginAttempts.set(identifier, { count: 1, resetAt: Date.now() + LOGIN_LOCKOUT_MS });
-  } else {
-    record.count++;
-  }
-}
-
-function clearLoginAttempts(identifier: string): void {
-  loginAttempts.delete(identifier);
-}
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "dev-secret-change-this");
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
 
@@ -61,6 +44,12 @@ export const authRoutes = new Hono<Env>();
 
 authRoutes.post("/register", validate(registerSchema), async (c) => {
   const data = c.get("validated");
+  const ipAddress = c.req.header("X-Forwarded-For")?.split(",")[0]?.trim() || c.req.header("X-Real-IP") || "unknown";
+
+  const rateLimitResult = await registrationRateLimiter(ipAddress);
+  if (!rateLimitResult.allowed) {
+    return c.json({ success: false, message: "Terlalu banyak pendaftaran. Coba lagi nanti." }, 429);
+  }
 
   try {
     const existingEmail = await prisma.user.findUnique({
@@ -106,15 +95,15 @@ authRoutes.post("/register", validate(registerSchema), async (c) => {
       email: user.email,
       name: user.name,
       username: user.username,
-    });
-    const refreshToken = await generateRefreshToken({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      username: user.username,
-    });
+    }, user.tokenVersion);
 
-    setTokenCookies(c, accessToken, refreshToken);
+    const userAgent = c.req.header("User-Agent") || "";
+    const fingerprint = c.req.header("X-Device-Fingerprint") || undefined;
+    const { tokenHash: refreshTokenHash } = await createRefreshTokenFamily(
+      user.id, fingerprint, ipAddress, userAgent
+    );
+
+    setTokenCookies(c, accessToken, refreshTokenHash);
 
     try {
       await createAuditLog({
@@ -175,9 +164,17 @@ authRoutes.post("/register", validate(registerSchema), async (c) => {
 
 authRoutes.post("/login", validate(loginSchema), async (c) => {
   const data = c.get("validated");
+  const userAgent = c.req.header("User-Agent") || "";
+  const ipAddress = c.req.header("X-Forwarded-For")?.split(",")[0]?.trim() || c.req.header("X-Real-IP") || "unknown";
 
-  if (!checkLoginAttempts(data.identifier)) {
-    return c.json({ success: false, message: "Terlalu banyak percobaan login. Coba lagi dalam 15 menit." }, 429);
+  const rateLimitKey = `${ipAddress}:${data.identifier}`;
+  const rateLimitResult = await loginRateLimiter(rateLimitKey);
+  if (!rateLimitResult.allowed) {
+    return c.json({
+      success: false,
+      message: "Terlalu banyak percobaan login. Coba lagi nanti.",
+      retryAfter: rateLimitResult.retryAfter,
+    }, 429);
   }
 
   const isEmail = data.identifier.includes("@");
@@ -190,7 +187,6 @@ authRoutes.post("/login", validate(loginSchema), async (c) => {
   });
 
   if (!user) {
-    recordLoginAttempt(data.identifier);
     return c.json({ success: false, message: "Email/username atau password salah" }, 401);
   }
 
@@ -209,32 +205,50 @@ authRoutes.post("/login", validate(loginSchema), async (c) => {
   const isValidPassword = await bcrypt.compare(data.password, user.password);
 
   if (!isValidPassword) {
-    recordLoginAttempt(data.identifier);
+    try {
+      await prisma.loginHistory.create({
+        data: {
+          userId: user.id,
+          ipAddress,
+          userAgent,
+          success: false,
+          failureReason: "INVALID_PASSWORD",
+        },
+      });
+    } catch (loginErr) {
+      log.error({ err: loginErr }, "failed to record login failure");
+    }
     return c.json({ success: false, message: "Email/username atau password salah" }, 401);
   }
-
-  clearLoginAttempts(data.identifier);
 
   const accessToken = await generateAccessToken({
     id: user.id,
     email: user.email,
     name: user.name,
     username: user.username,
-  });
-  const refreshToken = await generateRefreshToken({
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    username: user.username,
-  });
+  }, user.tokenVersion);
 
-  setTokenCookies(c, accessToken, refreshToken);
+  const fingerprint = c.req.header("X-Device-Fingerprint") || undefined;
+  const { tokenHash: refreshTokenHash } = await createRefreshTokenFamily(
+    user.id, fingerprint, ipAddress, userAgent
+  );
+
+  setTokenCookies(c, accessToken, refreshTokenHash);
 
   await createAuditLog({
     userId: user.id,
     actionType: AuditActions.USER_LOGIN,
     resourceName: "User",
     resourceId: user.id,
+  });
+
+  await prisma.loginHistory.create({
+    data: {
+      userId: user.id,
+      ipAddress,
+      userAgent,
+      success: true,
+    },
   });
 
   await prisma.activityHistory.create({
@@ -268,60 +282,126 @@ authRoutes.post("/login", validate(loginSchema), async (c) => {
 // ==========================================
 
 authRoutes.post("/refresh", async (c) => {
-  const refreshToken = getRefreshToken(c);
+  const cookieHeader = c.req.header("Cookie");
+  if (!cookieHeader) {
+    return c.json({ success: false, message: "Refresh token tidak ditemukan" }, 401);
+  }
+  const cookies = parse(cookieHeader);
+  const rawRefreshToken = cookies.refreshToken;
 
-  if (!refreshToken) {
+  if (!rawRefreshToken) {
     return c.json({ success: false, message: "Refresh token tidak ditemukan" }, 401);
   }
 
-  try {
-    const payload = await verifyToken(refreshToken);
+  const tokenHash = hashToken(rawRefreshToken);
+  const ipAddress = c.req.header("X-Forwarded-For")?.split(",")[0]?.trim() || c.req.header("X-Real-IP") || "unknown";
+  const userAgent = c.req.header("User-Agent") || "";
+  const fingerprint = c.req.header("X-Device-Fingerprint") || undefined;
 
-    if (payload.type !== "refresh") {
-      return c.json({ success: false, message: "Token type tidak valid" }, 401);
-    }
+  const rateLimitResult = await refreshTokenRateLimiter(tokenHash);
+  if (!rateLimitResult.allowed) {
+    return c.json({ success: false, message: "Terlalu banyak percobaan refresh. Coba lagi nanti." }, 429);
+  }
 
-    const user = await prisma.user.findUnique({
-      where: { id: payload.sub },
-      include: { roles: true },
-    });
+  const validation = await import("../services/refresh-token").then(m => m.validateRefreshToken(tokenHash));
 
-    if (!user || user.deletedAt || user.status === "SUSPENDED") {
-      return c.json({ success: false, message: "User tidak ditemukan atau ditangguhkan" }, 401);
-    }
-
-    const newAccessToken = await generateAccessToken({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      username: user.username,
-    });
-    const newRefreshToken = await generateRefreshToken({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      username: user.username,
-    });
-
-    setTokenCookies(c, newAccessToken, newRefreshToken);
-
-    return c.json({
-      success: true,
-      message: "Token berhasil diperbarui",
-      data: {
-        user: {
-          id: user.id,
-          name: user.name,
-          username: user.username,
-          email: user.email,
-          avatar: user.avatar,
-          roles: user.roles.map((r) => r.role),
+  if (!validation.valid) {
+    if (validation.familyId) {
+      log.error(
+        { userId: validation.userId, familyId: validation.familyId },
+        "REUSE DETECTED: Invalid refresh token — all sessions revoked"
+      );
+      await revokeAllUserTokens(validation.userId);
+      await prisma.user.update({
+        where: { id: validation.userId },
+        data: { tokenVersion: { increment: 1 } },
+      });
+      await createAuditLog({
+        userId: validation.userId,
+        actionType: "TOKEN_REUSE_DETECTED",
+        resourceName: "User",
+        resourceId: validation.userId,
+        afterData: { familyId: validation.familyId, action: "all_sessions_revoked" },
+      });
+      await prisma.notification.create({
+        data: {
+          userId: validation.userId,
+          title: "Peringatan Keamanan",
+          message: "Aktivitas mencurigakan terdeteksi pada akun Anda. Semua sesi telah ditutup. Jika ini bukan Anda, segera hubungi administrator.",
+          type: "SYSTEM",
         },
-      },
-    });
-  } catch {
+      });
+    }
     return c.json({ success: false, message: "Refresh token tidak valid" }, 401);
   }
+
+  const user = await prisma.user.findUnique({
+    where: { id: validation.userId },
+    include: { roles: true },
+  });
+
+  if (!user || user.deletedAt || user.status === "SUSPENDED" || user.status === "DEACTIVATED") {
+    return c.json({ success: false, message: "User tidak ditemukan atau ditangguhkan" }, 401);
+  }
+
+  const rotation = await rotateRefreshToken(tokenHash, user.id, fingerprint, ipAddress, userAgent);
+
+  if (rotation.expired) {
+    clearTokenCookies(c);
+    return c.json({ success: false, message: "Refresh token sudah kadaluarsa. Silakan login kembali." }, 401);
+  }
+
+  if (rotation.reused) {
+    log.error(
+      { userId: user.id, familyId: rotation.familyId },
+      "Token reuse detected during rotation — all sessions revoked"
+    );
+    await revokeAllUserTokens(user.id);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { tokenVersion: { increment: 1 } },
+    });
+    await createAuditLog({
+      userId: user.id,
+      actionType: "TOKEN_REUSE_DETECTED",
+      resourceName: "User",
+      resourceId: user.id,
+      afterData: { familyId: rotation.familyId, action: "all_sessions_revoked" },
+    });
+    await prisma.notification.create({
+      data: {
+        userId: user.id,
+        title: "Peringatan Keamanan",
+        message: "Token refresh Anda telah disalahgunakan. Semua sesi telah ditutup. Jika ini bukan Anda, segera hubungi administrator.",
+        type: "SYSTEM",
+      },
+    });
+    return c.json({ success: false, message: "Token tidak valid — semua sesi telah ditutup" }, 401);
+  }
+
+  const newAccessToken = await generateAccessToken({
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    username: user.username,
+  }, user.tokenVersion);
+
+  setTokenCookies(c, newAccessToken, rotation.newTokenHash);
+
+  return c.json({
+    success: true,
+    message: "Token berhasil diperbarui",
+    data: {
+      user: {
+        id: user.id,
+        name: user.name,
+        username: user.username,
+        email: user.email,
+        avatar: user.avatar,
+        roles: user.roles.map((r) => r.role),
+      },
+    },
+  });
 });
 
 // ==========================================
@@ -331,6 +411,15 @@ authRoutes.post("/refresh", async (c) => {
 authRoutes.post("/logout", authMiddleware, async (c) => {
   const user = c.get("user");
   clearTokenCookies(c);
+
+  const cookieHeader = c.req.header("Cookie");
+  if (cookieHeader) {
+    const cookies = parse(cookieHeader);
+    if (cookies.refreshToken) {
+      const tokenHash = hashToken(cookies.refreshToken);
+      await revokeToken(tokenHash);
+    }
+  }
 
   await createAuditLog({
     userId: user.id,
@@ -368,6 +457,15 @@ authRoutes.get("/me", authMiddleware, async (c) => {
     return c.json({ success: false, message: "User tidak ditemukan" }, 404);
   }
 
+  const [communitiesCount, organizationsCount] = await Promise.all([
+    prisma.communityMember.count({
+      where: { userId: userData.id, deletedAt: null },
+    }),
+    prisma.organizationMember.count({
+      where: { userId: userData.id, deletedAt: null },
+    }),
+  ]);
+
   return c.json({
     success: true,
     data: {
@@ -383,6 +481,8 @@ authRoutes.get("/me", authMiddleware, async (c) => {
         status: userData.status,
         roles: userData.roles.map((r) => r.role),
         interests: userData.interests.map((i) => i.interest),
+        communitiesCount,
+        organizationsCount,
         createdAt: userData.createdAt,
       },
     },
@@ -399,6 +499,7 @@ authRoutes.put("/change-password", authMiddleware, validate(changePasswordSchema
 
   const userData = await prisma.user.findUnique({
     where: { id: authUser.id },
+    select: { id: true, password: true },
   });
 
   if (!userData) {
@@ -419,14 +520,22 @@ authRoutes.put("/change-password", authMiddleware, validate(changePasswordSchema
     parseInt(process.env.BCRYPT_ROUNDS || "12")
   );
 
-  await prisma.user.update({
-    where: { id: authUser.id },
-    data: { password: hashedPassword },
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: authUser.id },
+      data: {
+        password: hashedPassword,
+        tokenVersion: { increment: 1 },
+      },
+    });
   });
+
+  await revokeAllUserTokens(authUser.id);
+  clearTokenCookies(c);
 
   await createAuditLog({
     userId: authUser.id,
-    actionType: "USER_CHANGE_PASSWORD",
+    actionType: AuditActions.USER_CHANGE_PASSWORD,
     resourceName: "User",
     resourceId: authUser.id,
   });
@@ -450,33 +559,32 @@ authRoutes.put("/change-password", authMiddleware, validate(changePasswordSchema
 authRoutes.post("/forgot-password", validate(forgotPasswordSchema), async (c) => {
   const data = c.get("validated");
 
-  // Always return same response to prevent email enumeration
+  const rateLimitResult = await forgotPasswordRateLimiter(data.email.toLowerCase());
+  if (!rateLimitResult.allowed) {
+    return c.json({ success: false, message: "Terlalu banyak permintaan reset. Coba lagi nanti." }, 429);
+  }
+
   const user = await prisma.user.findUnique({
     where: { email: data.email },
   });
 
   if (user && !user.deletedAt && user.status === "ACTIVE") {
-    // Generate reset token (JWT, 1hr expiry)
-    const resetToken = await new SignJWT({
-      sub: user.id,
-      email: user.email,
-      type: "reset",
-    })
-      .setProtectedHeader({ alg: "HS256" })
-      .setIssuedAt()
-      .setExpirationTime("1h")
-      .sign(JWT_SECRET);
+    const resetToken = await generateResetToken(user);
 
     log.info({ userId: user.id }, "password reset requested");
 
     const appUrl = process.env.APP_URL || "http://localhost:3000";
     const resetUrl = `${appUrl}/reset-password?token=${resetToken}`;
     const emailContent = buildResetPasswordEmail(resetUrl);
-    await sendEmail({
+    const emailSent = await sendEmail({
       to: user.email,
       subject: emailContent.subject,
       html: emailContent.html,
     });
+
+    if (!emailSent) {
+      log.error({ userId: user.id }, "failed to send reset password email");
+    }
   }
 
   return c.json({
@@ -493,7 +601,7 @@ authRoutes.post("/reset-password", validate(resetPasswordSchema), async (c) => {
   const data = c.get("validated");
 
   try {
-    const { payload } = await jwtVerify(data.token, JWT_SECRET);
+    const payload = await verifyToken(data.token);
 
     if (payload.type !== "reset") {
       return c.json({ success: false, message: "Token tidak valid" }, 400);
@@ -507,6 +615,14 @@ authRoutes.post("/reset-password", validate(resetPasswordSchema), async (c) => {
       return c.json({ success: false, message: "User tidak ditemukan" }, 404);
     }
 
+    if (user.status === "SUSPENDED") {
+      return c.json({ success: false, message: "Akun ditangguhkan. Hubungi administrator." }, 403);
+    }
+
+    if (user.status === "DEACTIVATED") {
+      return c.json({ success: false, message: "Akun sudah dinonaktifkan" }, 403);
+    }
+
     const hashedPassword = await bcrypt.hash(
       data.password,
       parseInt(process.env.BCRYPT_ROUNDS || "12")
@@ -514,12 +630,15 @@ authRoutes.post("/reset-password", validate(resetPasswordSchema), async (c) => {
 
     await prisma.user.update({
       where: { id: user.id },
-      data: { password: hashedPassword },
+      data: {
+        password: hashedPassword,
+        tokenVersion: { increment: 1 },
+      },
     });
 
     await createAuditLog({
       userId: user.id,
-      actionType: "USER_RESET_PASSWORD",
+      actionType: AuditActions.USER_RESET_PASSWORD,
       resourceName: "User",
       resourceId: user.id,
     });
@@ -540,4 +659,54 @@ authRoutes.post("/reset-password", validate(resetPasswordSchema), async (c) => {
   } catch {
     return c.json({ success: false, message: "Token tidak valid atau sudah kadaluarsa" }, 400);
   }
+});
+
+// ==========================================
+// SESSIONS (Device Tracking)
+// ==========================================
+
+authRoutes.get("/sessions", authMiddleware, async (c) => {
+  const user = c.get("user");
+  const sessions = await getActiveSessions(user.id);
+  return c.json({ success: true, data: { sessions } });
+});
+
+authRoutes.delete("/sessions/:sessionId", authMiddleware, async (c) => {
+  const user = c.get("user");
+  const sessionId = c.req.param("sessionId") as string;
+
+  const revoked = await revokeSession(sessionId, user.id);
+  if (!revoked) {
+    return c.json({ success: false, message: "Sesi tidak ditemukan atau bukan milik Anda" }, 404);
+  }
+
+  await createAuditLog({
+    userId: user.id,
+    actionType: "SESSION_REVOKED",
+    resourceName: "User",
+    resourceId: user.id,
+    afterData: { sessionId },
+  });
+
+  return c.json({ success: true, message: "Sesi berhasil ditutup" });
+});
+
+authRoutes.delete("/sessions", authMiddleware, async (c) => {
+  const user = c.get("user");
+  const revokedCount = await revokeAllUserTokens(user.id);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { tokenVersion: { increment: 1 } },
+  });
+
+  await createAuditLog({
+    userId: user.id,
+    actionType: "ALL_SESSIONS_REVOKED",
+    resourceName: "User",
+    resourceId: user.id,
+    afterData: { revokedCount },
+  });
+
+  return c.json({ success: true, message: `${revokedCount} sesi berhasil ditutup` });
 });

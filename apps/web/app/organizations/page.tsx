@@ -2,11 +2,14 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import api from "@/lib/api";
+import { useAuth } from "@/components/auth-provider";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { Pagination } from "@/components/pagination";
-import { VolunteerCTA } from "@/components/volunteer-cta";
+import { FeatureDisabledBanner } from "@/components/feature-disabled-banner";
+import { featureFlags } from "@/lib/feature-flags";
 
 interface Organization {
   id: string;
@@ -23,6 +26,8 @@ interface Organization {
 }
 
 export default function OrganizationsPage() {
+  const { user, isAuthenticated, isLoading } = useAuth();
+  const router = useRouter();
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -31,6 +36,17 @@ export default function OrganizationsPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  const hasOrgAccess =
+    user?.roles?.some((r: string) => ["SUPER_ADMIN", "PLATFORM_ADMIN"].includes(r)) ||
+    (user?.communitiesCount ?? 0) > 0 ||
+    (user?.organizationsCount ?? 0) > 0;
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && !hasOrgAccess) {
+      router.replace("/dashboard");
+    }
+  }, [isLoading, isAuthenticated, hasOrgAccess, router]);
 
   useEffect(() => {
     const timeout = setTimeout(() => setDebouncedSearch(search), 300);
@@ -71,6 +87,39 @@ export default function OrganizationsPage() {
 
   useEffect(() => { fetchOrganizations(); }, [fetchOrganizations]);
   useEffect(() => { setPage(1); }, [debouncedSearch, sort]);
+
+  if (!featureFlags.organization) {
+    return (
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        <Header />
+        <FeatureDisabledBanner />
+        <Footer />
+      </div>
+    );
+  }
+
+  if (!isLoading && !hasOrgAccess) {
+    return (
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        <Header />
+        <main className="container mx-auto px-4 py-12 flex-1 flex items-center justify-center">
+          <div className="text-center max-w-md">
+            <div className="h-16 w-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="h-8 w-8 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-komuna-navy mb-2">Akses Terbatas</h2>
+            <p className="text-gray-500 text-sm mb-6">Halaman ini hanya dapat diakses oleh anggota komunitas atau organisasi.</p>
+            <Link href="/dashboard" className="inline-flex items-center gap-2 px-5 py-2.5 bg-komuna-blue text-white rounded-lg font-medium hover:bg-komuna-navy transition-colors text-sm">
+              Kembali ke Dashboard
+            </Link>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -178,7 +227,7 @@ export default function OrganizationsPage() {
             <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
           </>
         )}
-        <VolunteerCTA />
+
       </main>
       <Footer />
     </div>

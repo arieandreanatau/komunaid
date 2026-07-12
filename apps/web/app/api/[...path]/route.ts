@@ -1,11 +1,31 @@
 import { handle } from "hono/vercel";
-import app from "../../../../api/src/app";
 
-const handler = handle(app);
+let handler: ReturnType<typeof handle>;
 
-export const GET = handler;
-export const POST = handler;
-export const PUT = handler;
-export const DELETE = handler;
-export const PATCH = handler;
-export const OPTIONS = handler;
+function getHandler() {
+  if (!handler) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const app = require("../../../../api/src/app").default;
+    handler = handle(app);
+  }
+  return handler;
+}
+
+export async function GET(request: Request) {
+  return getHandler()(request);
+}
+export async function POST(request: Request) {
+  return getHandler()(request);
+}
+export async function PUT(request: Request) {
+  return getHandler()(request);
+}
+export async function DELETE(request: Request) {
+  return getHandler()(request);
+}
+export async function PATCH(request: Request) {
+  return getHandler()(request);
+}
+export async function OPTIONS(request: Request) {
+  return getHandler()(request);
+}

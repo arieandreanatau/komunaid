@@ -11,7 +11,7 @@ import { useAuth } from "@/components/auth-provider";
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const { user, setUser, isAuthenticated, isLoading } = useAuth();
+  const { user, setUser, logout, isAuthenticated, isLoading } = useAuth();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirect") || "/admin";
   const [error, setError] = useState("");
@@ -39,7 +39,7 @@ export default function AdminLoginPage() {
       const userData = res.data.data?.user || res.data.user;
 
       if (!userData?.roles?.some((r: string) => ["SUPER_ADMIN", "PLATFORM_ADMIN"].includes(r))) {
-        await api.post("/auth/logout");
+        await logout();
         setError("Akun Anda tidak memiliki akses ke panel administrasi.");
         setCheckingRole(false);
         return;

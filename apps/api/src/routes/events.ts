@@ -4,18 +4,13 @@ import { createEventSchema, updateEventSchema, eventQuerySchema } from "@komunai
 import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import { createAuditLog, AuditActions } from "../services/audit";
+import { xssSanitize, sanitizeText } from "../lib/xss";
+import { slugify } from "@komunaid/utils";
 import type { AuthUser } from "../middleware/auth";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
 
 export const eventRoutes = new Hono<Env>();
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-}
 
 async function getEventOrganizerRole(userId: string, event: any): Promise<string | null> {
   if (event.communityId) {
@@ -173,6 +168,10 @@ eventRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
     return c.json({ success: false, message: "Event tidak ditemukan" }, 404);
   }
 
+  if (!user && ["DRAFT", "CANCELLED", "ARCHIVED"].includes(event.status)) {
+    return c.json({ success: false, message: "Event tidak ditemukan" }, 404);
+  }
+
   if (event.visibility === "PRIVATE" && (!user || (user.id !== event.createdById))) {
     const role = user ? await getEventOrganizerRole(user.id, event) : null;
     if (!role || !canManageEvent(role, user!.id, event)) {
@@ -190,7 +189,13 @@ eventRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
   const role = user ? await getEventOrganizerRole(user.id, event) : null;
   const isOrganizer = user ? canManageEvent(role, user.id, event) : false;
 
-  const galleryParsed = event.gallery ? JSON.parse(event.gallery as string) : [];
+  const galleryParsed = (() => {
+    try {
+      return event.gallery ? JSON.parse(event.gallery as string) : [];
+    } catch {
+      return [];
+    }
+  })();
 
   return c.json({
     success: true,
@@ -262,9 +267,19 @@ eventRoutes.post("/", authMiddleware, validate(createEventSchema), async (c) => 
 
   const { categoryIds, gallery, ...eventData } = data;
 
+  const sanitizedEventData = {
+    ...eventData,
+    title: sanitizeText(eventData.title),
+    description: sanitizeText(eventData.description),
+    location: sanitizeText(eventData.location),
+    contactName: sanitizeText(eventData.contactName),
+    contactEmail: sanitizeText(eventData.contactEmail),
+    contactPhone: sanitizeText(eventData.contactPhone),
+  };
+
   const event = await prisma.event.create({
     data: {
-      ...eventData,
+      ...sanitizedEventData,
       slug,
       createdById: authUser.id,
       eventDate: new Date(data.eventDate),
@@ -329,10 +344,25 @@ eventRoutes.patch("/:eventId", authMiddleware, validate(updateEventSchema), asyn
 
   const { categoryIds, gallery, ...updateData } = data;
 
+  const updateDataAny = updateData as Record<string, unknown>;
+  if (updateDataAny.communityId && updateDataAny.organizationId) {
+    return c.json({ success: false, message: "Event hanya boleh dimiliki oleh satu penyelenggara" }, 400);
+  }
+
+  const sanitizedUpdateData = {
+    ...updateData,
+    title: sanitizeText(updateData.title),
+    description: sanitizeText(updateData.description),
+    location: sanitizeText(updateData.location),
+    contactName: sanitizeText(updateData.contactName),
+    contactEmail: sanitizeText(updateData.contactEmail),
+    contactPhone: sanitizeText(updateData.contactPhone),
+  };
+
   const updated = await prisma.event.update({
     where: { id: eventId },
     data: {
-      ...updateData,
+      ...sanitizedUpdateData,
       eventDate: data.eventDate ? new Date(data.eventDate) : undefined,
       endDate: data.endDate ? new Date(data.endDate) : undefined,
       gallery: gallery !== undefined ? JSON.stringify(gallery) : undefined,
@@ -847,6 +877,15 @@ eventRoutes.post("/:eventId/register", authMiddleware, async (c) => {
   }
 
   const registration = await prisma.$transaction(async (tx) => {
+    const lockedRows = await tx.$queryRaw<{ quota: number }[]>`
+      SELECT \`quota\` FROM \`events\` WHERE \`id\` = ${eventId} FOR UPDATE
+    `;
+    const lockedEvent = lockedRows[0];
+
+    if (!lockedEvent) {
+      return null;
+    }
+
     if (existing && existing.status === "CANCELLED") {
       await tx.eventRegistration.delete({ where: { id: existing.id } });
     }
@@ -854,7 +893,9 @@ eventRoutes.post("/:eventId/register", authMiddleware, async (c) => {
     const confirmedCount = await tx.eventRegistration.count({
       where: { eventId, status: "CONFIRMED" },
     });
-    const isFull = confirmedCount >= event.quota;
+
+    const quota = lockedEvent.quota;
+    const isFull = confirmedCount >= quota;
     let registrationStatus = "CONFIRMED";
 
     if (isFull) {
@@ -938,20 +979,26 @@ eventRoutes.delete("/:eventId/register", authMiddleware, async (c) => {
   });
 
   if (event.status === "REGISTRATION_OPEN") {
-    const waitlisted = await prisma.eventRegistration.findFirst({
-      where: { eventId, status: "WAITLISTED" },
-      orderBy: { registeredAt: "asc" },
-    });
-
-    if (waitlisted) {
-      await prisma.eventRegistration.update({
-        where: { id: waitlisted.id },
-        data: { status: "CONFIRMED" },
+    const waitlistResult = await prisma.$transaction(async (tx) => {
+      const waitlisted = await tx.eventRegistration.findFirst({
+        where: { eventId, status: "WAITLISTED" },
+        orderBy: { registeredAt: "asc" },
       });
 
+      if (waitlisted) {
+        await tx.eventRegistration.update({
+          where: { id: waitlisted.id },
+          data: { status: "CONFIRMED" },
+        });
+        return waitlisted;
+      }
+      return null;
+    });
+
+    if (waitlistResult) {
       await prisma.notification.create({
         data: {
-          userId: waitlisted.userId,
+          userId: waitlistResult.userId,
           title: "Registrasi Dikonfirmasi",
           message: `Kuota tersedia! Anda terkonfirmasi pada event "${event.title}".`,
           type: "EVENT",
@@ -989,8 +1036,8 @@ eventRoutes.get("/:eventId/participants", authMiddleware, async (c) => {
   const authUser = c.get("user");
   const eventId = c.req.param("eventId") as string;
   const url = new URL(c.req.url);
-  const page = parseInt(url.searchParams.get("page") || "1");
-  const limit = parseInt(url.searchParams.get("limit") || "20");
+  const page = Math.max(1, parseInt(url.searchParams.get("page") || "1") || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") || "20") || 20));
   const search = url.searchParams.get("search") || "";
   const status = url.searchParams.get("status") || "";
 
@@ -1420,8 +1467,8 @@ eventRoutes.get("/:eventId/dashboard", authMiddleware, async (c) => {
 eventRoutes.get("/my/created", authMiddleware, async (c) => {
   const authUser = c.get("user");
   const url = new URL(c.req.url);
-  const page = parseInt(url.searchParams.get("page") || "1");
-  const limit = parseInt(url.searchParams.get("limit") || "20");
+  const page = Math.max(1, parseInt(url.searchParams.get("page") || "1") || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") || "20") || 20));
   const status = url.searchParams.get("status") || "";
 
   const where: any = {
@@ -1467,8 +1514,8 @@ eventRoutes.get("/my/created", authMiddleware, async (c) => {
 eventRoutes.get("/my/registered", authMiddleware, async (c) => {
   const authUser = c.get("user");
   const url = new URL(c.req.url);
-  const page = parseInt(url.searchParams.get("page") || "1");
-  const limit = parseInt(url.searchParams.get("limit") || "20");
+  const page = Math.max(1, parseInt(url.searchParams.get("page") || "1") || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") || "20") || 20));
   const status = url.searchParams.get("status") || "";
 
   const where: any = {

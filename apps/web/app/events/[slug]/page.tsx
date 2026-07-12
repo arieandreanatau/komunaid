@@ -9,6 +9,7 @@ import { useAuth } from "@/components/auth-provider";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { Breadcrumbs } from "@/components/breadcrumbs";
+import { getInitial } from "@/lib/initial";
 
 interface Event {
   id: string;
@@ -298,11 +299,9 @@ export default function EventDetailPage() {
                           <div className="h-32 relative overflow-hidden">
                             {re.coverImage || re.thumbnail ? (
                               <img src={re.coverImage || re.thumbnail} alt={re.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                            ) : (
-                              <div className="h-full bg-gradient-to-br from-komuna-blue to-komuna-teal flex items-center justify-center">
-                                <span className="text-white text-3xl font-bold opacity-30">{re.title[0]}</span>
-                              </div>
-                            )}
+                      ) : (
+                        <div className="h-full bg-gradient-to-br from-komuna-blue to-komuna-teal flex items-center justify-center"><span className="text-white text-7xl font-bold opacity-20">{getInitial(event.title)}</span></div>
+                      )}
                             {statusInfo && <span className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-xs font-medium ${statusInfo.className}`}>{statusInfo.label}</span>}
                           </div>
                           <div className="p-3">
@@ -431,7 +430,7 @@ export default function EventDetailPage() {
                       <img src={event.community.logo} alt={event.community.name} className="h-10 w-10 rounded-lg object-cover" />
                     ) : (
                       <div className="h-10 w-10 rounded-lg bg-komuna-blue/10 flex items-center justify-center">
-                        <span className="text-komuna-blue font-bold text-sm">{event.community.name[0]}</span>
+                        <span className="text-komuna-blue font-bold text-sm">{getInitial(event.community.name)}</span>
                       </div>
                     )}
                     <div>
@@ -446,7 +445,7 @@ export default function EventDetailPage() {
                       <img src={event.organization.logo} alt={event.organization.name} className="h-10 w-10 rounded-lg object-cover" />
                     ) : (
                       <div className="h-10 w-10 rounded-lg bg-komuna-teal/10 flex items-center justify-center">
-                        <span className="text-komuna-teal font-bold text-sm">{event.organization.name[0]}</span>
+                        <span className="text-komuna-teal font-bold text-sm">{getInitial(event.organization.name)}</span>
                       </div>
                     )}
                     <div>
@@ -460,8 +459,8 @@ export default function EventDetailPage() {
                     {event.createdBy.avatar ? (
                       <img src={event.createdBy.avatar} alt={event.createdBy.name} className="h-10 w-10 rounded-full object-cover" />
                     ) : (
-                      <div className="h-10 w-10 rounded-full bg-komuna-blue flex items-center justify-center">
-                        <span className="text-white font-bold text-sm">{event.createdBy.name[0]}</span>
+                      <div className="h-10 w-10 rounded-full bg-komuna-navy/10 flex items-center justify-center">
+                        <span className="text-komuna-navy font-bold text-sm">{getInitial(event.createdBy.name)}</span>
                       </div>
                     )}
                     <div>
