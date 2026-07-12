@@ -287,7 +287,7 @@ describe("Auth Middleware", () => {
 
     it("should call next when valid Bearer token provided", async () => {
       const { prisma } = await import("@komunaid/database");
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
 
       const token = await generateAccessToken(
         { id: "user-1", email: "test@test.com", name: "Test", username: "testuser" },

@@ -56,7 +56,7 @@ async function generateToken(payload: Record<string, any>): Promise<string> {
 
 function mockAuth(findUniqueResult?: any) {
   (prisma.user.findUnique as any).mockImplementation(async (args: any) => {
-    if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0 };
+    if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0, status: "ACTIVE" };
     return findUniqueResult !== undefined ? findUniqueResult : null;
   });
 }
@@ -79,7 +79,7 @@ describe("Report Routes", () => {
     it("should create a report successfully", async () => {
       const token = await generateToken({ sub: "u1", email: "a@b.com", name: "A", username: "a", type: "access" });
       (prisma.user.findUnique as any).mockImplementation(async (args: any) => {
-        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0 };
+        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0, status: "ACTIVE" };
         return null;
       });
       (prisma.report.findFirst as any).mockResolvedValue(null);
@@ -98,7 +98,7 @@ describe("Report Routes", () => {
     it("should return 409 for duplicate report", async () => {
       const token = await generateToken({ sub: "u1", email: "a@b.com", name: "A", username: "a", type: "access" });
       (prisma.user.findUnique as any).mockImplementation(async (args: any) => {
-        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0 };
+        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0, status: "ACTIVE" };
         return null;
       });
       (prisma.report.findFirst as any).mockResolvedValue({ id: "existing", reporterId: "u1", targetType: "USER", targetId: "t1", status: "OPEN" });
@@ -116,7 +116,7 @@ describe("Report Routes", () => {
     it("should create audit log on report creation", async () => {
       const token = await generateToken({ sub: "u1", email: "a@b.com", name: "A", username: "a", type: "access" });
       (prisma.user.findUnique as any).mockImplementation(async (args: any) => {
-        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0 };
+        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0, status: "ACTIVE" };
         return null;
       });
       (prisma.report.findFirst as any).mockResolvedValue(null);
@@ -141,7 +141,7 @@ describe("Report Routes", () => {
     it("should return 400 for invalid targetType", async () => {
       const token = await generateToken({ sub: "u1", email: "a@b.com", name: "A", username: "a", type: "access" });
       (prisma.user.findUnique as any).mockImplementation(async (args: any) => {
-        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0 };
+        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0, status: "ACTIVE" };
         return null;
       });
 
@@ -156,7 +156,7 @@ describe("Report Routes", () => {
     it("should return 400 for missing required fields", async () => {
       const token = await generateToken({ sub: "u1", email: "a@b.com", name: "A", username: "a", type: "access" });
       (prisma.user.findUnique as any).mockImplementation(async (args: any) => {
-        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0 };
+        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0, status: "ACTIVE" };
         return null;
       });
 
@@ -171,7 +171,7 @@ describe("Report Routes", () => {
     it("should allow optional description", async () => {
       const token = await generateToken({ sub: "u1", email: "a@b.com", name: "A", username: "a", type: "access" });
       (prisma.user.findUnique as any).mockImplementation(async (args: any) => {
-        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0 };
+        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0, status: "ACTIVE" };
         return null;
       });
       (prisma.report.findFirst as any).mockResolvedValue(null);
@@ -189,7 +189,7 @@ describe("Report Routes", () => {
     it("should return report by ID for owner", async () => {
       const token = await generateToken({ sub: "u1", email: "a@b.com", name: "A", username: "a", type: "access" });
       (prisma.user.findUnique as any).mockImplementation(async (args: any) => {
-        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0 };
+        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0, status: "ACTIVE" };
         return null;
       });
       (prisma.report.findUnique as any).mockResolvedValue({
@@ -222,7 +222,7 @@ describe("Report Routes", () => {
     it("should return 403 when not the owner", async () => {
       const token = await generateToken({ sub: "u1", email: "a@b.com", name: "A", username: "a", type: "access" });
       (prisma.user.findUnique as any).mockImplementation(async (args: any) => {
-        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0 };
+        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0, status: "ACTIVE" };
         return null;
       });
       (prisma.report.findUnique as any).mockResolvedValue({

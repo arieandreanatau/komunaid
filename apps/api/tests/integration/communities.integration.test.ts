@@ -152,7 +152,7 @@ describe("Communities Integration Tests", () => {
 
     it("should create a community with valid auth", async () => {
       const token = await generateToken({ sub: "user-1", email: "test@test.com", name: "Test", username: "test", type: "access" });
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
 
       const res = await app.request("/api/v1/communities", {
         method: "POST",
@@ -168,7 +168,7 @@ describe("Communities Integration Tests", () => {
 
     it("should return 400 for short name", async () => {
       const token = await generateToken({ sub: "user-1", email: "test@test.com", name: "Test", username: "test", type: "access" });
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
 
       const res = await app.request("/api/v1/communities", {
         method: "POST",
@@ -180,7 +180,7 @@ describe("Communities Integration Tests", () => {
 
     it("should return 400 with empty body", async () => {
       const token = await generateToken({ sub: "user-1", email: "test@test.com", name: "Test", username: "test", type: "access" });
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
 
       const res = await app.request("/api/v1/communities", {
         method: "POST",
@@ -227,7 +227,7 @@ describe("Communities Integration Tests", () => {
 
     it("should return 404 for non-existent community", async () => {
       const token = await generateToken({ sub: "user-2", email: "u2@test.com", name: "U2", username: "u2", type: "access" });
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
       (prisma.community.findUnique as any).mockResolvedValue(null);
 
       const res = await app.request("/api/v1/communities/nonexistent/join", {
@@ -247,7 +247,7 @@ describe("Communities Integration Tests", () => {
 
     it("should return 400 when not a member", async () => {
       const token = await generateToken({ sub: "user-2", email: "u2@test.com", name: "U2", username: "u2", type: "access" });
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
       (prisma.communityMember.findUnique as any).mockResolvedValue(null);
 
       const res = await app.request("/api/v1/communities/comm-1/leave", {
@@ -267,7 +267,7 @@ describe("Communities Integration Tests", () => {
   describe("POST /communities/:communityId/join (restricted)", () => {
     it("should create join request for RESTRICTED community", async () => {
       const token = await generateToken({ sub: "user-2", email: "u2@test.com", name: "U2", username: "u2", type: "access" });
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
       (prisma.community.findUnique as any).mockResolvedValue({
         id: "comm-1", name: "Restricted", status: "APPROVED", visibility: "PUBLIC",
         deletedAt: null, membershipType: "RESTRICTED",
@@ -290,7 +290,7 @@ describe("Communities Integration Tests", () => {
   describe("POST /communities/:communityId/join (duplicate)", () => {
     it("should return 409 if already a member", async () => {
       const token = await generateToken({ sub: "user-2", email: "u2@test.com", name: "U2", username: "u2", type: "access" });
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
       (prisma.community.findUnique as any).mockResolvedValue({
         id: "comm-1", name: "Test", status: "APPROVED", visibility: "PUBLIC",
         deletedAt: null, membershipType: "OPEN",

@@ -67,7 +67,7 @@ describe("Admin Integration Tests", () => {
 
     it("should return 403 for non-admin user", async () => {
       const token = await generateToken({ sub: "user-1", email: "user@test.com", name: "User", username: "user", type: "access" });
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
       (prisma.userRole.findMany as any).mockResolvedValue([{ role: "MEMBER" }]);
 
       const res = await app.request("/api/v1/admin/dashboard", {
@@ -80,7 +80,7 @@ describe("Admin Integration Tests", () => {
   describe("Dashboard", () => {
     it("should return dashboard data for admin", async () => {
       const token = await generateToken({ sub: "admin-1", email: "admin@test.com", name: "Admin", username: "admin", type: "access" });
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
       (prisma.userRole.findMany as any).mockResolvedValue([{ role: "PLATFORM_ADMIN" }]);
       (prisma.user.count as any).mockResolvedValue(100);
       (prisma.community.count as any).mockResolvedValue(25);
@@ -98,7 +98,7 @@ describe("Admin Integration Tests", () => {
   describe("User Management", () => {
     it("should list users for admin", async () => {
       const token = await generateToken({ sub: "admin-1", email: "admin@test.com", name: "Admin", username: "admin", type: "access" });
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
       (prisma.userRole.findMany as any).mockResolvedValue([{ role: "PLATFORM_ADMIN" }]);
       (prisma.user.findMany as any).mockResolvedValue([]);
       (prisma.user.count as any).mockResolvedValue(0);
@@ -113,7 +113,7 @@ describe("Admin Integration Tests", () => {
   describe("Roles", () => {
     it("should list roles for admin", async () => {
       const token = await generateToken({ sub: "admin-1", email: "admin@test.com", name: "Admin", username: "admin", type: "access" });
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
       (prisma.userRole.findMany as any).mockResolvedValue([{ role: "PLATFORM_ADMIN" }]);
 
       const res = await app.request("/api/v1/admin/roles", {
@@ -126,7 +126,7 @@ describe("Admin Integration Tests", () => {
   describe("Communities Management", () => {
     it("should list communities for admin", async () => {
       const token = await generateToken({ sub: "admin-1", email: "admin@test.com", name: "Admin", username: "admin", type: "access" });
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
       (prisma.userRole.findMany as any).mockResolvedValue([{ role: "PLATFORM_ADMIN" }]);
       (prisma.community.findMany as any).mockResolvedValue([]);
       (prisma.community.count as any).mockResolvedValue(0);
@@ -141,7 +141,7 @@ describe("Admin Integration Tests", () => {
   describe("Organizations Management", () => {
     it("should list organizations for admin", async () => {
       const token = await generateToken({ sub: "admin-1", email: "admin@test.com", name: "Admin", username: "admin", type: "access" });
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
       (prisma.userRole.findMany as any).mockResolvedValue([{ role: "PLATFORM_ADMIN" }]);
       (prisma.organization.findMany as any).mockResolvedValue([]);
       (prisma.organization.count as any).mockResolvedValue(0);
@@ -156,7 +156,7 @@ describe("Admin Integration Tests", () => {
   describe("Events Management", () => {
     it("should list events for admin", async () => {
       const token = await generateToken({ sub: "admin-1", email: "admin@test.com", name: "Admin", username: "admin", type: "access" });
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
       (prisma.userRole.findMany as any).mockResolvedValue([{ role: "PLATFORM_ADMIN" }]);
       (prisma.event.findMany as any).mockResolvedValue([]);
       (prisma.event.count as any).mockResolvedValue(0);
@@ -171,7 +171,7 @@ describe("Admin Integration Tests", () => {
   describe("Audit Logs", () => {
     it("should list audit logs for admin", async () => {
       const token = await generateToken({ sub: "admin-1", email: "admin@test.com", name: "Admin", username: "admin", type: "access" });
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
       (prisma.userRole.findMany as any).mockResolvedValue([{ role: "PLATFORM_ADMIN" }]);
       (prisma.auditLog.findMany as any).mockResolvedValue([]);
       (prisma.auditLog.count as any).mockResolvedValue(0);
@@ -186,7 +186,7 @@ describe("Admin Integration Tests", () => {
   describe("Notifications", () => {
     it("should list notifications for admin", async () => {
       const token = await generateToken({ sub: "admin-1", email: "admin@test.com", name: "Admin", username: "admin", type: "access" });
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
       (prisma.userRole.findMany as any).mockResolvedValue([{ role: "PLATFORM_ADMIN" }]);
       (prisma.notification.findMany as any).mockResolvedValue([]);
 
@@ -200,7 +200,7 @@ describe("Admin Integration Tests", () => {
   describe("Categories", () => {
     it("should list categories for admin", async () => {
       const token = await generateToken({ sub: "admin-1", email: "admin@test.com", name: "Admin", username: "admin", type: "access" });
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
       (prisma.userRole.findMany as any).mockResolvedValue([{ role: "PLATFORM_ADMIN" }]);
       (prisma.category.findMany as any).mockResolvedValue([]);
 

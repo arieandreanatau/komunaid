@@ -69,7 +69,7 @@ describe("Auth Middleware - Additional Coverage", () => {
   describe("authMiddleware with cookie token", () => {
     it("should pass when valid access token in cookie", async () => {
       const { prisma } = await import("@komunaid/database");
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
 
       const token = await generateAccessToken(
         { id: "user-1", email: "test@test.com", name: "Test", username: "testuser" },
@@ -86,7 +86,7 @@ describe("Auth Middleware - Additional Coverage", () => {
 
     it("should set user from cookie token", async () => {
       const { prisma } = await import("@komunaid/database");
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
 
       const token = await generateAccessToken(
         { id: "user-42", email: "cookie@test.com", name: "Cookie", username: "cookieuser" },
@@ -140,7 +140,7 @@ describe("Auth Middleware - Additional Coverage", () => {
   describe("authMiddleware with token version mismatch", () => {
     it("should throw when token version does not match DB version", async () => {
       const { prisma } = await import("@komunaid/database");
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 5 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 5, status: "ACTIVE" });
 
       const token = await generateAccessToken(
         { id: "user-1", email: "test@test.com", name: "Test", username: "testuser" },
@@ -156,7 +156,7 @@ describe("Auth Middleware - Additional Coverage", () => {
 
     it("should pass when token version matches DB version", async () => {
       const { prisma } = await import("@komunaid/database");
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 3 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 3, status: "ACTIVE" });
 
       const token = await generateAccessToken(
         { id: "user-1", email: "test@test.com", name: "Test", username: "testuser" },

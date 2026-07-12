@@ -61,7 +61,7 @@ async function generateToken(payload: Record<string, any>): Promise<string> {
 function mockAuth(routeResult?: any) {
   (prisma.user.findUnique as any).mockImplementation(async (args: any) => {
     if (args?.select?.tokenVersion !== undefined) {
-      return { tokenVersion: 0 };
+      return { tokenVersion: 0, status: "ACTIVE" };
     }
     return routeResult !== undefined ? routeResult : null;
   });
@@ -306,7 +306,7 @@ describe("User Routes", () => {
   describe("GET /:id", () => {
     it("should return user by ID", async () => {
       (prisma.user.findUnique as any).mockImplementation(async (args: any) => {
-        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0 };
+        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0, status: "ACTIVE" };
         return {
           id: "user-42", name: "John", avatar: "http://img", bio: "bio",
           location: "City", createdAt: new Date(),
@@ -324,7 +324,7 @@ describe("User Routes", () => {
 
     it("should return 404 when user not found", async () => {
       (prisma.user.findUnique as any).mockImplementation(async (args: any) => {
-        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0 };
+        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0, status: "ACTIVE" };
         return null;
       });
 
@@ -337,7 +337,7 @@ describe("User Routes", () => {
 
     it("should not require authentication", async () => {
       (prisma.user.findUnique as any).mockImplementation(async (args: any) => {
-        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0 };
+        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0, status: "ACTIVE" };
         return {
           id: "u1", name: "A", avatar: null, bio: null,
           location: null, createdAt: new Date(), joinedCommunities: [],
@@ -350,7 +350,7 @@ describe("User Routes", () => {
 
     it("should pass correct where clause to prisma", async () => {
       (prisma.user.findUnique as any).mockImplementation(async (args: any) => {
-        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0 };
+        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0, status: "ACTIVE" };
         return {
           id: "u1", name: "A", avatar: null, bio: null,
           location: null, createdAt: new Date(), joinedCommunities: [],
@@ -478,7 +478,7 @@ describe("User Routes", () => {
 
     it("should be shadowed by /:id route", async () => {
       (prisma.user.findUnique as any).mockImplementation(async (args: any) => {
-        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0 };
+        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0, status: "ACTIVE" };
         return null;
       });
       const res = await app.request("/users/notifications");
@@ -558,7 +558,7 @@ describe("User Routes", () => {
 
     it("should return 404 when user not found via /:id", async () => {
       (prisma.user.findUnique as any).mockImplementation(async (args: any) => {
-        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0 };
+        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0, status: "ACTIVE" };
         return null;
       });
       const res = await app.request("/users/activity");

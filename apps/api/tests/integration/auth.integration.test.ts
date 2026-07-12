@@ -421,7 +421,7 @@ describe("Auth Integration Tests", () => {
             createdAt: new Date(),
           };
         }
-        return { tokenVersion: 0 };
+        return { tokenVersion: 0, status: "ACTIVE" };
       });
 
       const res = await app.request("/api/v1/auth/me", {

@@ -58,7 +58,7 @@ function mockAdminAuth(opts?: { role?: string; findUniqueResult?: any }) {
   const role = opts?.role ?? "PLATFORM_ADMIN";
   const findUniqueResult = opts?.findUniqueResult;
   (prisma.user.findUnique as any).mockImplementation(async (args: any) => {
-    if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0 };
+    if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0, status: "ACTIVE" };
     return findUniqueResult !== undefined ? findUniqueResult : null;
   });
   (prisma.userRole.findMany as any).mockImplementation(async (args: any) => {

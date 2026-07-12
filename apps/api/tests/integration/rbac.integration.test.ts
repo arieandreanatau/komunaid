@@ -60,7 +60,7 @@ describe("RBAC Integration Tests", () => {
       if (err.message === "Not Found") {
         return c.json({ success: false, error: { code: "NOT_FOUND", message: "Not Found" } }, 404);
       }
-      return c.json({ success: false, error: { code: "INTERNAL_SERVER_ERROR", message: "Internal Server Error" } }, 500);
+      return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Unauthorized" } }, 401);
     });
     app.route("/api/v1/communities", communityRoutes);
   });
@@ -89,7 +89,7 @@ describe("RBAC Integration Tests", () => {
 
     it("should allow authenticated member to access member routes", async () => {
       const token = await generateToken({ sub: "user-1", email: "user@test.com", name: "User", username: "user", type: "access" });
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
       (prisma.userRole.findMany as any).mockResolvedValue([{ role: "MEMBER" }]);
 
       const res = await app.request("/api/v1/communities/my/submissions", {
@@ -102,7 +102,7 @@ describe("RBAC Integration Tests", () => {
   describe("Platform role checking", () => {
     it("should distinguish between MEMBER and ADMIN roles", async () => {
       const memberToken = await generateToken({ sub: "user-1", email: "member@test.com", name: "Member", username: "member", type: "access" });
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
       (prisma.userRole.findMany as any).mockResolvedValue([{ role: "MEMBER" }]);
 
       const memberRes = await app.request("/api/v1/communities/my/submissions", {
@@ -139,7 +139,7 @@ describe("RBAC Integration Tests", () => {
   describe("Community-level RBAC", () => {
     it("should reject owner-only actions from non-owner", async () => {
       const token = await generateToken({ sub: "user-2", email: "u2@test.com", name: "U2", username: "u2", type: "access" });
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
       (prisma.communityMember.findUnique as any).mockResolvedValue(null);
 
       const res = await app.request("/api/v1/communities/comm-1/archive", {
@@ -151,7 +151,7 @@ describe("RBAC Integration Tests", () => {
 
     it("should reject admin-only actions from non-admin", async () => {
       const token = await generateToken({ sub: "user-2", email: "u2@test.com", name: "U2", username: "u2", type: "access" });
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
       (prisma.communityMember.findUnique as any).mockResolvedValue({
         userId: "user-2", communityId: "comm-1", role: "MEMBER", status: "ACTIVE",
       });
@@ -164,7 +164,7 @@ describe("RBAC Integration Tests", () => {
 
     it("should allow owner to access owner routes", async () => {
       const token = await generateToken({ sub: "user-1", email: "u1@test.com", name: "U1", username: "u1", type: "access" });
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
       (prisma.communityMember.findUnique as any).mockResolvedValue({
         userId: "user-1", communityId: "comm-1", role: "OWNER", status: "ACTIVE",
       });
@@ -186,7 +186,7 @@ describe("RBAC Integration Tests", () => {
       });
 
       (prisma.user.findUnique as any).mockImplementation(async ({ where }: any) => {
-        if (where.id === "user-1") return { tokenVersion: 5 };
+        if (where.id === "user-1") return { tokenVersion: 5, status: "ACTIVE" };
         return null;
       });
 

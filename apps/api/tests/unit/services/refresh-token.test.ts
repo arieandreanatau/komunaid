@@ -172,7 +172,7 @@ describe("Refresh Token Service", () => {
       expect(result.newTokenHash).toBe("");
     });
 
-    it("should return reused=true when token is expired", async () => {
+    it("should return reused=false,expired=true when token is expired", async () => {
       const oldHash = hashToken("expired-token");
       (prisma.refreshToken.findUnique as any).mockResolvedValue({
         id: "t1",
@@ -184,7 +184,8 @@ describe("Refresh Token Service", () => {
 
       const result = await rotateRefreshToken(oldHash, "user-1");
 
-      expect(result.reused).toBe(true);
+      expect(result.reused).toBe(false);
+      expect(result.expired).toBe(true);
     });
 
     it("should revoke entire family on reuse detection", async () => {

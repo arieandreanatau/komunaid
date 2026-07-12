@@ -149,7 +149,7 @@ describe("Events Integration Tests", () => {
 
     it("should return 400 when no organizer specified", async () => {
       const token = await generateToken({ sub: "user-1", email: "test@test.com", name: "Test", username: "test", type: "access" });
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
 
       const res = await app.request("/api/v1/events", {
         method: "POST",
@@ -161,7 +161,7 @@ describe("Events Integration Tests", () => {
 
     it("should return 403 when user lacks community role", async () => {
       const token = await generateToken({ sub: "user-1", email: "test@test.com", name: "Test", username: "test", type: "access" });
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
       (prisma.communityMember.findUnique as any).mockResolvedValue(null);
 
       const res = await app.request("/api/v1/events", {
@@ -174,7 +174,7 @@ describe("Events Integration Tests", () => {
 
     it("should create event with valid community role", async () => {
       const token = await generateToken({ sub: "user-1", email: "test@test.com", name: "Test", username: "test", type: "access" });
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
       (prisma.communityMember.findUnique as any).mockResolvedValue({
         role: "OWNER", communityId: "comm-1", userId: "user-1",
       });
@@ -189,7 +189,7 @@ describe("Events Integration Tests", () => {
 
     it("should return 409 if already registered", async () => {
       const token = await generateToken({ sub: "user-1", email: "test@test.com", name: "Test", username: "test", type: "access" });
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
       (prisma.event.findUnique as any).mockResolvedValue({
         id: "event-1", slug: "test-event", title: "Test Event", status: "REGISTRATION_OPEN",
         deletedAt: null, quota: 100, allowWaitlist: false, createdById: "user-2",
@@ -214,7 +214,7 @@ describe("Events Integration Tests", () => {
 
     it("should cancel event as owner", async () => {
       const token = await generateToken({ sub: "user-1", email: "test@test.com", name: "Test", username: "test", type: "access" });
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
       (prisma.event.findUnique as any).mockResolvedValue({
         id: "event-1", status: "PUBLISHED", deletedAt: null, createdById: "user-1",
         title: "Test", slug: "test", communityId: null, organizationId: null,
@@ -231,7 +231,7 @@ describe("Events Integration Tests", () => {
 
     it("should return 403 when not authorized", async () => {
       const token = await generateToken({ sub: "user-2", email: "u2@test.com", name: "U2", username: "u2", type: "access" });
-      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0 });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
       (prisma.event.findUnique as any).mockResolvedValue({
         id: "event-1", status: "PUBLISHED", deletedAt: null, createdById: "user-1",
         communityId: null, organizationId: null,
