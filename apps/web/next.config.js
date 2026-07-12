@@ -16,7 +16,7 @@ loadEnv();
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: ["@komunaid/shared", "@komunaid/ui"],
-  serverExternalPackages: ["@prisma/client", "ioredis"],
+  serverExternalPackages: ["ioredis"],
   outputFileTracingIncludes: {
     "/api/**": [
       "../../node_modules/.prisma/client/**",
@@ -24,6 +24,7 @@ const nextConfig = {
       "../../node_modules/.pnpm/@prisma+client*/node_modules/.prisma/client/**",
       "../../node_modules/.pnpm/@prisma+client*/node_modules/@prisma/client/**",
       "../../node_modules/.pnpm/@prisma+engines*/node_modules/**",
+      "../../node_modules/@prisma/engines/**",
       "../api/src/**",
       "../api/package.json",
     ],
