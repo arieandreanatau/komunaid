@@ -1,6 +1,6 @@
 interface JsonLdProps {
   type: "website" | "organization" | "event" | "community";
-  data?: Record<string, string | number | boolean | null | undefined>;
+  data?: Record<string, unknown>;
 }
 
 const BASE_URL = "https://komuna.id";
