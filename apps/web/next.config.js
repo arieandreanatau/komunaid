@@ -42,9 +42,7 @@ const nextConfig = {
     ];
   },
   async rewrites() {
-    const apiBase = process.env.API_URL || "http://localhost:3001";
     return [
-      { source: "/api/v1/:path*", destination: `${apiBase}/api/v1/:path*` },
       { source: "/health", destination: "/api/health" },
       { source: "/ready", destination: "/api/ready" },
       { source: "/live", destination: "/api/live" },

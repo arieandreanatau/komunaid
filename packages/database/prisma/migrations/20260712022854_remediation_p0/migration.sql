@@ -12,11 +12,11 @@ ALTER TABLE `users` MODIFY COLUMN `bio` TEXT;
 
 -- Community.description, adminNote
 ALTER TABLE `communities` MODIFY COLUMN `description` TEXT;
-ALTER TABLE `communities` MODIFY COLUMN `admin_note` TEXT;
+ALTER TABLE `communities` MODIFY COLUMN `adminNote` TEXT;
 
 -- Organization.description, adminNote
 ALTER TABLE `organizations` MODIFY COLUMN `description` TEXT;
-ALTER TABLE `organizations` MODIFY COLUMN `admin_note` TEXT;
+ALTER TABLE `organizations` MODIFY COLUMN `adminNote` TEXT;
 
 -- Event.description
 ALTER TABLE `events` MODIFY COLUMN `description` TEXT;
@@ -32,11 +32,11 @@ ALTER TABLE `volunteer_positions` MODIFY COLUMN `requirement` TEXT;
 ALTER TABLE `volunteer_applications` MODIFY COLUMN `motivation` TEXT;
 ALTER TABLE `volunteer_applications` MODIFY COLUMN `experience` TEXT;
 ALTER TABLE `volunteer_applications` MODIFY COLUMN `availability` TEXT;
-ALTER TABLE `volunteer_applications` MODIFY COLUMN `review_note` TEXT;
+ALTER TABLE `volunteer_applications` MODIFY COLUMN `reviewNote` TEXT;
 
 -- Report.description, reviewNote
 ALTER TABLE `reports` MODIFY COLUMN `description` TEXT;
-ALTER TABLE `reports` MODIFY COLUMN `review_note` TEXT;
+ALTER TABLE `reports` MODIFY COLUMN `reviewNote` TEXT;
 
 -- Category.description
 ALTER TABLE `categories` MODIFY COLUMN `description` TEXT;

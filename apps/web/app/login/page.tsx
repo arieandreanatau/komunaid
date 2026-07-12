@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -19,10 +19,16 @@ function isSafeRedirect(path: string | null): boolean {
 
 export default function LoginPage() {
   const router = useRouter();
-  const { setUser } = useAuth();
+  const { user, isAuthenticated, isLoading, setUser } = useAuth();
   const searchParams = useSearchParams();
   const redirectTo = isSafeRedirect(searchParams.get("redirect")) ? searchParams.get("redirect")! : "/dashboard";
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && user) {
+      router.replace(redirectTo);
+    }
+  }, [isLoading, isAuthenticated, user, router, redirectTo]);
 
   const {
     register,
