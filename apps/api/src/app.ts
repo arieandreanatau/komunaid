@@ -33,12 +33,16 @@ app.use("*", async (c, next) => {
   const start = Date.now();
   await next();
   const duration = Date.now() - start;
-  log.info({
-    method: c.req.method,
-    path: c.req.path,
-    status: c.res.status,
-    duration: `${duration}ms`,
-  }, "request");
+  try {
+    log.info({
+      method: c.req.method,
+      path: c.req.path,
+      status: c.res.status,
+      duration: `${duration}ms`,
+    }, "request");
+  } catch {
+    // logger failure should not crash the request
+  }
 });
 
 app.use("*", securityHeaders);
@@ -160,7 +164,17 @@ app.get("/api/v1/docs", (c) => {
 app.route("/api/v1", api);
 
 app.onError((err, c) => {
-  log.error({ err, method: c.req.method, path: c.req.path }, "unhandled error");
+  const isExpected = err.message === "Unauthorized" || err.message === "Forbidden" || err.message === "Not Found";
+
+  try {
+    if (isExpected) {
+      log.info({ method: c.req.method, path: c.req.path, status: err.message }, "auth error");
+    } else {
+      log.error({ err, method: c.req.method, path: c.req.path }, "unhandled error");
+    }
+  } catch {
+    // logger failure should not crash the error handler
+  }
 
   if (err.message === "Unauthorized") {
     return c.json({ success: false, error: { code: "UNAUTHORIZED", message: "Unauthorized" } }, 401);

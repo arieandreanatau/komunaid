@@ -63,7 +63,9 @@ eventRoutes.get("/", optionalAuthMiddleware, validate(eventQuerySchema, "query")
   const where: any = { deletedAt: null };
 
   if (user) {
-    where.status = q.status || { notIn: ["DRAFT", "CANCELLED", "ARCHIVED"] };
+    where.status = q.status && q.status.length > 0
+      ? q.status
+      : { notIn: ["DRAFT", "CANCELLED", "ARCHIVED"] };
   } else {
     where.status = { notIn: ["DRAFT", "CANCELLED", "ARCHIVED"] };
     where.visibility = "PUBLIC";
@@ -78,7 +80,7 @@ eventRoutes.get("/", optionalAuthMiddleware, validate(eventQuerySchema, "query")
 
   if (q.communityId) where.communityId = q.communityId;
   if (q.organizationId) where.organizationId = q.organizationId;
-  if (q.status && user) where.status = q.status;
+  if (q.status && q.status.length > 0 && user) where.status = q.status;
 
   if (q.upcoming) {
     where.eventDate = { gte: new Date() };

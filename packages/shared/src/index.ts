@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+const emptyToUndefined = (v: unknown) =>
+  typeof v === "string" && v.trim() === "" ? undefined : v;
+
 // ==========================================
 // AUTH SCHEMAS
 // ==========================================
@@ -189,15 +192,33 @@ export const changeMemberRoleSchema = z.object({
 export const communityQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
-  search: z.string().optional(),
-  status: z.string().optional(),
-  visibility: z.enum(["PUBLIC", "PRIVATE"]).optional(),
-  membershipType: z.enum(["OPEN", "RESTRICTED"]).optional(),
-  categoryId: z.string().optional(),
-  province: z.string().optional(),
-  city: z.string().optional(),
-  tag: z.string().optional(),
-  featured: z.coerce.boolean().optional(),
+  search: z.preprocess(emptyToUndefined, z.string().optional()),
+  status: z.preprocess(
+    emptyToUndefined,
+    z
+      .enum([
+        "DRAFT",
+        "PENDING_REVIEW",
+        "APPROVED",
+        "REJECTED",
+        "SUSPENDED",
+        "ARCHIVED",
+      ])
+      .optional()
+  ),
+  visibility: z.preprocess(
+    emptyToUndefined,
+    z.enum(["PUBLIC", "PRIVATE"]).optional()
+  ),
+  membershipType: z.preprocess(
+    emptyToUndefined,
+    z.enum(["OPEN", "RESTRICTED"]).optional()
+  ),
+  categoryId: z.preprocess(emptyToUndefined, z.string().optional()),
+  province: z.preprocess(emptyToUndefined, z.string().optional()),
+  city: z.preprocess(emptyToUndefined, z.string().optional()),
+  tag: z.preprocess(emptyToUndefined, z.string().optional()),
+  featured: z.preprocess(emptyToUndefined, z.coerce.boolean().optional()),
   sort: z.enum(["asc", "desc"]).default("desc"),
   orderBy: z.enum(["createdAt", "name", "memberCount"]).default("createdAt"),
 });
@@ -361,11 +382,25 @@ export const updateEventSchema = createEventSchema.partial();
 export const eventQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
-  search: z.string().optional(),
-  status: z.string().optional(),
-  communityId: z.string().optional(),
-  organizationId: z.string().optional(),
-  upcoming: z.coerce.boolean().optional(),
+  search: z.preprocess(emptyToUndefined, z.string().optional()),
+  status: z.preprocess(
+    emptyToUndefined,
+    z
+      .enum([
+        "DRAFT",
+        "PUBLISHED",
+        "REGISTRATION_OPEN",
+        "REGISTRATION_CLOSED",
+        "ONGOING",
+        "COMPLETED",
+        "CANCELLED",
+        "ARCHIVED",
+      ])
+      .optional()
+  ),
+  communityId: z.preprocess(emptyToUndefined, z.string().optional()),
+  organizationId: z.preprocess(emptyToUndefined, z.string().optional()),
+  upcoming: z.preprocess(emptyToUndefined, z.coerce.boolean().optional()),
   sort: z.enum(["asc", "desc"]).default("desc"),
   orderBy: z.enum(["createdAt", "eventDate", "title"]).default("eventDate"),
 });
@@ -405,9 +440,12 @@ export const updateVolunteerOpportunitySchema = z.object({
 export const volunteerOpportunityQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
-  search: z.string().optional(),
-  status: z.string().optional(),
-  eventId: z.string().optional(),
+  search: z.preprocess(emptyToUndefined, z.string().optional()),
+  status: z.preprocess(
+    emptyToUndefined,
+    z.enum(["DRAFT", "PUBLISHED", "OPEN", "CLOSED", "ARCHIVED"]).optional()
+  ),
+  eventId: z.preprocess(emptyToUndefined, z.string().optional()),
   sort: z.enum(["asc", "desc"]).default("desc"),
   orderBy: z.enum(["createdAt", "title"]).default("createdAt"),
 });
