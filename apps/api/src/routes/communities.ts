@@ -1812,28 +1812,39 @@ communityRoutes.put(
 
 communityRoutes.get(
   "/:communityId/members",
-  authMiddleware,
+  optionalAuthMiddleware,
   async (c) => {
-    const authUser = c.get("user");
+    const authUser = c.get("user") as AuthUser | undefined;
     const communityId = c.req.param("communityId") as string;
 
-    const community = await prisma.community.findUnique({ where: { id: communityId } });
+    const community = await prisma.community.findUnique({
+      where: { id: communityId },
+      include: { settings: true },
+    });
     if (!community || community.deletedAt) {
       return c.json({ success: false, message: "Komunitas tidak ditemukan" }, 404);
     }
 
-    const isMember = await prisma.communityMember.findUnique({
-      where: {
-        communityId_userId: {
-          communityId,
-          userId: authUser.id,
-        },
-      },
-      select: { id: true },
-    });
+    const isMember = authUser
+      ? await prisma.communityMember.findFirst({
+          where: {
+            communityId,
+            userId: authUser.id,
+            status: "ACTIVE",
+            deletedAt: null,
+          },
+          select: { id: true },
+        })
+      : null;
 
-    if (community.visibility === "PRIVATE" && !isMember) {
+    const canViewPrivateMembers = Boolean(isMember || community.ownerId === authUser?.id);
+
+    if (community.visibility === "PRIVATE" && !canViewPrivateMembers) {
       return c.json({ success: false, message: "Komunitas ini bersifat privat" }, 403);
+    }
+
+    if (community.settings?.showMemberList === false && !canViewPrivateMembers) {
+      return c.json({ success: false, message: "Daftar anggota tidak tersedia" }, 403);
     }
 
     const url = new URL(c.req.url);
@@ -1847,6 +1858,7 @@ communityRoutes.get(
     const where: any = {
       communityId,
       status: "ACTIVE",
+      deletedAt: null,
     };
 
     if (roleFilter) {

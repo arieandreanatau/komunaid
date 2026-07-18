@@ -61,6 +61,7 @@ vi.mock("@komunaid/database", () => {
         return { id: `member-${Date.now()}`, ...data };
       }),
       findMany: vi.fn(async () => []),
+      findFirst: vi.fn(async () => null),
       count: vi.fn(async () => 0),
       update: vi.fn(),
     },
@@ -213,6 +214,58 @@ describe("Communities Integration Tests", () => {
 
       const res = await app.request("/api/v1/communities/test");
       expect(res.status).toBe(200);
+    });
+  });
+
+  describe("GET /communities/:communityId/members", () => {
+    it("should list members of a public community without auth", async () => {
+      (prisma.community.findUnique as any).mockResolvedValue({
+        id: "comm-1",
+        ownerId: "user-1",
+        visibility: "PUBLIC",
+        deletedAt: null,
+        settings: null,
+      });
+      (prisma.communityMember.findMany as any).mockResolvedValue([
+        {
+          id: "member-1",
+          user: { id: "user-1", name: "Owner", avatar: null, bio: null, username: "owner" },
+          role: "OWNER",
+          status: "ACTIVE",
+          joinedAt: new Date(),
+        },
+      ]);
+      (prisma.communityMember.count as any).mockResolvedValue(1);
+
+      const res = await app.request("/api/v1/communities/comm-1/members?page=1&limit=20");
+
+      expect(res.status).toBe(200);
+      const body = await res.json() as any;
+      expect(body.data).toHaveLength(1);
+      expect(body.data[0].user.name).toBe("Owner");
+      expect(prisma.communityMember.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            communityId: "comm-1",
+            status: "ACTIVE",
+            deletedAt: null,
+          }),
+        })
+      );
+    });
+
+    it("should hide a private community member list from guests", async () => {
+      (prisma.community.findUnique as any).mockResolvedValue({
+        id: "comm-1",
+        ownerId: "user-1",
+        visibility: "PRIVATE",
+        deletedAt: null,
+        settings: null,
+      });
+
+      const res = await app.request("/api/v1/communities/comm-1/members");
+
+      expect(res.status).toBe(403);
     });
   });
 

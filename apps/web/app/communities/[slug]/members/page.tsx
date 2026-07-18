@@ -27,7 +27,18 @@ interface Community {
   name: string;
   slug: string;
   memberCount: number;
-  settings: { showMemberList: boolean };
+  settings: { showMemberList: boolean } | null;
+}
+
+interface ApiMember {
+  id: string;
+  user: {
+    name: string;
+    avatar: string | null;
+    bio: string | null;
+  };
+  role: Member["role"];
+  joinedAt: string;
 }
 
 const ROLE_OPTIONS = ["ALL", "OWNER", "ADMIN", "EVENT_MANAGER", "MEMBER"] as const;
@@ -78,10 +89,19 @@ export default function CommunityMembersPage() {
   const fetchCommunity = useCallback(async () => {
     try {
       const { data } = await api.get(`/communities/${slug}`);
-      setCommunity(data.community);
-      return data.community;
+      const fetchedCommunity = data.data as Community | undefined;
+
+      if (!fetchedCommunity?.id) {
+        setError("Data komunitas tidak valid.");
+        setLoading(false);
+        return null;
+      }
+
+      setCommunity(fetchedCommunity);
+      return fetchedCommunity;
     } catch (err: any) {
-      setError(err?.response?.data?.message || "Gagal memuat data komunitas.");
+      setError(err?.response?.data?.message || err?.response?.data?.error?.message || "Gagal memuat data komunitas.");
+      setLoading(false);
       return null;
     }
   }, [slug]);
@@ -98,10 +118,17 @@ export default function CommunityMembersPage() {
           role: roleFilter === "ALL" ? "" : roleFilter,
         });
         const { data } = await api.get(`/communities/${communityId}/members?${params.toString()}`);
-        setMembers(data.members);
-        setPagination(data.pagination);
+        setMembers((data.data || []).map((member: ApiMember) => ({
+          id: member.id,
+          name: member.user.name,
+          avatar: member.user.avatar,
+          bio: member.user.bio,
+          role: member.role,
+          joinedAt: member.joinedAt,
+        })));
+        setPagination(data.pagination || null);
       } catch (err: any) {
-        setError(err?.response?.data?.message || "Gagal memuat daftar anggota.");
+        setError(err?.response?.data?.message || err?.response?.data?.error?.message || "Gagal memuat daftar anggota.");
       } finally {
         setLoading(false);
       }
@@ -160,7 +187,7 @@ export default function CommunityMembersPage() {
     );
   }
 
-  if (community && !community.settings.showMemberList) {
+  if (community && community.settings?.showMemberList === false) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />
