@@ -28,6 +28,7 @@ import {
   loginRateLimiter,
   registrationRateLimiter,
   forgotPasswordRateLimiter,
+  resetPasswordRateLimiter,
   refreshTokenRateLimiter,
 } from "../services/rate-limiter";
 import { createChildLogger } from "../lib/logger";
@@ -569,7 +570,7 @@ authRoutes.post("/forgot-password", validate(forgotPasswordSchema), async (c) =>
   });
 
   if (user && !user.deletedAt && user.status === "ACTIVE") {
-    const resetToken = await generateResetToken(user);
+    const resetToken = await generateResetToken(user, user.tokenVersion);
 
     log.info({ userId: user.id }, "password reset requested");
 
@@ -580,6 +581,7 @@ authRoutes.post("/forgot-password", validate(forgotPasswordSchema), async (c) =>
       to: user.email,
       subject: emailContent.subject,
       html: emailContent.html,
+      text: emailContent.text,
     });
 
     if (!emailSent) {
@@ -600,6 +602,11 @@ authRoutes.post("/forgot-password", validate(forgotPasswordSchema), async (c) =>
 authRoutes.post("/reset-password", validate(resetPasswordSchema), async (c) => {
   const data = c.get("validated");
 
+  const rateLimitResult = await resetPasswordRateLimiter(hashToken(data.token));
+  if (!rateLimitResult.allowed) {
+    return c.json({ success: false, message: "Terlalu banyak percobaan reset. Coba lagi nanti." }, 429);
+  }
+
   try {
     const payload = await verifyToken(data.token);
 
@@ -615,6 +622,10 @@ authRoutes.post("/reset-password", validate(resetPasswordSchema), async (c) => {
       return c.json({ success: false, message: "User tidak ditemukan" }, 404);
     }
 
+    if (payload.tokenVersion === undefined || payload.tokenVersion !== user.tokenVersion) {
+      return c.json({ success: false, message: "Token tidak valid atau sudah digunakan" }, 400);
+    }
+
     if (user.status === "SUSPENDED") {
       return c.json({ success: false, message: "Akun ditangguhkan. Hubungi administrator." }, 403);
     }
@@ -628,29 +639,50 @@ authRoutes.post("/reset-password", validate(resetPasswordSchema), async (c) => {
       parseInt(process.env.BCRYPT_ROUNDS || "12")
     );
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        password: hashedPassword,
-        tokenVersion: { increment: 1 },
-      },
+    const resetResult = await prisma.$transaction(async (tx) => {
+      const result = await tx.user.updateMany({
+        where: { id: user.id, tokenVersion: payload.tokenVersion },
+        data: {
+          password: hashedPassword,
+          tokenVersion: { increment: 1 },
+        },
+      });
+
+      if (result.count === 1) {
+        await tx.refreshToken.updateMany({
+          where: { userId: user.id, isRevoked: false },
+          data: { isRevoked: true },
+        });
+      }
+
+      return result;
     });
 
-    await createAuditLog({
-      userId: user.id,
-      actionType: AuditActions.USER_RESET_PASSWORD,
-      resourceName: "User",
-      resourceId: user.id,
-    });
+    if (resetResult.count !== 1) {
+      return c.json({ success: false, message: "Token tidak valid atau sudah digunakan" }, 400);
+    }
 
-    await prisma.notification.create({
-      data: {
+    clearTokenCookies(c);
+
+    try {
+      await createAuditLog({
         userId: user.id,
-        title: "Password Berhasil Direset",
-        message: "Password akun Anda telah berhasil direset. Jika Anda tidak melakukan ini, segera hubungi administrator.",
-        type: "SYSTEM",
-      },
-    });
+        actionType: AuditActions.USER_RESET_PASSWORD,
+        resourceName: "User",
+        resourceId: user.id,
+      });
+
+      await prisma.notification.create({
+        data: {
+          userId: user.id,
+          title: "Password Berhasil Direset",
+          message: "Password akun Anda telah berhasil direset. Jika Anda tidak melakukan ini, segera hubungi administrator.",
+          type: "SYSTEM",
+        },
+      });
+    } catch (postErr) {
+      log.error({ err: postErr, userId: user.id }, "post-reset operations failed");
+    }
 
     return c.json({
       success: true,

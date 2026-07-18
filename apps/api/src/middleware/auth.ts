@@ -83,11 +83,12 @@ export async function generateAccessToken(user: AuthUser, tokenVersion?: number,
     .sign(JWT_SECRET);
 }
 
-export function generateResetToken(user: AuthUser): Promise<string> {
+export function generateResetToken(user: AuthUser, tokenVersion: number): Promise<string> {
   return new SignJWT({
     sub: user.id,
     email: user.email,
     type: "reset",
+    tokenVersion,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()

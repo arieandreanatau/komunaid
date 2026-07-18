@@ -1,7 +1,9 @@
 import nodemailer from "nodemailer";
+import { Resend } from "resend";
 import { createChildLogger } from "../lib/logger";
 
 const log = createChildLogger("email");
+const RESEND_BATCH_SIZE = 100;
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || "localhost",
@@ -19,7 +21,7 @@ const transporter = nodemailer.createTransport({
 });
 
 interface SendEmailParams {
-  to: string;
+  to: string | string[];
   subject: string;
   html: string;
   text?: string;
@@ -27,29 +29,74 @@ interface SendEmailParams {
 
 export async function sendEmail(params: SendEmailParams): Promise<boolean> {
   const from = process.env.EMAIL_FROM || "noreply@komuna.id";
+  const recipients = Array.isArray(params.to) ? params.to : [params.to];
 
-  // Try SMTP (fallback for Resend)
-  if (process.env.SMTP_HOST) {
+  if (recipients.length === 0) {
+    log.warn("email has no recipients");
+    return false;
+  }
+
+  let pendingRecipients = recipients;
+
+  if (process.env.RESEND_API_KEY) {
+    let offset = 0;
+
     try {
-      await transporter.sendMail({
-        from,
-        to: params.to,
-        subject: params.subject,
-        html: params.html,
-        text: params.text,
-      });
-      log.info({ to: params.to, subject: params.subject }, "email sent via SMTP");
-      return true;
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      let resendFailed = false;
+
+      for (; offset < recipients.length; offset += RESEND_BATCH_SIZE) {
+        const batch = recipients.slice(offset, offset + RESEND_BATCH_SIZE).map((to) => ({
+            from,
+            to,
+            subject: params.subject,
+            html: params.html,
+            text: params.text,
+        }));
+        const result = await resend.batch.send(batch);
+
+        if (result.error) {
+          resendFailed = true;
+          pendingRecipients = recipients.slice(offset);
+          log.error({ err: result.error, recipientCount: recipients.length }, "failed to send email via Resend");
+          break;
+        }
+      }
+
+      if (!resendFailed) {
+        log.info({ recipientCount: recipients.length, subject: params.subject }, "email sent via Resend");
+        return true;
+      }
     } catch (error) {
-      log.error({ err: error, to: params.to }, "failed to send email via SMTP");
+      pendingRecipients = recipients.slice(offset);
+      log.error({ err: error, recipientCount: recipients.length }, "failed to send email via Resend");
     }
   }
 
-  // Dev fallback — log to console
+  // Keep recipients separate so email addresses are not disclosed to each other.
+  if (process.env.SMTP_HOST) {
+    try {
+      for (const to of pendingRecipients) {
+        await transporter.sendMail({
+          from,
+          to,
+          subject: params.subject,
+          html: params.html,
+          text: params.text,
+        });
+      }
+      log.info({ recipientCount: pendingRecipients.length, subject: params.subject }, "email sent via SMTP");
+      return true;
+    } catch (error) {
+      log.error({ err: error, recipientCount: recipients.length }, "failed to send email via SMTP");
+    }
+  }
+
+  // Development fallback: expose content locally without contacting a provider.
   if (process.env.NODE_ENV !== "production") {
     console.log("\n========================================");
-    console.log("📧 DEV EMAIL (not actually sent)");
-    console.log("To:", params.to);
+    console.log("DEV EMAIL (not actually sent)");
+    console.log("To:", pendingRecipients.join(", "));
     console.log("Subject:", params.subject);
     console.log("HTML:\n", params.html);
     console.log("========================================\n");
@@ -57,7 +104,7 @@ export async function sendEmail(params: SendEmailParams): Promise<boolean> {
   }
 
   log.warn(
-    { to: params.to, subject: params.subject },
+    { recipientCount: recipients.length, subject: params.subject },
     "no email provider configured (set RESEND_API_KEY or SMTP_HOST), email not sent"
   );
   return false;
@@ -66,9 +113,11 @@ export async function sendEmail(params: SendEmailParams): Promise<boolean> {
 export function buildResetPasswordEmail(resetUrl: string): {
   subject: string;
   html: string;
+  text: string;
 } {
   return {
     subject: "Reset Password - KomunaID",
+    text: `Anda meminta reset password KomunaID. Buka link berikut untuk membuat password baru: ${resetUrl}\n\nLink ini kedaluarsa dalam 1 jam. Jika Anda tidak meminta reset password, abaikan email ini.`,
     html: `
       <!DOCTYPE html>
       <html>

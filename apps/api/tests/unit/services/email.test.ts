@@ -1,7 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-const { mockSendMail } = vi.hoisted(() => ({
+const { mockResendBatchSend, mockSendMail } = vi.hoisted(() => ({
+  mockResendBatchSend: vi.fn(),
   mockSendMail: vi.fn(),
+}));
+
+vi.mock("resend", () => ({
+  Resend: vi.fn().mockImplementation(() => ({
+    batch: { send: mockResendBatchSend },
+  })),
 }));
 
 vi.mock("nodemailer", () => {
@@ -30,6 +37,8 @@ describe("Email Service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env = { ...originalEnv };
+    delete process.env.RESEND_API_KEY;
+    delete process.env.SMTP_HOST;
   });
 
   afterEach(() => {
@@ -37,6 +46,78 @@ describe("Email Service", () => {
   });
 
   describe("sendEmail", () => {
+    it("should prefer Resend when RESEND_API_KEY is set", async () => {
+      process.env.RESEND_API_KEY = "re_test_key";
+      process.env.NODE_ENV = "production";
+      mockResendBatchSend.mockResolvedValue({ data: { data: [{ id: "email-id" }] }, error: null });
+
+      const result = await sendEmail({
+        to: "user@example.com",
+        subject: "Test",
+        html: "<p>Hello</p>",
+      });
+
+      expect(result).toBe(true);
+      expect(mockResendBatchSend).toHaveBeenCalledWith(
+        [expect.objectContaining({ to: "user@example.com", subject: "Test" })]
+      );
+      expect(mockSendMail).not.toHaveBeenCalled();
+    });
+
+    it("should send separately to multiple recipients", async () => {
+      process.env.RESEND_API_KEY = "re_test_key";
+      process.env.NODE_ENV = "production";
+      mockResendBatchSend.mockResolvedValue({ data: { data: [{ id: "email-id" }] }, error: null });
+
+      const result = await sendEmail({
+        to: ["one@example.com", "two@example.com"],
+        subject: "Test",
+        html: "<p>Hello</p>",
+      });
+
+      expect(result).toBe(true);
+      expect(mockResendBatchSend).toHaveBeenCalledOnce();
+      expect(mockResendBatchSend).toHaveBeenCalledWith([
+        expect.objectContaining({ to: "one@example.com" }),
+        expect.objectContaining({ to: "two@example.com" }),
+      ]);
+    });
+
+    it("should split large recipient lists into Resend batches", async () => {
+      process.env.RESEND_API_KEY = "re_test_key";
+      process.env.NODE_ENV = "production";
+      mockResendBatchSend.mockResolvedValue({ data: { data: [{ id: "email-id" }] }, error: null });
+      const recipients = Array.from({ length: 101 }, (_, index) => `user${index}@example.com`);
+
+      const result = await sendEmail({
+        to: recipients,
+        subject: "Test",
+        html: "<p>Hello</p>",
+      });
+
+      expect(result).toBe(true);
+      expect(mockResendBatchSend).toHaveBeenCalledTimes(2);
+      expect(mockResendBatchSend.mock.calls[0][0]).toHaveLength(100);
+      expect(mockResendBatchSend.mock.calls[1][0]).toHaveLength(1);
+    });
+
+    it("should fall back to SMTP when Resend fails", async () => {
+      process.env.RESEND_API_KEY = "re_test_key";
+      process.env.SMTP_HOST = "smtp.example.com";
+      process.env.NODE_ENV = "production";
+      mockResendBatchSend.mockResolvedValue({ data: null, error: { message: "Rejected" } });
+      mockSendMail.mockResolvedValue(undefined);
+
+      const result = await sendEmail({
+        to: "user@example.com",
+        subject: "Test",
+        html: "<p>Hello</p>",
+      });
+
+      expect(result).toBe(true);
+      expect(mockSendMail).toHaveBeenCalledOnce();
+    });
+
     it("should return true when SMTP_HOST is set and sendMail succeeds", async () => {
       process.env.SMTP_HOST = "smtp.example.com";
       process.env.NODE_ENV = "production";
@@ -155,6 +236,7 @@ describe("Email Service", () => {
       const url = "https://komuna.id/reset?token=abc123";
       const result = buildResetPasswordEmail(url);
       expect(result.html).toContain(url);
+      expect(result.text).toContain(url);
     });
 
     it("should return valid HTML with KomunaID branding", () => {

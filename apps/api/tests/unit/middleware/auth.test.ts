@@ -111,9 +111,10 @@ describe("Auth Middleware", () => {
         email: "test@test.com",
         name: "Test",
         username: "testuser",
-      });
+      }, 4);
       const payload = await verifyToken(token);
       expect(payload.type).toBe("reset");
+      expect(payload.tokenVersion).toBe(4);
     });
 
     it("should include email in payload", async () => {
@@ -122,7 +123,7 @@ describe("Auth Middleware", () => {
         email: "reset@test.com",
         name: "Test",
         username: "testuser",
-      });
+      }, 0);
       const payload = await verifyToken(token);
       expect(payload.email).toBe("reset@test.com");
     });
@@ -277,7 +278,7 @@ describe("Auth Middleware", () => {
         email: "test@test.com",
         name: "Test",
         username: "testuser",
-      });
+      }, 0);
       mockContext.req.header.mockImplementation((name: string) => {
         if (name === "Cookie") return `token=${resetToken}`;
         return undefined;

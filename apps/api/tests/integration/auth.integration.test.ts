@@ -46,6 +46,17 @@ vi.mock("@komunaid/database", () => {
         Object.assign(user, data);
         return user;
       }),
+      updateMany: vi.fn(async ({ where, data }: any) => {
+        const user = users.get(where.id);
+        if (!user || (where.tokenVersion !== undefined && user.tokenVersion !== where.tokenVersion)) {
+          return { count: 0 };
+        }
+        user.password = data.password ?? user.password;
+        if (data.tokenVersion?.increment) {
+          user.tokenVersion += data.tokenVersion.increment;
+        }
+        return { count: 1 };
+      }),
     },
     userRole: { findMany: vi.fn(async () => []) },
     communityMember: { findUnique: vi.fn(async () => null), count: vi.fn(async () => 0) },
@@ -92,6 +103,7 @@ vi.mock("pino-pretty", () => ({ default: vi.fn(() => ({})) }));
 
 import { prisma } from "@komunaid/database";
 import { authRoutes } from "../../src/routes/auth";
+import { generateResetToken } from "../../src/middleware/auth";
 import bcrypt from "bcryptjs";
 
 async function generateToken(payload: any): Promise<string> {
@@ -475,6 +487,43 @@ describe("Auth Integration Tests", () => {
         body: JSON.stringify({ token: "invalid-token", password: "New12345" }),
       });
       expect(res.status).toBe(400);
+    });
+
+    it("should reset password once and reject token reuse", async () => {
+      const user = await prisma.user.create({
+        data: {
+          name: "Reset User",
+          username: `reset_${Date.now()}`,
+          email: `reset_${Date.now()}@example.com`,
+          password: await bcrypt.hash("Old12345", 4),
+        },
+      });
+      (prisma.user.findUnique as any).mockResolvedValue(user);
+      const token = await generateResetToken(user, user.tokenVersion);
+      const body = JSON.stringify({
+        token,
+        password: "New12345",
+        confirmPassword: "New12345",
+      });
+
+      const firstResponse = await app.request("/api/v1/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+      const secondResponse = await app.request("/api/v1/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+
+      expect(firstResponse.status).toBe(200);
+      expect(secondResponse.status).toBe(400);
+      expect(await bcrypt.compare("New12345", user.password)).toBe(true);
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+        where: { userId: user.id, isRevoked: false },
+        data: { isRevoked: true },
+      });
     });
   });
 
