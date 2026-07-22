@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { useAuth } from "@/components/auth-provider";
@@ -40,6 +40,10 @@ interface RegisteredEvent {
   organization: { name: string; slug: string } | null;
 }
 
+interface SavedEvent extends Omit<RegisteredEvent, "registrationStatus" | "attendance"> {
+  savedAt: string;
+}
+
 const EVENT_STATUS_MAP: Record<string, { label: string; className: string }> = {
   DRAFT: { label: "Draft", className: "bg-gray-100 text-gray-600" },
   PUBLISHED: { label: "Diterbitkan", className: "bg-blue-100 text-blue-700" },
@@ -68,11 +72,13 @@ const ATTENDANCE_MAP: Record<string, { label: string; className: string }> = {
 
 export default function MyEventsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"created" | "registered">("created");
+  const [activeTab, setActiveTab] = useState<"created" | "registered" | "saved">("created");
   const [createdPage, setCreatedPage] = useState(1);
   const [registeredPage, setRegisteredPage] = useState(1);
+  const [savedPage, setSavedPage] = useState(1);
   const [filterMonth, setFilterMonth] = useState("");
   const [filterCommunityId, setFilterCommunityId] = useState("");
   const [userCommunities, setUserCommunities] = useState<{ id: string; name: string }[]>([]);
@@ -82,6 +88,12 @@ export default function MyEventsPage() {
       router.push("/login");
     }
   }, [isAuthenticated, authLoading, router]);
+
+  useEffect(() => {
+    if (searchParams.get("tab") === "saved") {
+      setActiveTab("saved");
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -102,7 +114,7 @@ export default function MyEventsPage() {
   if (filterMonth) Object.assign(registeredParams, { month: filterMonth });
   if (filterCommunityId) Object.assign(registeredParams, { communityId: filterCommunityId });
 
-  useEffect(() => { setCreatedPage(1); setRegisteredPage(1); }, [filterMonth, filterCommunityId]);
+  useEffect(() => { setCreatedPage(1); setRegisteredPage(1); setSavedPage(1); }, [filterMonth, filterCommunityId]);
 
   const { data: createdData, isLoading: createdLoading } = useQuery({
     queryKey: ["myCreatedEvents", createdPage, filterMonth, filterCommunityId],
@@ -118,6 +130,15 @@ export default function MyEventsPage() {
     enabled: !!isAuthenticated,
     queryFn: async () => {
       const res = await api.get("/events/my/registered", { params: registeredParams });
+      return res.data;
+    },
+  });
+
+  const { data: savedData, isLoading: savedLoading } = useQuery({
+    queryKey: ["mySavedEvents", savedPage],
+    enabled: !!isAuthenticated,
+    queryFn: async () => {
+      const res = await api.get("/events/my/saved", { params: { page: savedPage, limit: 10 } });
       return res.data;
     },
   });
@@ -181,6 +202,8 @@ export default function MyEventsPage() {
   const createdPagination = createdData?.pagination || { page: 1, totalPages: 1 };
   const registeredEvents = registeredData?.events || [];
   const registeredPagination = registeredData?.pagination || { page: 1, totalPages: 1 };
+  const savedEvents: SavedEvent[] = savedData?.data || [];
+  const savedPagination = savedData?.pagination || { page: 1, totalPages: 1, total: 0 };
 
   return (
     <div className="space-y-6">
@@ -201,7 +224,7 @@ export default function MyEventsPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3">
+      {activeTab !== "saved" && <div className="flex flex-wrap gap-3">
         <select
           value={filterMonth}
           onChange={(e) => setFilterMonth(e.target.value)}
@@ -226,7 +249,7 @@ export default function MyEventsPage() {
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>
-      </div>
+      </div>}
 
       {/* Tabs */}
       <div className="border-b border-gray-200">
@@ -258,6 +281,21 @@ export default function MyEventsPage() {
             {registeredData?.pagination && (
               <span className="ml-1.5 px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-xs">
                 {registeredPagination.totalItems || 0}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("saved")}
+            className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "saved"
+                ? "border-komuna-blue text-komuna-blue"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Tersimpan
+            {savedData?.pagination && (
+              <span className="ml-1.5 px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-xs">
+                {savedPagination.total || 0}
               </span>
             )}
           </button>
@@ -417,7 +455,7 @@ export default function MyEventsPage() {
               })}
 
               {createdPagination.totalPages > 1 && (
-                <div className="flex justify-center gap-2">
+                <div className="flex flex-wrap justify-center gap-2">
                   {Array.from({ length: createdPagination.totalPages }, (_, i) => i + 1).map((p) => (
                     <button
                       key={p}
@@ -519,6 +557,57 @@ export default function MyEventsPage() {
                       className={`px-3 py-1 rounded-lg text-sm ${p === registeredPage ? "bg-komuna-blue text-white" : "bg-white border hover:bg-gray-50"}`}
                     >
                       {p}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {activeTab === "saved" && (
+        <div className="space-y-4">
+          {savedLoading ? (
+            <div className="text-center py-12">
+              <div className="h-8 w-8 border-4 border-komuna-blue border-t-transparent rounded-full animate-spin mx-auto" />
+              <p className="text-sm text-gray-500 mt-3">Memuat event tersimpan...</p>
+            </div>
+          ) : savedEvents.length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-xl border border-gray-100">
+              <svg className="h-12 w-12 text-gray-300 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-4-7 4V5z" />
+              </svg>
+              <p className="text-gray-500 mb-3">Belum ada event tersimpan</p>
+              <Link href="/events" className="inline-flex items-center gap-2 px-4 py-2 bg-komuna-blue text-white rounded-lg text-sm font-medium hover:bg-komuna-navy transition-colors">
+                Jelajahi Event
+              </Link>
+            </div>
+          ) : (
+            <>
+              {savedEvents.map((event) => (
+                <Link key={event.id} href={`/events/${event.slug}`} className="block bg-white rounded-xl border border-gray-100 shadow-sm p-5 hover:border-komuna-blue/30 hover:shadow-md transition-all">
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    {event.coverImage ? (
+                      <img src={event.coverImage} alt={event.title} className="h-20 w-28 rounded-lg object-cover flex-shrink-0" />
+                    ) : (
+                      <div className="h-20 w-28 rounded-lg bg-gradient-to-br from-komuna-blue to-komuna-teal flex items-center justify-center flex-shrink-0">
+                        <span className="text-white text-xl font-bold">{event.title[0]}</span>
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-semibold text-komuna-navy truncate">{event.title}</h3>
+                      <p className="text-sm text-gray-500 mt-1">{formatDateTime(event.eventDate)}</p>
+                      <p className="text-xs text-gray-500 mt-2">{event.locationType === "ONLINE" ? "Online" : event.location || "Lokasi TBD"}</p>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+              {savedPagination.totalPages > 1 && (
+                <div className="flex justify-center gap-2">
+                  {Array.from({ length: savedPagination.totalPages }, (_, i) => i + 1).map((pageNumber) => (
+                    <button key={pageNumber} onClick={() => setSavedPage(pageNumber)} className={`px-3 py-1 rounded-lg text-sm ${pageNumber === savedPage ? "bg-komuna-blue text-white" : "bg-white border hover:bg-gray-50"}`}>
+                      {pageNumber}
                     </button>
                   ))}
                 </div>

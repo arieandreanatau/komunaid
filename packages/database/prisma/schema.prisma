@@ -36,6 +36,7 @@ model User {
   joinedCommunities     CommunityMember[]
   organizationMembers   OrganizationMember[]
   registeredEvents      EventRegistration[]
+  savedEvents           EventSave[]
   createdCommunities    Community[]
   createdOrganizations  Organization[]
   createdEvents         Event[]
@@ -523,6 +524,7 @@ model Event {
   organization           Organization?          @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   createdBy              User                   @relation(fields: [createdById], references: [id])
   registrations          EventRegistration[]
+  savedBy                EventSave[]
   categories             EventCategory[]
   volunteerOpportunities VolunteerOpportunity[]
 
@@ -580,6 +582,20 @@ model EventRegistration {
   @@index([attendance])
   @@index([eventId, status])
   @@map("event_registrations")
+}
+
+model EventSave {
+  id        String   @id @default(cuid())
+  eventId   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([userId, createdAt])
+  @@map("event_saves")
 }
 
 enum RegistrationStatus {

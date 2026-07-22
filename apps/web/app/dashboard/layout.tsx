@@ -23,14 +23,8 @@ interface Organization {
 }
 
 interface UserProfile {
-  communities: {
-    community: Community;
-    role: string;
-  }[];
-  organizations: {
-    organization: Organization;
-    role: string;
-  }[];
+  communities: (Community & { role: string })[];
+  organizations: (Organization & { role: string })[];
 }
 
 export default function DashboardLayout({
@@ -56,19 +50,19 @@ export default function DashboardLayout({
       if (isAuthenticated) {
         try {
           const response = await api.get("/users/profile");
-          const profile: UserProfile = response.data;
+          const profile: UserProfile = response.data.data?.user || response.data.user;
           const ownedApproved = profile.communities?.find(
-            (c) => c.role === "OWNER" && c.community.status === "APPROVED"
+            (c) => c.role === "OWNER" && c.status === "APPROVED"
           );
           if (ownedApproved) {
-            setApprovedCommunity(ownedApproved.community);
+            setApprovedCommunity(ownedApproved);
           }
           if (profile.organizations) {
             const ownedApprovedOrg = profile.organizations.find(
-              (o) => o.role === "OWNER" && o.organization.status === "APPROVED"
+              (o) => o.role === "OWNER" && o.status === "APPROVED"
             );
             if (ownedApprovedOrg) {
-              setApprovedOrganization(ownedApprovedOrg.organization);
+              setApprovedOrganization(ownedApprovedOrg);
             }
           }
         } catch (error) {
@@ -96,6 +90,7 @@ export default function DashboardLayout({
     { href: "/dashboard/my-submissions", label: "Pengajuan Komunitas", icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
     { href: "/dashboard/events", label: "Event Saya", icon: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" },
     { href: "/dashboard/profile", label: "Profil", icon: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" },
+    { href: "/dashboard/interests", label: "Minat Saya", icon: "M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.958a1 1 0 00.95.69h4.162c.969 0 1.371 1.24.588 1.81l-3.367 2.446a1 1 0 00-.364 1.118l1.286 3.958c.3.921-.755 1.688-1.539 1.118l-3.367-2.446a1 1 0 00-1.176 0l-3.367 2.446c-.783.57-1.838-.197-1.539-1.118l1.286-3.958a1 1 0 00-.364-1.118L4.06 9.385c-.783-.57-.38-1.81.588-1.81H8.81a1 1 0 00.951-.69l1.287-3.958z" },
     { href: "/dashboard/notifications", label: "Notifikasi", icon: "M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" },
     { href: "/dashboard/activity", label: "Aktivitas", icon: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" },
     { href: "/dashboard/settings", label: "Pengaturan", icon: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z" },
@@ -176,6 +171,7 @@ export default function DashboardLayout({
         {/* Mobile Sidebar Toggle */}
         <div className="lg:hidden fixed bottom-4 left-4 z-40">
           <button
+            aria-label={sidebarOpen ? "Tutup menu dashboard" : "Buka menu dashboard"}
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="p-3 bg-komuna-blue text-white rounded-full shadow-lg hover:bg-komuna-navy transition-colors"
           >
@@ -192,7 +188,7 @@ export default function DashboardLayout({
             <aside className="absolute left-0 top-0 bottom-0 w-64 bg-white shadow-xl z-40">
               <div className="flex items-center justify-between p-4 border-b">
                 <span className="font-semibold text-komuna-navy">Menu</span>
-                <button onClick={() => setSidebarOpen(false)} className="p-1 hover:bg-gray-100 rounded">
+                <button aria-label="Tutup menu dashboard" onClick={() => setSidebarOpen(false)} className="p-1 hover:bg-gray-100 rounded">
                   <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
@@ -220,7 +216,7 @@ export default function DashboardLayout({
 
         {/* Main Content */}
         <main className="flex-1 min-h-[calc(100vh-4rem)]">
-          <div className="max-w-5xl mx-auto px-4 py-6">
+          <div className="max-w-6xl mx-auto px-4 py-6">
             {children}
           </div>
         </main>

@@ -100,10 +100,14 @@ describe("User Routes", () => {
         joinedCommunities: [{ community: { id: "c1", name: "C1", slug: "c1", logo: "l", status: "APPROVED" }, role: "MEMBER", status: "ACTIVE", deletedAt: null }],
         organizationMembers: [{ organization: { id: "o1", name: "O1", slug: "o1", logo: "l", status: "ACTIVE" }, role: "OWNER" }],
         registeredEvents: [{ event: { id: "e1", title: "E1", slug: "e1", coverImage: "ci", eventDate: new Date(), status: "PUBLISHED" }, status: "CONFIRMED" }],
+        savedEvents: [{ event: { id: "e2", title: "E2", slug: "e2", coverImage: null, eventDate: new Date(), status: "PUBLISHED" }, createdAt: new Date() }],
         notifications: [],
         createdAt: new Date(),
       });
-      (prisma.notification.count as any).mockResolvedValue(2);
+      (prisma.notification.count as any)
+        .mockResolvedValueOnce(2)
+        .mockResolvedValueOnce(1)
+        .mockResolvedValueOnce(1);
 
       const res = await app.request("/users/profile", {
         headers: { Authorization: `Bearer ${token}` },
@@ -118,6 +122,9 @@ describe("User Routes", () => {
       expect(body.data.user.organizations).toHaveLength(1);
       expect(body.data.user.events).toHaveLength(1);
       expect(body.data.user.events[0].registrationStatus).toBe("CONFIRMED");
+      expect(body.data.user.registeredEventsCount).toBe(1);
+      expect(body.data.user.savedEvents).toHaveLength(1);
+      expect(body.data.user.savedEventsCount).toBe(1);
       expect(body.data.user.unreadNotifications).toBe(2);
     });
 

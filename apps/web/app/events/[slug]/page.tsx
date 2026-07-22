@@ -43,6 +43,7 @@ interface Event {
     status: string;
     attendance: string;
   } | null;
+  isSaved: boolean;
 }
 
 const REG_STATUS_MAP: Record<string, { label: string; className: string }> = {
@@ -70,6 +71,7 @@ export default function EventDetailPage() {
   const { user, isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
   const [registerModalOpen, setRegisterModalOpen] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   const { data: event, isLoading, error } = useQuery({
     queryKey: ["event", slug],
@@ -113,6 +115,24 @@ export default function EventDetailPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["event", slug] });
+    },
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      setSaveError("");
+      if (event!.isSaved) {
+        return api.delete(`/events/${event!.id}/save`);
+      }
+      return api.post(`/events/${event!.id}/save`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["event", slug] });
+      queryClient.invalidateQueries({ queryKey: ["profile"] });
+      queryClient.invalidateQueries({ queryKey: ["mySavedEvents"] });
+    },
+    onError: (error: any) => {
+      setSaveError(error.response?.data?.message || "Gagal memperbarui event tersimpan.");
     },
   });
 
@@ -405,6 +425,25 @@ export default function EventDetailPage() {
                 {/* Share */}
                 <button
                   onClick={() => {
+                    if (!isAuthenticated) {
+                      window.location.href = `/login?redirect=${encodeURIComponent(`/events/${slug}`)}`;
+                      return;
+                    }
+                    saveMutation.mutate();
+                  }}
+                  disabled={saveMutation.isPending}
+                  aria-pressed={event.isSaved}
+                  className={`w-full mt-3 py-2.5 border rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 ${event.isSaved ? "border-komuna-blue bg-komuna-blue/5 text-komuna-blue" : "border-gray-300 text-gray-600 hover:bg-gray-50"}`}
+                >
+                  <svg className="h-4 w-4" fill={event.isSaved ? "currentColor" : "none"} viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-4-7 4V5z" />
+                  </svg>
+                  {saveMutation.isPending ? "Memproses..." : event.isSaved ? "Tersimpan" : "Simpan Event"}
+                </button>
+                {saveError && <p role="alert" className="mt-2 text-center text-xs text-red-600">{saveError}</p>}
+
+                <button
+                  onClick={() => {
                     if (navigator.share) {
                       navigator.share({ title: event.title, url: window.location.href });
                     } else {
@@ -412,7 +451,7 @@ export default function EventDetailPage() {
                       alert("Link disalin!");
                     }
                   }}
-                  className="w-full mt-3 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm text-gray-600 flex items-center justify-center gap-2"
+                  className="w-full mt-2 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm text-gray-600 flex items-center justify-center gap-2"
                 >
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />

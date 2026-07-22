@@ -1,14 +1,200 @@
 "use client";
 
-import { useAuth } from "@/components/auth-provider";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/components/auth-provider";
 import api from "@/lib/api";
+
+interface CommunitySummary {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  logo?: string | null;
+  coverImage?: string | null;
+  role?: string;
+  status?: string;
+  memberCount?: number;
+  eventCount?: number;
+  categories?: Array<{ id: string; name: string }>;
+}
+
+interface EventSummary {
+  id: string;
+  title: string;
+  slug: string;
+  coverImage?: string | null;
+  thumbnail?: string | null;
+  eventDate: string;
+  status: string;
+  registrationStatus?: string;
+  location?: string | null;
+  locationType?: string;
+  registeredCount?: number;
+  quota?: number;
+  community?: { name: string; slug: string } | null;
+  organization?: { name: string; slug: string } | null;
+}
+
+interface DashboardProfile {
+  id?: string;
+  name?: string;
+  username?: string;
+  email?: string;
+  avatar?: string | null;
+  bio?: string | null;
+  location?: string | null;
+  roles?: string[];
+  interests?: string[];
+  communities?: CommunitySummary[];
+  followedCommunities?: CommunitySummary[];
+  events?: EventSummary[];
+  registeredEventsCount?: number;
+  savedEvents?: EventSummary[];
+  savedEventsCount?: number;
+  unreadNotifications?: number;
+}
+
+interface NotificationItem {
+  id: string;
+  title: string;
+  message: string;
+  type: string;
+  isRead: boolean;
+  link?: string | null;
+  createdAt: string;
+}
+
+interface ActivityItem {
+  id: string;
+  action: string;
+  details?: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+type FeedItem = {
+  id: string;
+  title: string;
+  description: string;
+  createdAt: string;
+  kind: "community" | "event" | "approval" | "profile" | "system";
+  href: string;
+  unread?: boolean;
+};
+
+const MONTHS = [
+  "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+  "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+];
+
+const DAYS = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
+
+const FEED_STYLES: Record<FeedItem["kind"], { bg: string; text: string }> = {
+  community: { bg: "bg-emerald-50", text: "text-emerald-600" },
+  event: { bg: "bg-cyan-50", text: "text-cyan-600" },
+  approval: { bg: "bg-amber-50", text: "text-amber-600" },
+  profile: { bg: "bg-blue-50", text: "text-komuna-blue" },
+  system: { bg: "bg-slate-100", text: "text-slate-600" },
+};
+
+function Icon({ name, className = "h-5 w-5" }: { name: string; className?: string }) {
+  const paths: Record<string, string> = {
+    users: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656-.126-1.283-.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z",
+    calendar: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",
+    bookmark: "M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-4-7 4V5z",
+    bell: "M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9",
+    arrow: "M9 5l7 7-7 7",
+    chevronLeft: "M15 19l-7-7 7-7",
+    chevronRight: "M9 5l7 7-7 7",
+    location: "M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z M15 11a3 3 0 11-6 0 3 3 0 016 0z",
+    clock: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z",
+    plus: "M12 4v16m8-8H4",
+    sparkles: "M5 3v4M3 5h4m11-2v4m-2-2h4M6 17v4m-2-2h4m7-8l1.5 3.5L20 16l-3.5 1.5L15 21l-1.5-3.5L10 16l3.5-1.5L15 11z",
+  };
+
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={paths[name] || paths.arrow} />
+    </svg>
+  );
+}
+
+function SectionHeader({ title, href, linkLabel = "Lihat semua" }: { title: string; href: string; linkLabel?: string }) {
+  return (
+    <div className="mb-4 flex items-center justify-between gap-4">
+      <h2 className="text-lg font-bold text-komuna-navy">{title}</h2>
+      <Link href={href} className="inline-flex items-center gap-1 text-sm font-semibold text-komuna-blue hover:text-komuna-navy">
+        {linkLabel}
+        <Icon name="arrow" className="h-4 w-4" />
+      </Link>
+    </div>
+  );
+}
+
+function formatRelativeDate(dateValue: string) {
+  const date = new Date(dateValue);
+  const diffMs = Date.now() - date.getTime();
+  const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
+  if (diffMinutes < 1) return "Baru saja";
+  if (diffMinutes < 60) return `${diffMinutes} menit lalu`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours} jam lalu`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `${diffDays} hari lalu`;
+  return date.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function activityToFeed(activity: ActivityItem): FeedItem {
+  const details = activity.details || {};
+  const communityName = typeof details.communityName === "string" ? details.communityName : "komunitas";
+  const eventTitle = typeof details.eventTitle === "string" ? details.eventTitle : "event";
+  const labels: Record<string, { title: string; description: string; kind: FeedItem["kind"]; href: string }> = {
+    COMMUNITY_CREATE: { title: "Membuat komunitas", description: communityName, kind: "community", href: "/dashboard/communities" },
+    COMMUNITY_SUBMITTED: { title: "Komunitas diajukan", description: communityName, kind: "approval", href: "/dashboard/my-submissions" },
+    COMMUNITY_MEMBER_JOIN: { title: "Bergabung komunitas", description: communityName, kind: "community", href: "/dashboard/communities" },
+    COMMUNITY_JOIN_REQUEST_CREATE: { title: "Permintaan bergabung dikirim", description: communityName, kind: "community", href: "/dashboard/communities" },
+    EVENT_REGISTER: { title: "Bergabung event", description: eventTitle, kind: "event", href: "/dashboard/events" },
+    USER_UPDATE_PROFILE: { title: "Profil diperbarui", description: "Informasi profil berhasil diubah", kind: "profile", href: "/dashboard/profile" },
+    USER_UPDATE_INTERESTS: { title: "Minat diperbarui", description: "Rekomendasi akan makin relevan", kind: "profile", href: "/dashboard/interests" },
+  };
+  const item = labels[activity.action] || {
+    title: activity.action.replaceAll("_", " ").toLowerCase(),
+    description: "Aktivitas akun",
+    kind: "system" as const,
+    href: "/dashboard/activity",
+  };
+
+  return { id: `activity-${activity.id}`, createdAt: activity.createdAt, ...item };
+}
+
+function notificationToFeed(notification: NotificationItem): FeedItem {
+  const kind: FeedItem["kind"] = notification.type === "EVENT"
+    ? "event"
+    : notification.type === "COMMUNITY" || notification.type === "ORGANIZATION"
+      ? "community"
+      : notification.type === "APPROVAL"
+        ? "approval"
+        : "system";
+  return {
+    id: `notification-${notification.id}`,
+    title: notification.title,
+    description: notification.message,
+    createdAt: notification.createdAt,
+    kind,
+    href: notification.link || "/dashboard/notifications",
+    unread: !notification.isRead,
+  };
+}
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
 
-  const { data: profile } = useQuery({
+  const profileQuery = useQuery<DashboardProfile>({
     queryKey: ["profile"],
     enabled: !!user,
     queryFn: async () => {
@@ -17,216 +203,306 @@ export default function DashboardPage() {
     },
   });
 
-  const profileData = profile || user;
+  const popularCommunitiesQuery = useQuery<CommunitySummary[]>({
+    queryKey: ["communities", "popular", "dashboard"],
+    queryFn: async () => {
+      const res = await api.get("/communities/popular/list");
+      return res.data.data || [];
+    },
+  });
+
+  const popularEventsQuery = useQuery<EventSummary[]>({
+    queryKey: ["events", "popular", "upcoming"],
+    queryFn: async () => {
+      const res = await api.get("/events/popular/upcoming");
+      return res.data.data || [];
+    },
+  });
+
+  const notificationsQuery = useQuery<NotificationItem[]>({
+    queryKey: ["notifications", "dashboard"],
+    enabled: !!user,
+    queryFn: async () => {
+      const res = await api.get("/users/notifications?page=1&limit=5");
+      return res.data.data || [];
+    },
+  });
+
+  const activitiesQuery = useQuery<ActivityItem[]>({
+    queryKey: ["activity", "dashboard"],
+    enabled: !!user,
+    queryFn: async () => {
+      const res = await api.get("/users/activity?page=1&limit=5");
+      return res.data.data || [];
+    },
+  });
+
+  const profile = profileQuery.data || (user as DashboardProfile | null) || {};
+  const followedCommunities = profile.followedCommunities || profile.communities || [];
+  const registeredEvents = profile.events || [];
+  const savedEventsCount = profile.savedEventsCount ?? profile.savedEvents?.length ?? 0;
+  const upcomingRegisteredEvents = registeredEvents
+    .filter((event) => new Date(event.eventDate).getTime() >= new Date().setHours(0, 0, 0, 0))
+    .sort((a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime());
+
+  const calendarDays = useMemo(() => {
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    return [
+      ...Array.from({ length: firstDay }, () => null),
+      ...Array.from({ length: daysInMonth }, (_, index) => index + 1),
+    ];
+  }, [calendarMonth]);
+
+  const eventDays = useMemo(() => {
+    const days = new Set<number>();
+    registeredEvents.forEach((event) => {
+      const date = new Date(event.eventDate);
+      if (date.getFullYear() === calendarMonth.getFullYear() && date.getMonth() === calendarMonth.getMonth()) {
+        days.add(date.getDate());
+      }
+    });
+    return days;
+  }, [calendarMonth, registeredEvents]);
+
+  const feed = useMemo(() => [
+    ...(notificationsQuery.data || []).map(notificationToFeed),
+    ...(activitiesQuery.data || []).map(activityToFeed),
+  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 6), [activitiesQuery.data, notificationsQuery.data]);
+
+  const stats = [
+    { label: "Komunitas Diikuti", value: followedCommunities.length, href: "/dashboard/communities", icon: "users", accent: "bg-blue-50 text-komuna-blue" },
+    { label: "Event Terdaftar", value: profile.registeredEventsCount ?? registeredEvents.length, href: "/dashboard/events", icon: "calendar", accent: "bg-emerald-50 text-komuna-teal" },
+    { label: "Event Tersimpan", value: savedEventsCount, href: "/dashboard/events?tab=saved", icon: "bookmark", accent: "bg-amber-50 text-amber-600" },
+  ];
+
+  const isCurrentDay = (day: number) => {
+    const now = new Date();
+    return day === now.getDate() && calendarMonth.getMonth() === now.getMonth() && calendarMonth.getFullYear() === now.getFullYear();
+  };
 
   return (
-    <div className="space-y-6">
-      {/* Welcome */}
-      <div className="bg-gradient-to-r from-komuna-navy via-komuna-blue to-komuna-teal rounded-xl p-6 text-white">
-        <h1 className="text-2xl font-bold">Selamat datang, {profileData?.name || "Member"}!</h1>
-        <p className="text-white/80 mt-1">Kelola profil, komunitas, dan aktivitas Anda dari sini.</p>
-      </div>
-
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-komuna-blue/10 flex items-center justify-center">
-              <svg className="h-5 w-5 text-komuna-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-komuna-navy">{profileData?.communities?.length || 0}</p>
-              <p className="text-sm text-gray-500">Komunitas Diikuti</p>
-            </div>
+    <div className="space-y-7 pb-8">
+      <section className="relative overflow-hidden rounded-2xl bg-komuna-navy px-5 py-6 text-white shadow-sm sm:px-7">
+        <div className="absolute -right-16 -top-24 h-64 w-64 rounded-full bg-komuna-aqua/20 blur-2xl" />
+        <div className="absolute -bottom-24 right-32 h-48 w-48 rounded-full bg-komuna-blue/50 blur-2xl" />
+        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-komuna-aqua">Overview</p>
+            <h1 className="text-2xl font-bold sm:text-3xl">Selamat datang, {profile.name || "Member"}!</h1>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-blue-100">Temukan komunitas baru, pantau agenda, dan ikuti aktivitas terbaru dalam satu tempat.</p>
           </div>
-        </div>
-        <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-komuna-teal/10 flex items-center justify-center">
-              <svg className="h-5 w-5 text-komuna-teal" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-komuna-navy">{profileData?.events?.length || 0}</p>
-              <p className="text-sm text-gray-500">Event Terdaftar</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-komuna-aqua/10 flex items-center justify-center">
-              <svg className="h-5 w-5 text-komuna-aqua" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-komuna-navy">{profileData?.unreadNotifications || 0}</p>
-              <p className="text-sm text-gray-500">Notifikasi Baru</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Community Entry Points */}
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Link href="/communities/create" className="bg-gradient-to-br from-komuna-navy to-komuna-blue rounded-xl p-6 text-white hover:shadow-lg transition-shadow">
-            <div className="flex items-start gap-4">
-              <div className="h-12 w-12 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-              </div>
-              <div>
-                <h3 className="font-semibold text-lg">Buat Komunitas</h3>
-                <p className="text-white/70 text-sm mt-1">Daftarkan komunitas Anda di KomunaID</p>
-              </div>
-            </div>
-          </Link>
-
-          <Link href="/communities" className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-start gap-4">
-              <div className="h-12 w-12 rounded-lg bg-komuna-teal/10 flex items-center justify-center shrink-0">
-                <svg className="h-6 w-6 text-komuna-teal" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-              </div>
-              <div>
-                <h3 className="font-semibold text-lg text-komuna-navy">Jelajahi Komunitas</h3>
-                <p className="text-gray-500 text-sm mt-1">Jelajahi dan bergabung dengan komunitas</p>
-              </div>
-            </div>
-          </Link>
-        </div>
-
-        {profileData?.communities?.filter(
-          (c: { role?: string; status?: string }) => c.role === "OWNER" && c.status === "APPROVED"
-        ).length > 0 && (
-          profileData.communities
-            .filter((c: { role?: string; status?: string }) => c.role === "OWNER" && c.status === "APPROVED")
-            .slice(0, 1)
-            .map((community: { id: string; name: string; slug: string; logo?: string }) => (
-              <Link
-                key={community.id}
-                href={`/dashboard/communities/${community.id}`}
-                className="block bg-gradient-to-r from-komuna-teal to-komuna-blue rounded-xl p-6 text-white hover:shadow-lg transition-shadow"
-              >
-                <div className="flex items-center gap-4">
-                  {community.logo ? (
-                    <img src={community.logo} alt={community.name} className="h-14 w-14 rounded-xl object-cover border-2 border-white/30" />
-                  ) : (
-                    <div className="h-14 w-14 rounded-xl bg-white/20 flex items-center justify-center text-xl font-bold">
-                      {community.name.charAt(0)}
-                    </div>
-                  )}
-                  <div className="flex-1">
-                    <p className="text-white/70 text-sm">Community Dashboard</p>
-                    <h3 className="font-bold text-lg">{community.name}</h3>
-                    <p className="text-white/70 text-sm">Kelola komunitas Anda dari sini</p>
-                  </div>
-                  <div className="bg-white/20 rounded-lg px-4 py-2 text-sm font-medium">
-                    Buka Dashboard
-                  </div>
-                </div>
-              </Link>
-            ))
-        )}
-      </div>
-
-      {/* Profile Summary */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-        <h2 className="text-lg font-semibold text-komuna-navy mb-4">Profile Summary</h2>
-        <div className="flex items-start gap-4">
-          {profileData?.avatar ? (
-            <img src={profileData.avatar} alt={profileData.name} className="h-16 w-16 rounded-full object-cover" />
-          ) : (
-            <div className="h-16 w-16 rounded-full bg-komuna-blue flex items-center justify-center text-white text-xl font-bold">
-              {profileData?.name?.charAt(0).toUpperCase()}
-            </div>
-          )}
-          <div className="flex-1">
-            <h3 className="font-semibold text-gray-900">{profileData?.name}</h3>
-            <p className="text-sm text-gray-500">@{profileData?.username}</p>
-            <p className="text-sm text-gray-400">{profileData?.email}</p>
-            {profileData?.bio && <p className="text-sm text-gray-600 mt-1">{profileData.bio}</p>}
-            <div className="flex items-center gap-2 mt-2">
-              {profileData?.roles?.map((role: string) => (
-                <span key={role} className="px-2 py-0.5 text-xs font-medium bg-komuna-blue/10 text-komuna-blue rounded-full">
-                  {role}
-                </span>
-              ))}
-            </div>
-          </div>
-          <Link href="/dashboard/profile" className="text-sm text-komuna-blue hover:underline font-medium">
-            Edit Profile
-          </Link>
-        </div>
-      </div>
-
-      {/* Joined Communities (placeholder if no data) */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-komuna-navy">Komunitas yang Diikuti</h2>
-          <Link href="/communities" className="text-sm text-komuna-blue hover:underline">
-            Jelajahi
-          </Link>
-        </div>
-        {profileData?.communities && profileData.communities.length > 0 ? (
-          <div className="space-y-3">
-            {profileData.communities.slice(0, 5).map((community: { id: string; name: string; slug: string; logo?: string }) => (
-              <Link key={community.id} href={`/communities/${community.slug}`} className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors">
-                {community.logo ? (
-                  <img src={community.logo} alt={community.name} className="h-10 w-10 rounded-lg object-cover" />
-                ) : (
-                  <div className="h-10 w-10 rounded-lg bg-komuna-teal/10 flex items-center justify-center text-komuna-teal font-semibold text-sm">
-                    {community.name.charAt(0)}
-                  </div>
-                )}
-                <span className="font-medium text-gray-900">{community.name}</span>
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-8 text-gray-500">
-            <svg className="h-12 w-12 mx-auto text-gray-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-            <p className="text-sm">Belum bergabung dengan komunitas manapun.</p>
-            <Link href="/communities" className="inline-block mt-2 text-sm text-komuna-blue hover:underline font-medium">
+          <div className="flex flex-wrap gap-2">
+            <Link href="/communities/create" className="inline-flex w-fit items-center gap-2 rounded-lg border border-white/30 bg-white/10 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-white/20">
+              <Icon name="plus" className="h-4 w-4" />
+              Buat Komunitas
+            </Link>
+            <Link href="/communities" className="inline-flex w-fit items-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-bold text-komuna-navy transition-colors hover:bg-blue-50">
+              <Icon name="sparkles" className="h-4 w-4 text-komuna-blue" />
               Jelajahi Komunitas
             </Link>
           </div>
-        )}
-      </div>
-
-      {/* Registered Events (placeholder if no data) */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-komuna-navy">Event Terdaftar</h2>
-          <Link href="/events" className="text-sm text-komuna-blue hover:underline">
-            Jelajahi
-          </Link>
         </div>
-        {profileData?.events && profileData.events.length > 0 ? (
-          <div className="space-y-3">
-            {profileData.events.slice(0, 5).map((event: { id: string; title: string; slug: string; coverImage?: string; eventDate: string; registrationStatus: string }) => (
-              <Link key={event.id} href={`/events/${event.slug}`} className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors">
-                <div className="h-10 w-10 rounded-lg bg-komuna-aqua/10 flex items-center justify-center">
-                  <svg className="h-5 w-5 text-komuna-aqua" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                </div>
-                <div className="flex-1">
-                  <span className="font-medium text-gray-900">{event.title}</span>
-                  <p className="text-xs text-gray-500">{new Date(event.eventDate).toLocaleDateString("id-ID")}</p>
-                </div>
-                <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-                  event.registrationStatus === "CONFIRMED" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
-                }`}>
-                  {event.registrationStatus}
+      </section>
+
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {stats.map((stat) => (
+          <Link key={stat.label} href={stat.href} className="group flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-komuna-blue/30 hover:shadow-md">
+            <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${stat.accent}`}>
+              <Icon name={stat.icon} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-2xl font-extrabold text-komuna-navy">{profileQuery.isLoading ? "-" : stat.value}</span>
+              <span className="block truncate text-xs font-medium text-slate-500">{stat.label}</span>
+            </span>
+            <Icon name="arrow" className="h-4 w-4 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-komuna-blue" />
+          </Link>
+        ))}
+      </section>
+
+      <section className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(290px,0.75fr)]">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <SectionHeader title="Rekomendasi Komunitas" href="/communities" />
+          {popularCommunitiesQuery.isLoading ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {Array.from({ length: 4 }).map((_, index) => <div key={index} className="h-28 animate-pulse rounded-xl bg-slate-100" />)}
+            </div>
+          ) : popularCommunitiesQuery.isError ? (
+            <p className="rounded-xl bg-red-50 p-4 text-sm text-red-600">Rekomendasi komunitas gagal dimuat.</p>
+          ) : popularCommunitiesQuery.data?.length ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {popularCommunitiesQuery.data.slice(0, 4).map((community) => (
+                <Link key={community.id} href={`/communities/${community.slug}`} className="group flex gap-3 rounded-xl border border-slate-100 p-3 transition-colors hover:border-komuna-blue/25 hover:bg-blue-50/40">
+                  {community.logo || community.coverImage ? (
+                    <img src={community.logo || community.coverImage || ""} alt={community.name} className="h-12 w-12 shrink-0 rounded-xl object-cover" />
+                  ) : (
+                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-komuna-blue to-komuna-teal text-lg font-extrabold text-white">{community.name.charAt(0)}</span>
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-bold text-komuna-navy group-hover:text-komuna-blue">{community.name}</span>
+                    <span className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+                      <span>{community.memberCount || 0} anggota</span>
+                      <span className="h-1 w-1 rounded-full bg-slate-300" />
+                      <span>{community.eventCount || 0} event</span>
+                    </span>
+                    {community.categories?.[0] && <span className="mt-2 inline-block rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">{community.categories[0].name}</span>}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-xl bg-slate-50 p-5 text-center text-sm text-slate-500">Belum ada rekomendasi komunitas.</p>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h2 className="font-bold text-komuna-navy">Kalender Event</h2>
+              <p className="text-xs text-slate-500">Event yang kamu ikuti</p>
+            </div>
+            <div className="flex gap-1">
+              <button type="button" aria-label="Bulan sebelumnya" onClick={() => setCalendarMonth((date) => new Date(date.getFullYear(), date.getMonth() - 1, 1))} className="rounded-lg border border-slate-200 p-1.5 text-slate-500 hover:bg-slate-50 hover:text-komuna-blue">
+                <Icon name="chevronLeft" className="h-4 w-4" />
+              </button>
+              <button type="button" aria-label="Bulan berikutnya" onClick={() => setCalendarMonth((date) => new Date(date.getFullYear(), date.getMonth() + 1, 1))} className="rounded-lg border border-slate-200 p-1.5 text-slate-500 hover:bg-slate-50 hover:text-komuna-blue">
+                <Icon name="chevronRight" className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+          <p className="mb-3 text-sm font-bold text-slate-800">{MONTHS[calendarMonth.getMonth()]} {calendarMonth.getFullYear()}</p>
+          <div className="grid grid-cols-7 gap-y-1 text-center">
+            {DAYS.map((day) => <span key={day} className="py-1 text-[10px] font-bold uppercase text-slate-400">{day}</span>)}
+            {calendarDays.map((day, index) => (
+              <span key={`${day || "empty"}-${index}`} className="flex h-8 items-center justify-center">
+                {day && (
+                  <span className={`relative flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${isCurrentDay(day) ? "bg-komuna-navy text-white" : "text-slate-600"}`}>
+                    {day}
+                    {eventDays.has(day) && <span className={`absolute -bottom-0.5 h-1.5 w-1.5 rounded-full ring-2 ring-white ${isCurrentDay(day) ? "bg-komuna-aqua" : "bg-komuna-blue"}`} />}
+                  </span>
+                )}
+              </span>
+            ))}
+          </div>
+          <div className="mt-4 border-t border-slate-100 pt-3">
+            {upcomingRegisteredEvents[0] ? (
+              <Link href={`/events/${upcomingRegisteredEvents[0].slug}`} className="flex items-center gap-3 rounded-lg bg-blue-50/70 p-3 hover:bg-blue-50">
+                <span className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-lg bg-white text-komuna-blue shadow-sm">
+                  <span className="text-[9px] font-bold uppercase">{new Date(upcomingRegisteredEvents[0].eventDate).toLocaleDateString("id-ID", { month: "short" })}</span>
+                  <span className="text-base font-extrabold leading-none">{new Date(upcomingRegisteredEvents[0].eventDate).getDate()}</span>
                 </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-xs font-bold text-komuna-navy">{upcomingRegisteredEvents[0].title}</span>
+                  <span className="mt-0.5 block text-[11px] text-slate-500">Agenda terdekat</span>
+                </span>
+              </Link>
+            ) : (
+              <p className="text-center text-xs text-slate-500">Belum ada agenda terdaftar.</p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <SectionHeader title="Event Mendatang Populer" href="/events" />
+        {popularEventsQuery.isLoading ? (
+          <div className="grid gap-4 md:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, index) => <div key={index} className="h-56 animate-pulse rounded-xl bg-slate-100" />)}
+          </div>
+        ) : popularEventsQuery.isError ? (
+          <p className="rounded-xl bg-red-50 p-4 text-sm text-red-600">Event populer gagal dimuat.</p>
+        ) : popularEventsQuery.data?.length ? (
+          <div className="grid gap-4 md:grid-cols-3">
+            {popularEventsQuery.data.slice(0, 3).map((event) => (
+              <Link key={event.id} href={`/events/${event.slug}`} className="group overflow-hidden rounded-xl border border-slate-200 bg-white transition-all hover:-translate-y-0.5 hover:shadow-md">
+                <div className="relative h-32 overflow-hidden bg-gradient-to-br from-komuna-blue to-komuna-teal">
+                  {event.coverImage || event.thumbnail ? (
+                    <img src={event.coverImage || event.thumbnail || ""} alt={event.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                  ) : <span className="flex h-full items-center justify-center text-4xl font-black text-white/30">{event.title.charAt(0)}</span>}
+                  <span className="absolute left-3 top-3 rounded-lg bg-white/95 px-2 py-1 text-[10px] font-bold text-komuna-blue shadow-sm">{event.registeredCount || 0} peserta</span>
+                </div>
+                <div className="p-4">
+                  <p className="mb-2 line-clamp-2 text-sm font-bold leading-5 text-komuna-navy group-hover:text-komuna-blue">{event.title}</p>
+                  <p className="flex items-center gap-2 text-xs font-medium text-slate-600"><Icon name="calendar" className="h-3.5 w-3.5 text-komuna-blue" />{new Date(event.eventDate).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</p>
+                  <p className="mt-1.5 flex items-center gap-2 truncate text-xs text-slate-500"><Icon name="location" className="h-3.5 w-3.5 text-slate-400" />{event.locationType === "ONLINE" ? "Online" : event.location || "Lokasi menyusul"}</p>
+                </div>
               </Link>
             ))}
           </div>
         ) : (
-          <div className="text-center py-8 text-gray-500">
-            <svg className="h-12 w-12 mx-auto text-gray-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-            <p className="text-sm">Belum terdaftar di event manapun.</p>
-            <Link href="/events" className="inline-block mt-2 text-sm text-komuna-blue hover:underline font-medium">
-              Jelajahi Event
+          <p className="rounded-xl bg-slate-50 p-5 text-center text-sm text-slate-500">Belum ada event mendatang.</p>
+        )}
+      </section>
+
+      <section className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(290px,0.85fr)]">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <SectionHeader title="Aktivitas & Notifikasi" href="/dashboard/activity" linkLabel="Riwayat" />
+          {notificationsQuery.isLoading || activitiesQuery.isLoading ? (
+            <div className="space-y-3">{Array.from({ length: 4 }).map((_, index) => <div key={index} className="h-16 animate-pulse rounded-xl bg-slate-100" />)}</div>
+          ) : feed.length ? (
+            <div className="divide-y divide-slate-100">
+              {feed.map((item) => {
+                const style = FEED_STYLES[item.kind];
+                return (
+                  <Link key={item.id} href={item.href} className="group flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+                    <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${style.bg} ${style.text}`}>
+                      <Icon name={item.kind === "event" ? "calendar" : item.kind === "community" ? "users" : item.kind === "approval" ? "bell" : "clock"} className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-2">
+                        <span className="truncate text-sm font-bold text-slate-800 group-hover:text-komuna-blue">{item.title}</span>
+                        {item.unread && <span className="h-2 w-2 shrink-0 rounded-full bg-komuna-blue" />}
+                      </span>
+                      <span className="mt-0.5 block truncate text-xs text-slate-500">{item.description}</span>
+                    </span>
+                    <span className="shrink-0 text-[11px] text-slate-400">{formatRelativeDate(item.createdAt)}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">Belum ada aktivitas atau notifikasi.</p>
+          )}
+        </div>
+
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="bg-gradient-to-br from-komuna-navy to-komuna-blue p-5 text-white">
+            <div className="flex items-center gap-3">
+              {profile.avatar ? (
+                <img src={profile.avatar} alt={profile.name || "Profil"} className="h-14 w-14 rounded-2xl border-2 border-white/30 object-cover" />
+              ) : (
+                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15 text-xl font-black">{profile.name?.charAt(0).toUpperCase() || "M"}</span>
+              )}
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-komuna-aqua">Profile Summary</p>
+                <h2 className="truncate text-lg font-bold">{profile.name || "Member"}</h2>
+                <p className="truncate text-xs text-blue-100">@{profile.username || "member"}</p>
+                {profile.email && <p className="mt-0.5 truncate text-[11px] text-blue-200">{profile.email}</p>}
+              </div>
+            </div>
+            {profile.bio && <p className="mt-4 line-clamp-2 text-xs leading-5 text-blue-100">{profile.bio}</p>}
+          </div>
+          <div className="p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-sm font-bold text-komuna-navy">Profil dan Minat Saya</h2>
+              <Link href="/dashboard/profile" className="text-xs font-bold text-komuna-blue hover:text-komuna-navy">Edit Profile</Link>
+            </div>
+            {profile.interests?.length ? (
+              <div className="flex flex-wrap gap-2">
+                {profile.interests.slice(0, 7).map((interest) => <span key={interest} className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-komuna-blue">{interest}</span>)}
+              </div>
+            ) : (
+              <p className="text-xs leading-5 text-slate-500">Tambahkan minat agar rekomendasi komunitas dan event lebih sesuai.</p>
+            )}
+            <Link href="/dashboard/interests" className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold text-komuna-teal hover:text-komuna-navy">
+              <Icon name="plus" className="h-3.5 w-3.5" />
+              Kelola minat
             </Link>
           </div>
-        )}
-      </div>
+        </div>
+      </section>
     </div>
   );
 }

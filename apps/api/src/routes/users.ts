@@ -43,12 +43,29 @@ userRoutes.get("/profile", authMiddleware, async (c) => {
         },
       },
       registeredEvents: {
+        where: {
+          status: { in: ["PENDING", "CONFIRMED", "WAITLISTED"] },
+          event: {
+            deletedAt: null,
+            status: { notIn: ["CANCELLED", "ARCHIVED"] },
+          },
+        },
         include: {
           event: {
             select: { id: true, title: true, slug: true, coverImage: true, eventDate: true, status: true },
           },
         },
-        orderBy: { registeredAt: "desc" },
+        orderBy: { event: { eventDate: "asc" } },
+        take: 50,
+      },
+      savedEvents: {
+        where: { event: { deletedAt: null } },
+        include: {
+          event: {
+            select: { id: true, title: true, slug: true, coverImage: true, eventDate: true, status: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
         take: 10,
       },
       notifications: {
@@ -63,9 +80,21 @@ userRoutes.get("/profile", authMiddleware, async (c) => {
     return c.json({ success: false, message: "User tidak ditemukan" }, 404);
   }
 
-  const unreadCount = await prisma.notification.count({
-    where: { userId: authUser.id, isRead: false },
-  });
+  const [unreadCount, registeredEventsCount, savedEventsCount] = await Promise.all([
+    prisma.notification.count({
+      where: { userId: authUser.id, isRead: false },
+    }),
+    prisma.eventRegistration.count({
+      where: {
+        userId: authUser.id,
+        status: { in: ["PENDING", "CONFIRMED", "WAITLISTED"] },
+        event: { deletedAt: null, status: { notIn: ["CANCELLED", "ARCHIVED"] } },
+      },
+    }),
+    prisma.eventSave.count({
+      where: { userId: authUser.id, event: { deletedAt: null } },
+    }),
+  ]);
 
   const mapCommunity = (membership: (typeof user.joinedCommunities)[number]) => ({
     id: membership.community.id,
@@ -131,6 +160,17 @@ userRoutes.get("/profile", authMiddleware, async (c) => {
           status: r.event.status,
           registrationStatus: r.status,
         })),
+        registeredEventsCount,
+        savedEvents: user.savedEvents?.map((saved) => ({
+          id: saved.event.id,
+          title: saved.event.title,
+          slug: saved.event.slug,
+          coverImage: saved.event.coverImage,
+          eventDate: saved.event.eventDate,
+          status: saved.event.status,
+          savedAt: saved.createdAt,
+        })) || [],
+        savedEventsCount,
         unreadNotifications: unreadCount,
         createdAt: user.createdAt,
       },

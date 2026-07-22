@@ -55,7 +55,7 @@ test.describe("Dashboard - Profile", () => {
   test("displays quick stats cards", async ({ page }) => {
     await expect(page.getByText("Komunitas Diikuti")).toBeVisible();
     await expect(page.getByText("Event Terdaftar")).toBeVisible();
-    await expect(page.getByText("Notifikasi Baru")).toBeVisible();
+    await expect(page.getByText("Event Tersimpan")).toBeVisible();
   });
 
   test("shows edit profile link", async ({ page }) => {

@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { prisma } from "@komunaid/database";
+import type { Prisma } from "@prisma/client";
 import { createEventSchema, updateEventSchema, eventQuerySchema } from "@komunaid/shared";
 import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth";
 import { validate } from "../middleware/validate";
@@ -143,6 +144,117 @@ eventRoutes.get("/", optionalAuthMiddleware, validate(eventQuerySchema, "query")
 });
 
 // ==========================================
+// POPULAR UPCOMING EVENTS (Public)
+// ==========================================
+
+eventRoutes.get("/popular/upcoming", async (c) => {
+  const eventWhere: Prisma.EventWhereInput = {
+    deletedAt: null,
+    visibility: "PUBLIC" as const,
+    status: { in: ["PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED"] },
+    eventDate: { gte: new Date() },
+  };
+  const ranked = await prisma.eventRegistration.groupBy({
+    by: ["eventId"],
+    where: { status: "CONFIRMED", event: eventWhere },
+    _count: { _all: true },
+    orderBy: { _count: { eventId: "desc" } },
+    take: 6,
+  });
+  const rankedIds = ranked.map((item) => item.eventId);
+  const fallback = rankedIds.length < 6
+    ? await prisma.event.findMany({
+        where: { ...eventWhere, id: { notIn: rankedIds } },
+        select: { id: true },
+        orderBy: { eventDate: "asc" },
+        take: 6 - rankedIds.length,
+      })
+    : [];
+  const orderedIds = [...rankedIds, ...fallback.map((event) => event.id)];
+  const events = await prisma.event.findMany({
+    where: { id: { in: orderedIds } },
+    include: {
+      community: { select: { id: true, name: true, slug: true, logo: true } },
+      organization: { select: { id: true, name: true, slug: true, logo: true } },
+      categories: { include: { category: true } },
+      _count: { select: { registrations: { where: { status: "CONFIRMED" } } } },
+    },
+  });
+  const eventOrder = new Map(orderedIds.map((id, index) => [id, index]));
+  events.sort((a, b) => (eventOrder.get(a.id) ?? 0) - (eventOrder.get(b.id) ?? 0));
+
+  return c.json({
+    success: true,
+    data: events.map((event) => ({
+      id: event.id,
+      title: event.title,
+      slug: event.slug,
+      description: event.description,
+      coverImage: event.coverImage,
+      thumbnail: event.thumbnail,
+      location: event.location,
+      locationType: event.locationType,
+      eventDate: event.eventDate,
+      quota: event.quota,
+      status: event.status,
+      registeredCount: event._count.registrations,
+      community: event.community,
+      organization: event.organization,
+      categories: event.categories.map((item) => item.category),
+    })),
+  });
+});
+
+// ==========================================
+// SAVED EVENTS
+// ==========================================
+
+eventRoutes.get("/my/saved", authMiddleware, async (c) => {
+  const authUser = c.get("user");
+  const url = new URL(c.req.url);
+  const page = Math.max(1, parseInt(url.searchParams.get("page") || "1") || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") || "20") || 20));
+  const where = { userId: authUser.id, event: { deletedAt: null } };
+
+  const [savedEvents, total] = await Promise.all([
+    prisma.eventSave.findMany({
+      where,
+      include: {
+        event: {
+          include: {
+            community: { select: { id: true, name: true, slug: true } },
+            organization: { select: { id: true, name: true, slug: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.eventSave.count({ where }),
+  ]);
+
+  return c.json({
+    success: true,
+    data: savedEvents.map((saved) => ({
+      id: saved.event.id,
+      title: saved.event.title,
+      slug: saved.event.slug,
+      eventDate: saved.event.eventDate,
+      endDate: saved.event.endDate,
+      status: saved.event.status,
+      location: saved.event.location,
+      locationType: saved.event.locationType,
+      coverImage: saved.event.coverImage,
+      community: saved.event.community,
+      organization: saved.event.organization,
+      savedAt: saved.createdAt,
+    })),
+    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+  });
+});
+
+// ==========================================
 // 2. GET EVENT BY SLUG (Public)
 // ==========================================
 
@@ -182,10 +294,16 @@ eventRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
   }
 
   let userRegistration = null;
+  let isSaved = false;
   if (user) {
-    userRegistration = await prisma.eventRegistration.findUnique({
-      where: { eventId_userId: { eventId: event.id, userId: user.id } },
-    });
+    [userRegistration, isSaved] = await Promise.all([
+      prisma.eventRegistration.findUnique({
+        where: { eventId_userId: { eventId: event.id, userId: user.id } },
+      }),
+      prisma.eventSave.findUnique({
+        where: { eventId_userId: { eventId: event.id, userId: user.id } },
+      }).then(Boolean),
+    ]);
   }
 
   const role = user ? await getEventOrganizerRole(user.id, event) : null;
@@ -225,8 +343,40 @@ eventRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
             registeredAt: userRegistration.registeredAt,
           }
         : null,
+      isSaved,
     },
   });
+});
+
+eventRoutes.post("/:eventId/save", authMiddleware, async (c) => {
+  const authUser = c.get("user");
+  const eventId = c.req.param("eventId") as string;
+  const event = await prisma.event.findFirst({
+    where: { id: eventId, deletedAt: null },
+    select: { id: true },
+  });
+
+  if (!event) {
+    return c.json({ success: false, message: "Event tidak ditemukan" }, 404);
+  }
+
+  await prisma.eventSave.upsert({
+    where: { eventId_userId: { eventId, userId: authUser.id } },
+    create: { eventId, userId: authUser.id },
+    update: {},
+  });
+
+  return c.json({ success: true, message: "Event berhasil disimpan" });
+});
+
+eventRoutes.delete("/:eventId/save", authMiddleware, async (c) => {
+  const authUser = c.get("user");
+  const eventId = c.req.param("eventId") as string;
+  await prisma.eventSave.deleteMany({
+    where: { eventId, userId: authUser.id },
+  });
+
+  return c.json({ success: true, message: "Event dihapus dari daftar tersimpan" });
 });
 
 // ==========================================
@@ -937,6 +1087,18 @@ eventRoutes.post("/:eventId/register", authMiddleware, async (c) => {
     resourceId: eventId,
     afterData: { status: registration.status },
   });
+
+  try {
+    await prisma.activityHistory.create({
+      data: {
+        userId: authUser.id,
+        action: "EVENT_REGISTER",
+        details: { eventId, eventTitle: event.title, status: registration.status },
+      },
+    });
+  } catch {
+    // Registration is already committed; activity history must not turn success into an error.
+  }
 
   return c.json({
     success: true,

@@ -8,6 +8,7 @@ process.env.JWT_SECRET = "test-integration-secret";
 vi.mock("@komunaid/database", () => {
   const events = new Map<string, any>();
   const registrations = new Map<string, any>();
+  const savedEvents = new Map<string, any>();
   let idCounter = 1;
   const createId = () => `event-${idCounter++}`;
 
@@ -47,6 +48,7 @@ vi.mock("@komunaid/database", () => {
         return e;
       }),
       count: vi.fn(async () => events.size),
+      findFirst: vi.fn(async ({ where }: any) => events.get(where.id) || null),
     },
     eventRegistration: {
       findUnique: vi.fn(async ({ where }: any) => {
@@ -72,6 +74,18 @@ vi.mock("@komunaid/database", () => {
       }),
       delete: vi.fn(), count: vi.fn(async () => registrations.size),
       groupBy: vi.fn(async () => []), updateMany: vi.fn(async () => ({ count: 0 })),
+    },
+    eventSave: {
+      findUnique: vi.fn(async ({ where }: any) => savedEvents.get(`${where.eventId_userId.eventId}:${where.eventId_userId.userId}`) || null),
+      findMany: vi.fn(async () => Array.from(savedEvents.values())),
+      count: vi.fn(async () => savedEvents.size),
+      upsert: vi.fn(async ({ where, create }: any) => {
+        const key = `${where.eventId_userId.eventId}:${where.eventId_userId.userId}`;
+        const saved = savedEvents.get(key) || { id: `save-${savedEvents.size + 1}`, ...create, createdAt: new Date() };
+        savedEvents.set(key, saved);
+        return saved;
+      }),
+      deleteMany: vi.fn(async ({ where }: any) => ({ count: savedEvents.delete(`${where.eventId}:${where.userId}`) ? 1 : 0 })),
     },
     communityMember: { findUnique: vi.fn(async () => null) },
     organizationMember: { findUnique: vi.fn(async () => null) },
@@ -284,6 +298,42 @@ describe("Events Integration Tests", () => {
 
       const res = await app.request("/api/v1/events/test-event");
       expect(res.status).toBe(200);
+    });
+  });
+
+  describe("saved events", () => {
+    it("requires authentication to save an event", async () => {
+      const res = await app.request("/api/v1/events/event-1/save", { method: "POST" });
+      expect(res.status).toBe(401);
+    });
+
+    it("saves and removes an event", async () => {
+      const token = await generateToken({ sub: "user-1", email: "test@test.com", name: "Test", username: "test", type: "access" });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
+      (prisma.event.findFirst as any).mockResolvedValue({ id: "event-1" });
+
+      const saveRes = await app.request("/api/v1/events/event-1/save", {
+        method: "POST", headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(saveRes.status).toBe(200);
+      expect(prisma.eventSave.upsert).toHaveBeenCalled();
+
+      const deleteRes = await app.request("/api/v1/events/event-1/save", {
+        method: "DELETE", headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(deleteRes.status).toBe(200);
+      expect(prisma.eventSave.deleteMany).toHaveBeenCalled();
+    });
+
+    it("returns 404 when saving a missing event", async () => {
+      const token = await generateToken({ sub: "user-1", email: "test@test.com", name: "Test", username: "test", type: "access" });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
+      (prisma.event.findFirst as any).mockResolvedValue(null);
+
+      const res = await app.request("/api/v1/events/missing/save", {
+        method: "POST", headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(res.status).toBe(404);
     });
   });
 });
