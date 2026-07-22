@@ -16,6 +16,8 @@ import {
   createCommunityMediaSchema,
   updateCommunityMediaSchema,
   communityMediaQuerySchema,
+  createForumReplySchema,
+  forumReplyQuerySchema,
 } from "@komunaid/shared";
 import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth";
 import {
@@ -2703,3 +2705,124 @@ communityRoutes.delete(
   }
 );
 
+// ==========================================
+// 27. FORUM REPLIES
+// ==========================================
+
+communityRoutes.get(
+  "/:communityId/media/:threadId/replies",
+  optionalAuthMiddleware,
+  validate(forumReplyQuerySchema, "query"),
+  async (c) => {
+    const communityId = c.req.param("communityId") as string;
+    const threadId = c.req.param("threadId") as string;
+    const q = c.get("validated");
+
+    const thread = await prisma.communityMedia.findFirst({
+      where: { id: threadId, communityId, type: "FORUM_POST", deletedAt: null },
+    });
+
+    if (!thread) {
+      return c.json({ success: false, message: "Thread tidak ditemukan" }, 404);
+    }
+
+    const page = q.page as number;
+    const limit = q.limit as number;
+
+    const [replies, total] = await Promise.all([
+      prisma.forumReply.findMany({
+        where: { threadId, deletedAt: null },
+        include: {
+          createdBy: { select: { id: true, name: true, avatar: true } },
+        },
+        orderBy: { createdAt: q.sort },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.forumReply.count({ where: { threadId, deletedAt: null } }),
+    ]);
+
+    return c.json({
+      success: true,
+      data: replies,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    });
+  }
+);
+
+communityRoutes.post(
+  "/:communityId/media/:threadId/replies",
+  authMiddleware,
+  validate(createForumReplySchema),
+  async (c) => {
+    const authUser = c.get("user");
+    const communityId = c.req.param("communityId") as string;
+    const threadId = c.req.param("threadId") as string;
+    const data = c.get("validated");
+
+    const thread = await prisma.communityMedia.findFirst({
+      where: { id: threadId, communityId, type: "FORUM_POST", deletedAt: null },
+    });
+
+    if (!thread) {
+      return c.json({ success: false, message: "Thread tidak ditemukan" }, 404);
+    }
+
+    const isMember = await prisma.communityMember.findFirst({
+      where: { communityId, userId: authUser.id, status: "ACTIVE", deletedAt: null },
+      select: { id: true },
+    });
+
+    if (!isMember && thread.createdById !== authUser.id) {
+      return c.json({ success: false, message: "Hanya anggota yang dapat membalas forum" }, 403);
+    }
+
+    const reply = await prisma.forumReply.create({
+      data: {
+        threadId,
+        content: sanitizeText(data.content) || data.content,
+        createdById: authUser.id,
+      },
+      include: {
+        createdBy: { select: { id: true, name: true, avatar: true } },
+      },
+    });
+
+    return c.json({ success: true, data: reply }, 201);
+  }
+);
+
+communityRoutes.delete(
+  "/:communityId/media/:mediaId/replies/:replyId",
+  authMiddleware,
+  async (c) => {
+    const authUser = c.get("user");
+    const replyId = c.req.param("replyId") as string;
+
+    const reply = await prisma.forumReply.findFirst({
+      where: { id: replyId, deletedAt: null },
+    });
+
+    if (!reply) {
+      return c.json({ success: false, message: "Balasan tidak ditemukan" }, 404);
+    }
+
+    if (reply.createdById !== authUser.id) {
+      const authUserRoles = await prisma.userRole.findMany({
+        where: { userId: authUser.id },
+        select: { role: true },
+      });
+      const isSuperAdmin = authUserRoles.some((r) => r.role === "SUPER_ADMIN");
+      if (!isSuperAdmin) {
+        return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
+      }
+    }
+
+    await prisma.forumReply.update({
+      where: { id: replyId },
+      data: { deletedAt: new Date() },
+    });
+
+    return c.json({ success: true, message: "Balasan berhasil dihapus" });
+  }
+);

@@ -249,8 +249,8 @@ eventRoutes.post("/", authMiddleware, validate(createEventSchema), async (c) => 
     const membership = await prisma.communityMember.findUnique({
       where: { communityId_userId: { communityId: data.communityId, userId: authUser.id } },
     });
-    if (!membership || !["OWNER", "ADMIN", "EVENT_MANAGER"].includes(membership.role)) {
-      return c.json({ success: false, message: "Tidak memiliki akses membuat event di komunitas ini" }, 403);
+    if (!membership || !["OWNER"].includes(membership.role)) {
+      return c.json({ success: false, message: "Hanya pemilik komunitas yang dapat membuat event" }, 403);
     }
   }
 
@@ -1472,6 +1472,8 @@ eventRoutes.get("/my/created", authMiddleware, async (c) => {
   const page = Math.max(1, parseInt(url.searchParams.get("page") || "1") || 1);
   const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") || "20") || 20));
   const status = url.searchParams.get("status") || "";
+  const monthParam = url.searchParams.get("month") || "";
+  const communityId = url.searchParams.get("communityId") || "";
 
   const where: any = {
     createdById: authUser.id,
@@ -1479,6 +1481,15 @@ eventRoutes.get("/my/created", authMiddleware, async (c) => {
   };
 
   if (status) where.status = status;
+  if (communityId) where.communityId = communityId;
+  if (monthParam) {
+    const [year, month] = monthParam.split("-").map(Number);
+    if (year && month) {
+      const startDate = new Date(Date.UTC(year, month - 1, 1));
+      const endDate = new Date(Date.UTC(year, month, 1));
+      where.eventDate = { gte: startDate, lt: endDate };
+    }
+  }
 
   const [events, total] = await Promise.all([
     prisma.event.findMany({
@@ -1519,6 +1530,8 @@ eventRoutes.get("/my/registered", authMiddleware, async (c) => {
   const page = Math.max(1, parseInt(url.searchParams.get("page") || "1") || 1);
   const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") || "20") || 20));
   const status = url.searchParams.get("status") || "";
+  const monthParam = url.searchParams.get("month") || "";
+  const communityId = url.searchParams.get("communityId") || "";
 
   const where: any = {
     userId: authUser.id,
@@ -1526,6 +1539,15 @@ eventRoutes.get("/my/registered", authMiddleware, async (c) => {
   };
 
   if (status) where.status = status;
+  if (communityId) where.event = { ...where.event, communityId };
+  if (monthParam) {
+    const [year, month] = monthParam.split("-").map(Number);
+    if (year && month) {
+      const startDate = new Date(Date.UTC(year, month - 1, 1));
+      const endDate = new Date(Date.UTC(year, month, 1));
+      where.event = { ...where.event, eventDate: { gte: startDate, lt: endDate } };
+    }
+  }
 
   const [registrations, total] = await Promise.all([
     prisma.eventRegistration.findMany({

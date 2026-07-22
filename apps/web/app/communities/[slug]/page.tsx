@@ -9,6 +9,8 @@ import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { getInitial } from "@/lib/initial";
+import { GallerySection } from "@/components/gallery-section";
+import { ForumSection } from "@/components/forum-section";
 
 interface CommunityMember {
   id: string;
@@ -297,6 +299,8 @@ export default function CommunityDetailPage() {
                 </div>
               )}
               <CommunityMediaSection communityId={community.id} />
+              <GallerySection communityId={community.id} isMember={isMember} />
+              <ForumSection communityId={community.id} isMember={isMember} />
 
               <div className="bg-white rounded-xl shadow-sm p-6">
                 <div className="grid grid-cols-3 gap-4 text-center">

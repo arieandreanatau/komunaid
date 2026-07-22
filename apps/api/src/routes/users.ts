@@ -26,6 +26,9 @@ userRoutes.get("/profile", authMiddleware, async (c) => {
       roles: true,
       interests: true,
       joinedCommunities: {
+        where: {
+          community: { deletedAt: null },
+        },
         include: {
           community: {
             select: { id: true, name: true, slug: true, logo: true, status: true },
@@ -64,6 +67,34 @@ userRoutes.get("/profile", authMiddleware, async (c) => {
     where: { userId: authUser.id, isRead: false },
   });
 
+  const mapCommunity = (membership: (typeof user.joinedCommunities)[number]) => ({
+    id: membership.community.id,
+    name: membership.community.name,
+    slug: membership.community.slug,
+    logo: membership.community.logo,
+    role: membership.role,
+    status: membership.community.status,
+  });
+  const activeMemberships = user.joinedCommunities.filter(
+    (membership) => membership.status === "ACTIVE" && membership.deletedAt === null
+  );
+  const createdCommunities = activeMemberships
+    .filter((membership) => membership.role === "OWNER")
+    .map(mapCommunity);
+  const followedCommunities = activeMemberships
+    .filter((membership) => membership.role !== "OWNER")
+    .map(mapCommunity);
+  const pastCommunities = user.joinedCommunities
+    .filter(
+      (membership) =>
+        membership.role !== "OWNER" &&
+        membership.deletedAt !== null
+    )
+    .map((membership) => ({
+      ...mapCommunity(membership),
+      leftAt: membership.deletedAt,
+    }));
+
   return c.json({
     success: true,
     data: {
@@ -79,14 +110,10 @@ userRoutes.get("/profile", authMiddleware, async (c) => {
         status: user.status,
         roles: user.roles.map((r) => r.role),
         interests: user.interests.map((i) => i.interest),
-        communities: user.joinedCommunities.map((m) => ({
-          id: m.community.id,
-          name: m.community.name,
-          slug: m.community.slug,
-          logo: m.community.logo,
-          role: m.role,
-          status: m.community.status,
-        })),
+        communities: activeMemberships.map(mapCommunity),
+        createdCommunities,
+        followedCommunities,
+        pastCommunities,
         organizations: user.organizationMembers.map((m) => ({
           id: m.organization.id,
           name: m.organization.name,
@@ -171,41 +198,6 @@ userRoutes.put("/profile", authMiddleware, validate(updateProfileSchema), async 
 });
 
 // ==========================================
-// GET USER BY ID (Public)
-// ==========================================
-
-userRoutes.get("/:id", async (c) => {
-  const id = c.req.param("id");
-
-  const user = await prisma.user.findUnique({
-    where: { id, deletedAt: null },
-    select: {
-      id: true,
-      name: true,
-      avatar: true,
-      bio: true,
-      location: true,
-      createdAt: true,
-      joinedCommunities: {
-        select: {
-          community: {
-            select: { id: true, name: true, slug: true, logo: true },
-          },
-        },
-        where: { community: { status: COMMUNITY_STATUSES.APPROVED } },
-        take: 10,
-      },
-    },
-  });
-
-  if (!user) {
-    return c.json({ success: false, message: "User tidak ditemukan" }, 404);
-  }
-
-  return c.json({ success: true, data: { user } });
-});
-
-// ==========================================
 // UPDATE INTERESTS
 // ==========================================
 
@@ -253,6 +245,72 @@ userRoutes.put("/interests", authMiddleware, async (c) => {
     message: "Interests berhasil diupdate",
     data: { interests },
   });
+});
+
+// ==========================================
+// CHANGE EMAIL
+// ==========================================
+
+userRoutes.put("/change-email", authMiddleware, async (c) => {
+  const authUser = c.get("user");
+  const { email } = await c.req.json();
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return c.json({ success: false, message: "Format email tidak valid" }, 400);
+  }
+
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) {
+    return c.json({ success: false, message: "Email sudah digunakan" }, 409);
+  }
+
+  await prisma.user.update({
+    where: { id: authUser.id },
+    data: { email },
+  });
+
+  await createAuditLog({
+    userId: authUser.id,
+    actionType: AuditActions.USER_UPDATE_PROFILE,
+    resourceName: "User",
+    resourceId: authUser.id,
+    afterData: { email },
+  });
+
+  return c.json({ success: true, message: "Email berhasil diubah", data: { email } });
+});
+
+// ==========================================
+// CHANGE USERNAME
+// ==========================================
+
+userRoutes.put("/change-username", authMiddleware, async (c) => {
+  const authUser = c.get("user");
+  const { username } = await c.req.json();
+
+  if (!username || !/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
+    return c.json({ success: false, message: "Username 3-20 karakter, huruf/angka/underscore" }, 400);
+  }
+
+  const existing = await prisma.user.findUnique({ where: { username } });
+  if (existing) {
+    return c.json({ success: false, message: "Username sudah digunakan" }, 409);
+  }
+
+  await prisma.user.update({
+    where: { id: authUser.id },
+    data: { username },
+  });
+
+  await createAuditLog({
+    userId: authUser.id,
+    actionType: AuditActions.USER_UPDATE_PROFILE,
+    resourceName: "User",
+    resourceId: authUser.id,
+    afterData: { username },
+  });
+
+  return c.json({ success: true, message: "Username berhasil diubah", data: { username } });
 });
 
 // ==========================================
@@ -341,4 +399,40 @@ userRoutes.get("/activity", authMiddleware, async (c) => {
   ]);
 
   return c.json(paginatedResponse(activities, total, page, limit));
+});
+
+// ==========================================
+// GET USER BY ID (Public)
+// Keep dynamic route after all static GET routes.
+// ==========================================
+
+userRoutes.get("/:id", async (c) => {
+  const id = c.req.param("id");
+
+  const user = await prisma.user.findUnique({
+    where: { id, deletedAt: null },
+    select: {
+      id: true,
+      name: true,
+      avatar: true,
+      bio: true,
+      location: true,
+      createdAt: true,
+      joinedCommunities: {
+        select: {
+          community: {
+            select: { id: true, name: true, slug: true, logo: true },
+          },
+        },
+        where: { community: { status: COMMUNITY_STATUSES.APPROVED } },
+        take: 10,
+      },
+    },
+  });
+
+  if (!user) {
+    return c.json({ success: false, message: "User tidak ditemukan" }, 404);
+  }
+
+  return c.json({ success: true, data: { user } });
 });

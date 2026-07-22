@@ -73,11 +73,6 @@ export default function AdminLoginPage() {
             <span className="text-sm font-medium text-white/80">Admin Panel</span>
           </div>
 
-          <Link href="/" className="flex items-center justify-center gap-3 mb-4">
-            <img src="/icon_komuna.png" alt="KomunaID" className="h-10 w-10" />
-            <span className="font-bold text-2xl text-white">KomunaID</span>
-          </Link>
-
           <h1 className="text-2xl font-bold text-white">Masuk ke Admin Panel</h1>
           <p className="text-sm text-white/60 mt-2">
             Hanya untuk administrator platform

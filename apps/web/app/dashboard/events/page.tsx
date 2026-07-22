@@ -73,6 +73,9 @@ export default function MyEventsPage() {
   const [activeTab, setActiveTab] = useState<"created" | "registered">("created");
   const [createdPage, setCreatedPage] = useState(1);
   const [registeredPage, setRegisteredPage] = useState(1);
+  const [filterMonth, setFilterMonth] = useState("");
+  const [filterCommunityId, setFilterCommunityId] = useState("");
+  const [userCommunities, setUserCommunities] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -80,20 +83,41 @@ export default function MyEventsPage() {
     }
   }, [isAuthenticated, authLoading, router]);
 
+  useEffect(() => {
+    if (isAuthenticated) {
+      api.get("/users/profile").then((res) => {
+        const profile = res.data.data?.user || res.data.user;
+        if (profile?.communities) {
+          setUserCommunities(profile.communities.map((c: any) => ({ id: c.id, name: c.name })));
+        }
+      }).catch(() => {});
+    }
+  }, [isAuthenticated]);
+
+  const createdParams = { page: createdPage, limit: 10 };
+  if (filterMonth) Object.assign(createdParams, { month: filterMonth });
+  if (filterCommunityId) Object.assign(createdParams, { communityId: filterCommunityId });
+
+  const registeredParams = { page: registeredPage, limit: 10 };
+  if (filterMonth) Object.assign(registeredParams, { month: filterMonth });
+  if (filterCommunityId) Object.assign(registeredParams, { communityId: filterCommunityId });
+
+  useEffect(() => { setCreatedPage(1); setRegisteredPage(1); }, [filterMonth, filterCommunityId]);
+
   const { data: createdData, isLoading: createdLoading } = useQuery({
-    queryKey: ["myCreatedEvents", createdPage],
+    queryKey: ["myCreatedEvents", createdPage, filterMonth, filterCommunityId],
     enabled: !!isAuthenticated,
     queryFn: async () => {
-      const res = await api.get("/events/my/created", { params: { page: createdPage, limit: 10 } });
+      const res = await api.get("/events/my/created", { params: createdParams });
       return res.data;
     },
   });
 
   const { data: registeredData, isLoading: registeredLoading } = useQuery({
-    queryKey: ["myRegisteredEvents", registeredPage],
+    queryKey: ["myRegisteredEvents", registeredPage, filterMonth, filterCommunityId],
     enabled: !!isAuthenticated,
     queryFn: async () => {
-      const res = await api.get("/events/my/registered", { params: { page: registeredPage, limit: 10 } });
+      const res = await api.get("/events/my/registered", { params: registeredParams });
       return res.data;
     },
   });
@@ -174,6 +198,34 @@ export default function MyEventsPage() {
           </svg>
           Buat Event Baru
         </Link>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3">
+        <select
+          value={filterMonth}
+          onChange={(e) => setFilterMonth(e.target.value)}
+          className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-komuna-blue"
+        >
+          <option value="">Semua Bulan</option>
+          {Array.from({ length: 12 }, (_, i) => {
+            const m = String(i + 1).padStart(2, "0");
+            const now = new Date();
+            const y = now.getFullYear();
+            const d = new Date(y, i, 1);
+            return <option key={m} value={`${y}-${m}`}>{d.toLocaleDateString("id-ID", { month: "long", year: "numeric" })}</option>;
+          })}
+        </select>
+        <select
+          value={filterCommunityId}
+          onChange={(e) => setFilterCommunityId(e.target.value)}
+          className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-komuna-blue"
+        >
+          <option value="">Semua Komunitas</option>
+          {userCommunities.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
       </div>
 
       {/* Tabs */}

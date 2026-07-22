@@ -244,7 +244,7 @@ export const suspendCommunitySchema = z.object({
 export const createCommunityMediaSchema = z.object({
   title: z.string().min(3, "Judul minimal 3 karakter").max(200, "Judul maksimal 200 karakter"),
   content: z.string().min(10, "Konten minimal 10 karakter").max(5000, "Konten maksimal 5000 karakter"),
-  type: z.enum(["ANNOUNCEMENT", "NEWS"]).default("ANNOUNCEMENT"),
+  type: z.enum(["ANNOUNCEMENT", "NEWS", "GALLERY", "FORUM_POST"]).default("ANNOUNCEMENT"),
   imageUrl: z.string().url("URL gambar tidak valid").optional(),
   isPublished: z.boolean().default(false),
 });
@@ -255,10 +255,20 @@ export const communityMediaQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   search: z.string().optional(),
-  type: z.enum(["ANNOUNCEMENT", "NEWS"]).optional(),
+  type: z.enum(["ANNOUNCEMENT", "NEWS", "GALLERY", "FORUM_POST"]).optional(),
   published: z.coerce.boolean().optional(),
   sort: z.enum(["asc", "desc"]).default("desc"),
   orderBy: z.enum(["createdAt", "title", "publishedAt"]).default("createdAt"),
+});
+
+export const createForumReplySchema = z.object({
+  content: z.string().min(1, "Konten wajib diisi").max(5000, "Konten maksimal 5000 karakter"),
+});
+
+export const forumReplyQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  sort: z.enum(["asc", "desc"]).default("asc"),
 });
 
 // ==========================================

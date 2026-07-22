@@ -128,6 +128,8 @@ test.describe("Authentication - Register", () => {
     await page.getByLabel("Konfirmasi Password").fill("password123");
     await page.getByLabel("terms").check();
     await page.getByRole("button", { name: "Daftar" }).click();
+    await expect(page.getByRole("heading", { name: "Pendaftaran Berhasil" })).toBeVisible();
+    await expect(page.getByText("Memuat dashboard...")).toBeVisible();
     await page.waitForURL("**/dashboard");
     await expect(page).toHaveURL(/dashboard/);
   });

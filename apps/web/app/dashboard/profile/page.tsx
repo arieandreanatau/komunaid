@@ -10,6 +10,7 @@ export default function ProfilePage() {
   const { user, setUser } = useAuth();
   const queryClient = useQueryClient();
   const [success, setSuccess] = useState("");
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ["profile"],
@@ -23,7 +24,6 @@ export default function ProfilePage() {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-    reset,
   } = useForm({
     values: profile ? {
       name: profile.name || "",
@@ -44,10 +44,61 @@ export default function ProfilePage() {
     },
   });
 
+  const emailMutation = useMutation({
+    mutationFn: (email: string) => api.put("/users/change-email", { email }),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["profile"] });
+      setSuccess("Email berhasil diubah!");
+      setTimeout(() => setSuccess(""), 3000);
+    },
+    onError: (err: any) => {
+      setSuccess("");
+      alert(err?.response?.data?.message || "Gagal mengubah email");
+    },
+  });
+
+  const usernameMutation = useMutation({
+    mutationFn: (username: string) => api.put("/users/change-username", { username }),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["profile"] });
+      setSuccess("Username berhasil diubah!");
+      setTimeout(() => setSuccess(""), 3000);
+    },
+    onError: (err: any) => {
+      setSuccess("");
+      alert(err?.response?.data?.message || "Gagal mengubah username");
+    },
+  });
+
+  const passwordMutation = useMutation({
+    mutationFn: (data: { currentPassword: string; newPassword: string; confirmNewPassword: string }) =>
+      api.put("/auth/change-password", data),
+    onSuccess: () => {
+      setSuccess("Password berhasil diubah! Silakan login kembali.");
+      setShowPasswordForm(false);
+      setTimeout(() => setSuccess(""), 5000);
+    },
+    onError: (err: any) => {
+      setSuccess("");
+      alert(err?.response?.data?.message || "Gagal mengubah password");
+    },
+  });
+
   const onSubmit = (data: Record<string, string>) => {
     setSuccess("");
     mutation.mutate(data);
   };
+
+  const [editingEmail, setEditingEmail] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [editingUsername, setEditingUsername] = useState(false);
+  const [newUsername, setNewUsername] = useState("");
+
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmNewPassword: "",
+  });
 
   if (isLoading) {
     return <div className="space-y-4">{[1, 2, 3].map(i => <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse" />)}</div>;
@@ -86,16 +137,48 @@ export default function ProfilePage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700">Email</label>
-            <input value={profile?.email || ""} disabled
-              className="mt-1 block w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-500" />
-            <p className="mt-1 text-xs text-gray-400">Email tidak dapat diubah</p>
+            <div className="mt-1 flex gap-2">
+              <input
+                value={editingEmail ? newEmail : profile?.email || ""}
+                onChange={(e) => setNewEmail(e.target.value)}
+                disabled={!editingEmail}
+                className={`flex-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue ${editingEmail ? "border-gray-300" : "border-gray-200 bg-gray-50 text-gray-500"}`}
+              />
+              {editingEmail ? (
+                <>
+                  <button type="button" onClick={() => { emailMutation.mutate(newEmail); setEditingEmail(false); }}
+                    className="px-3 py-2 bg-komuna-blue text-white text-sm rounded-lg hover:bg-komuna-navy">Simpan</button>
+                  <button type="button" onClick={() => setEditingEmail(false)}
+                    className="px-3 py-2 border border-gray-300 text-sm rounded-lg hover:bg-gray-50">Batal</button>
+                </>
+              ) : (
+                <button type="button" onClick={() => { setNewEmail(profile?.email || ""); setEditingEmail(true); }}
+                  className="px-3 py-2 border border-gray-300 text-sm rounded-lg hover:bg-gray-50">Ubah</button>
+              )}
+            </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700">Username</label>
-            <input value={profile?.username || ""} disabled
-              className="mt-1 block w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-500" />
-            <p className="mt-1 text-xs text-gray-400">Username tidak dapat diubah</p>
+            <div className="mt-1 flex gap-2">
+              <input
+                value={editingUsername ? newUsername : profile?.username || ""}
+                onChange={(e) => setNewUsername(e.target.value)}
+                disabled={!editingUsername}
+                className={`flex-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue ${editingUsername ? "border-gray-300" : "border-gray-200 bg-gray-50 text-gray-500"}`}
+              />
+              {editingUsername ? (
+                <>
+                  <button type="button" onClick={() => { usernameMutation.mutate(newUsername); setEditingUsername(false); }}
+                    className="px-3 py-2 bg-komuna-blue text-white text-sm rounded-lg hover:bg-komuna-navy">Simpan</button>
+                  <button type="button" onClick={() => setEditingUsername(false)}
+                    className="px-3 py-2 border border-gray-300 text-sm rounded-lg hover:bg-gray-50">Batal</button>
+                </>
+              ) : (
+                <button type="button" onClick={() => { setNewUsername(profile?.username || ""); setEditingUsername(true); }}
+                  className="px-3 py-2 border border-gray-300 text-sm rounded-lg hover:bg-gray-50">Ubah</button>
+              )}
+            </div>
           </div>
 
           <div>
@@ -120,13 +203,78 @@ export default function ProfilePage() {
             <p className="mt-1 text-xs text-gray-400">Maksimal 500 karakter</p>
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between">
             <button type="submit" disabled={isSubmitting}
               className="px-6 py-2.5 bg-komuna-blue text-white text-sm font-medium rounded-lg hover:bg-komuna-navy disabled:opacity-50 transition-colors">
               {isSubmitting ? "Menyimpan..." : "Simpan Perubahan"}
             </button>
           </div>
         </form>
+      </div>
+
+      {/* Password Section */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">Ubah Password</h2>
+          <button
+            type="button"
+            onClick={() => setShowPasswordForm(!showPasswordForm)}
+            className="text-sm text-komuna-blue hover:underline font-medium"
+          >
+            {showPasswordForm ? "Batal" : "Ubah Password"}
+          </button>
+        </div>
+
+        {showPasswordForm && (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Password Saat Ini</label>
+              <input
+                type="password"
+                value={passwordForm.currentPassword}
+                onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Password Baru</label>
+              <input
+                type="password"
+                value={passwordForm.newPassword}
+                onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue"
+              />
+              <p className="mt-1 text-xs text-gray-400">Minimal 8 karakter, kombinasi huruf besar, huruf kecil, dan angka</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Konfirmasi Password Baru</label>
+              <input
+                type="password"
+                value={passwordForm.confirmNewPassword}
+                onChange={(e) => setPasswordForm({ ...passwordForm, confirmNewPassword: e.target.value })}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmNewPassword) {
+                  alert("Semua field password wajib diisi");
+                  return;
+                }
+                if (passwordForm.newPassword !== passwordForm.confirmNewPassword) {
+                  alert("Password baru tidak cocok");
+                  return;
+                }
+                passwordMutation.mutate(passwordForm);
+              }}
+              disabled={passwordMutation.isPending}
+              className="px-6 py-2.5 bg-komuna-blue text-white text-sm font-medium rounded-lg hover:bg-komuna-navy disabled:opacity-50 transition-colors"
+            >
+              {passwordMutation.isPending ? "Menyimpan..." : "Simpan Password"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

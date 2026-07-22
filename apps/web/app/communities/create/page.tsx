@@ -25,9 +25,9 @@ interface WizardForm {
   postalCode: string;
   village: string;
   district: string;
-  country: string;
   province: string;
   city: string;
+  hasBasecamp: boolean;
   website: string;
   instagram: string;
   contactEmail: string;
@@ -58,9 +58,9 @@ const initialForm: WizardForm = {
   postalCode: "",
   village: "",
   district: "",
-  country: "",
   province: "",
   city: "",
+  hasBasecamp: false,
   website: "",
   instagram: "",
   contactEmail: "",
@@ -78,7 +78,6 @@ export default function CreateCommunityPage() {
   const [error, setError] = useState("");
   const [stepErrors, setStepErrors] = useState<string[]>([]);
 
-  const [countries, setCountries] = useState<string[]>([]);
   const [provinces, setProvinces] = useState<string[]>([]);
   const [cities, setCities] = useState<string[]>([]);
   const [districts, setDistricts] = useState<string[]>([]);
@@ -87,7 +86,6 @@ export default function CreateCommunityPage() {
   const [loadingCities, setLoadingCities] = useState(false);
   const [loadingDistricts, setLoadingDistricts] = useState(false);
   const [loadingVillages, setLoadingVillages] = useState(false);
-
   const [loadingPostalCode, setLoadingPostalCode] = useState(false);
 
   const [logoUploading, setLogoUploading] = useState(false);
@@ -112,29 +110,10 @@ export default function CreateCommunityPage() {
   }, []);
 
   useEffect(() => {
-    const fetchCountries = async () => {
-      try {
-        const { data } = await api.get("/master-data/countries");
-        setCountries(data.data || []);
-      } catch {
-        console.error("Gagal memuat negara");
-      }
-    };
-    fetchCountries();
-  }, []);
-
-  useEffect(() => {
-    if (!form.country) {
-      setProvinces([]);
-      setCities([]);
-      setDistricts([]);
-      setVillages([]);
-      return;
-    }
     const fetchProvinces = async () => {
       setLoadingProvinces(true);
       try {
-        const { data } = await api.get(`/master-data/provinces?country=${encodeURIComponent(form.country)}`);
+        const { data } = await api.get("/master-data/provinces");
         setProvinces(data.data || []);
       } catch {
         setProvinces([]);
@@ -143,8 +122,7 @@ export default function CreateCommunityPage() {
       }
     };
     fetchProvinces();
-    setForm((prev) => ({ ...prev, province: "", city: "", district: "", village: "" }));
-  }, [form.country]);
+  }, []);
 
   useEffect(() => {
     if (!form.province) {
@@ -236,7 +214,7 @@ export default function CreateCommunityPage() {
     fetchPostalCode();
   }, [form.village, form.district]);
 
-  const updateField = (field: keyof WizardForm, value: string | string[]) => {
+  const updateField = (field: keyof WizardForm, value: string | string[] | boolean) => {
     setForm((prev) => ({ ...prev, [field]: value }));
     setStepErrors([]);
   };
@@ -289,11 +267,12 @@ export default function CreateCommunityPage() {
       if (form.customCategory.trim() && form.customCategory.trim().length > 50) errs.push("Nama kategori custom maksimal 50 karakter");
     }
     if (s === 3) {
-      if (!form.country) errs.push("Negara wajib dipilih");
-      if (!form.province) errs.push("Provinsi wajib dipilih");
-      if (!form.city) errs.push("Kota/Kabupaten wajib dipilih");
-      if (!form.district) errs.push("Kecamatan wajib dipilih");
-      if (!form.village) errs.push("Desa/Kelurahan wajib dipilih");
+      if (form.hasBasecamp) {
+        if (!form.province) errs.push("Provinsi wajib dipilih");
+        if (!form.city) errs.push("Kota/Kabupaten wajib dipilih");
+        if (!form.district) errs.push("Kecamatan wajib dipilih");
+        if (!form.village) errs.push("Desa/Kelurahan wajib dipilih");
+      }
     }
     if (s === 4) {
       if (form.website && !/^https?:\/\/.+/.test(form.website)) {
@@ -332,14 +311,14 @@ export default function CreateCommunityPage() {
         customCategory: form.customCategory.trim() || undefined,
         logo: form.logo || undefined,
         banner: form.banner || undefined,
-        address1: form.address1 || undefined,
-        address2: form.address2 || undefined,
-        postalCode: form.postalCode || undefined,
-        village: form.village || undefined,
-        district: form.district || undefined,
-        country: form.country || undefined,
-        province: form.province || undefined,
-        city: form.city || undefined,
+        address1: form.hasBasecamp ? (form.address1 || undefined) : undefined,
+        address2: form.hasBasecamp ? (form.address2 || undefined) : undefined,
+        postalCode: form.hasBasecamp ? (form.postalCode || undefined) : undefined,
+        village: form.hasBasecamp ? (form.village || undefined) : undefined,
+        district: form.hasBasecamp ? (form.district || undefined) : undefined,
+        province: form.hasBasecamp ? (form.province || undefined) : undefined,
+        city: form.hasBasecamp ? (form.city || undefined) : undefined,
+        country: "Indonesia",
         website: form.website || undefined,
         instagram: form.instagram || undefined,
         contactEmail: form.contactEmail || undefined,
@@ -681,179 +660,156 @@ export default function CreateCommunityPage() {
 
             {step === 3 && (
               <div className="space-y-5">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Negara <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={form.country}
-                    onChange={(e) => updateField("country", e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white"
-                  >
-                    <option value="">-- Pilih Negara --</option>
-                    {countries.map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Alamat 1 <span className="text-gray-400 font-normal">(opsional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={form.address1}
-                    onChange={(e) => updateField("address1", e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
-                    placeholder="Contoh: Jl. Asia Afrika No. 1"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Alamat 2 <span className="text-gray-400 font-normal">(opsional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={form.address2}
-                    onChange={(e) => updateField("address2", e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
-                    placeholder="Contoh: Blok A No. 5, RT 01/RW 02"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Provinsi <span className="text-red-500">*</span>
-                  </label>
-                  {form.country ? (
-                    <select
-                      value={form.province}
-                      onChange={(e) => updateField("province", e.target.value)}
-                      disabled={loadingProvinces}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white disabled:bg-gray-100"
-                    >
-                      <option value="">{loadingProvinces ? "Memuat..." : "-- Pilih Provinsi --"}</option>
-                      {provinces.map((p) => (
-                        <option key={p} value={p}>{p}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      value={form.province}
-                      onChange={(e) => updateField("province", e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
-                      placeholder="Pilih negara terlebih dahulu"
-                      disabled
-                    />
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Kota/Kabupaten <span className="text-red-500">*</span>
-                  </label>
-                  {form.province ? (
-                    <select
-                      value={form.city}
-                      onChange={(e) => updateField("city", e.target.value)}
-                      disabled={loadingCities}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white disabled:bg-gray-100"
-                    >
-                      <option value="">{loadingCities ? "Memuat..." : "-- Pilih Kota/Kabupaten --"}</option>
-                      {cities.map((c) => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      value={form.city}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
-                      placeholder="Pilih provinsi terlebih dahulu"
-                      disabled
-                    />
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Kecamatan <span className="text-red-500">*</span>
-                  </label>
-                  {form.city ? (
-                    <select
-                      value={form.district}
-                      onChange={(e) => updateField("district", e.target.value)}
-                      disabled={loadingDistricts}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white disabled:bg-gray-100"
-                    >
-                      <option value="">{loadingDistricts ? "Memuat..." : "-- Pilih Kecamatan --"}</option>
-                      {districts.map((d) => (
-                        <option key={d} value={d}>{d}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      value={form.district}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
-                      placeholder="Pilih kota terlebih dahulu"
-                      disabled
-                    />
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Desa/Kelurahan <span className="text-red-500">*</span>
-                  </label>
-                  {form.district ? (
-                    <select
-                      value={form.village}
-                      onChange={(e) => updateField("village", e.target.value)}
-                      disabled={loadingVillages}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white disabled:bg-gray-100"
-                    >
-                      <option value="">{loadingVillages ? "Memuat..." : "-- Pilih Desa/Kelurahan --"}</option>
-                      {villages.map((v) => (
-                        <option key={v} value={v}>{v}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      value={form.village}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
-                      placeholder="Pilih kecamatan terlebih dahulu"
-                      disabled
-                    />
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Kode Pos <span className="text-gray-400 font-normal">(auto generate)</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={form.postalCode}
-                      onChange={(e) => updateField("postalCode", e.target.value)}
-                      maxLength={5}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-gray-50"
-                      placeholder={loadingPostalCode ? "Mencari kode pos..." : "Otomatis terisi saat memilih kelurahan"}
-                      disabled={loadingPostalCode}
-                    />
-                    {loadingPostalCode && (
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                        <div className="h-4 w-4 border-2 border-komuna-blue border-t-transparent rounded-full animate-spin" />
-                      </div>
-                    )}
+                <div className="flex items-center justify-between rounded-lg border border-gray-200 p-4">
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Punya Basecamp / Sekretariat</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Jika tidak memiliki, data lokasi tidak wajib diisi</p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      updateField("hasBasecamp", !form.hasBasecamp);
+                      if (!form.hasBasecamp) {
+                        updateField("province", "");
+                        updateField("city", "");
+                        updateField("district", "");
+                        updateField("village", "");
+                        updateField("address1", "");
+                        updateField("address2", "");
+                        updateField("postalCode", "");
+                      }
+                    }}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:ring-offset-2 ${form.hasBasecamp ? "bg-komuna-blue" : "bg-gray-200"}`}
+                    role="switch"
+                    aria-checked={form.hasBasecamp}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${form.hasBasecamp ? "translate-x-6" : "translate-x-1"}`} />
+                  </button>
                 </div>
-              </div>
+
+                {form.hasBasecamp && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Alamat 1 <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={form.address1}
+                        onChange={(e) => updateField("address1", e.target.value)}
+                        maxLength={120}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
+                        placeholder="Contoh: Jl. Asia Afrika No. 1"
+                      />
+                      <p className="mt-1 text-xs text-gray-400">{form.address1.length}/120</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Alamat 2 <span className="text-gray-400 font-normal">(opsional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={form.address2}
+                        onChange={(e) => updateField("address2", e.target.value)}
+                        maxLength={120}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
+                        placeholder="Contoh: Blok A No. 5, RT 01/RW 02"
+                      />
+                      <p className="mt-1 text-xs text-gray-400">{form.address2.length}/120</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Provinsi <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={form.province}
+                        onChange={(e) => updateField("province", e.target.value)}
+                        disabled={loadingProvinces}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white disabled:bg-gray-100"
+                      >
+                        <option value="">{loadingProvinces ? "Memuat..." : "-- Pilih Provinsi --"}</option>
+                        {provinces.map((p) => (
+                          <option key={p} value={p}>{p}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Kota/Kabupaten <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={form.city}
+                        onChange={(e) => updateField("city", e.target.value)}
+                        disabled={!form.province || loadingCities}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white disabled:bg-gray-100"
+                      >
+                        <option value="">{loadingCities ? "Memuat..." : "-- Pilih Kota/Kabupaten --"}</option>
+                        {cities.map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Kecamatan <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={form.district}
+                        onChange={(e) => updateField("district", e.target.value)}
+                        disabled={!form.city || loadingDistricts}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white disabled:bg-gray-100"
+                      >
+                        <option value="">{loadingDistricts ? "Memuat..." : "-- Pilih Kecamatan --"}</option>
+                        {districts.map((d) => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Desa/Kelurahan <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={form.village}
+                        onChange={(e) => updateField("village", e.target.value)}
+                        disabled={!form.district || loadingVillages}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white disabled:bg-gray-100"
+                      >
+                        <option value="">{loadingVillages ? "Memuat..." : "-- Pilih Desa/Kelurahan --"}</option>
+                        {villages.map((v) => (
+                          <option key={v} value={v}>{v}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Kode Pos <span className="text-gray-400 font-normal">(auto generate)</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={form.postalCode}
+                          readOnly
+                          maxLength={5}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-gray-50"
+                          placeholder={loadingPostalCode ? "Mencari kode pos..." : "Otomatis terisi saat memilih kelurahan"}
+                        />
+                          {loadingPostalCode && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <div className="h-4 w-4 border-2 border-komuna-blue border-t-transparent rounded-full animate-spin" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
             )}
 
             {step === 4 && (

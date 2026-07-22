@@ -13,7 +13,7 @@ import { useAuth } from "@/components/auth-provider";
 const eventSchema = z.object({
   title: z.string().min(3, "Judul minimal 3 karakter").max(200, "Judul maksimal 200 karakter"),
   description: z.string().min(10, "Deskripsi minimal 10 karakter").max(5000, "Deskripsi maksimal 5000 karakter"),
-  categoryIds: z.array(z.string()).min(1, "Pilih minimal satu kategori"),
+  categoryIds: z.array(z.string()).min(1, "Pilih minimal satu kategori").max(5, "Maksimal 5 kategori"),
   communityId: z.string().optional().nullable(),
   organizationId: z.string().optional().nullable(),
   eventDate: z.string().min(1, "Tanggal event wajib diisi"),
@@ -27,6 +27,9 @@ const eventSchema = z.object({
   allowWaitlist: z.boolean(),
   coverImage: z.string().optional().nullable(),
   thumbnail: z.string().optional().nullable(),
+}).refine((data) => Boolean(data.communityId || data.organizationId), {
+  message: "Pilih komunitas atau organisasi penyelenggara",
+  path: ["communityId"],
 });
 
 type EventFormData = z.infer<typeof eventSchema>;
@@ -37,10 +40,40 @@ interface Category {
   icon: string;
 }
 
-interface Membership {
-  community: { id: string; name: string; slug: string; status: string } | null;
-  organization: { id: string; name: string; slug: string } | null;
+interface ProfileMembership {
+  id: string;
+  name: string;
   role: string;
+  status: string;
+}
+
+interface Organizer {
+  id: string;
+  name: string;
+  type: "community" | "organization";
+}
+
+const TIMEZONE_OFFSETS: Record<string, number> = {
+  "Asia/Jakarta": 7,
+  "Asia/Makassar": 8,
+  "Asia/Jayapura": 9,
+  UTC: 0,
+};
+
+function localDateTimeToIso(value: string, timezone: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(value);
+  const offset = TIMEZONE_OFFSETS[timezone];
+  if (!match || offset === undefined) throw new Error("Format tanggal atau timezone tidak valid");
+
+  const [, year, month, day, hour, minute, second = "0"] = match;
+  return new Date(Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour) - offset,
+    Number(minute),
+    Number(second)
+  )).toISOString();
 }
 
 const TOTAL_STEPS = 6;
@@ -66,7 +99,7 @@ export default function CreateEventPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [step, setStep] = useState(1);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [memberships, setMemberships] = useState<Membership[]>([]);
+  const [organizers, setOrganizers] = useState<Organizer[]>([]);
 
   const {
     register,
@@ -105,10 +138,11 @@ export default function CreateEventPage() {
         title: data.title.trim(),
         description: data.description.trim(),
         categoryIds: data.categoryIds,
-        eventDate: data.eventDate,
-        endDate: data.endDate || undefined,
+        eventDate: localDateTimeToIso(data.eventDate, data.timezone),
+        endDate: data.endDate ? localDateTimeToIso(data.endDate, data.timezone) : undefined,
         timezone: data.timezone,
         locationType: data.locationType,
+        isOnline: data.locationType !== "OFFLINE",
         location: data.location || undefined,
         meetingUrl: data.meetingUrl || undefined,
         onlineUrl: data.onlineUrl || undefined,
@@ -142,12 +176,24 @@ export default function CreateEventPage() {
         ]);
         setCategories(catRes.data.data || []);
         const profile = profileRes.data.data?.user || profileRes.data.user;
-        if (profile?.communities) {
-          const active = profile.communities.filter(
-            (c: Membership) => c.community?.status === "APPROVED"
-          );
-          setMemberships(active);
-        }
+        const communities = (profile?.communities || [])
+          .filter((membership: ProfileMembership) => membership.status === "APPROVED" && membership.role === "OWNER")
+          .map((membership: ProfileMembership) => ({
+            id: membership.id,
+            name: membership.name,
+            type: "community" as const,
+          }));
+        const organizations = (profile?.organizations || [])
+          .filter(
+            (membership: ProfileMembership) =>
+              membership.status === "APPROVED" && ["OWNER", "ADMIN"].includes(membership.role)
+          )
+          .map((membership: ProfileMembership) => ({
+            id: membership.id,
+            name: membership.name,
+            type: "organization" as const,
+          }));
+        setOrganizers([...communities, ...organizations]);
       } catch {
         console.error("Gagal memuat data");
       }
@@ -166,7 +212,7 @@ export default function CreateEventPage() {
 
   const validateCurrentStep = async (): Promise<boolean> => {
     const stepFields: Record<number, (keyof EventFormData)[]> = {
-      1: ["title", "description", "categoryIds"],
+      1: ["title", "description", "categoryIds", "communityId", "organizationId"],
       2: ["eventDate", "timezone"],
       3: ["locationType"],
       4: ["quota"],
@@ -191,6 +237,14 @@ export default function CreateEventPage() {
   const onSubmit = (data: EventFormData) => {
     createMutation.mutate(data);
   };
+
+  const mutationError = createMutation.error as {
+    response?: { data?: { message?: string; errors?: Array<{ message?: string }> } };
+  } | null;
+  const mutationErrorMessage =
+    mutationError?.response?.data?.errors?.[0]?.message ||
+    mutationError?.response?.data?.message ||
+    "Gagal membuat event. Silakan coba lagi.";
 
   if (authLoading) {
     return (
@@ -265,7 +319,7 @@ export default function CreateEventPage() {
             <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
             </svg>
-            Gagal membuat event. Silakan coba lagi.
+            {mutationErrorMessage}
           </div>
         )}
 
@@ -326,29 +380,40 @@ export default function CreateEventPage() {
                 {errors.categoryIds && <p className="mt-1 text-xs text-red-500">{errors.categoryIds.message}</p>}
               </div>
 
-              {(memberships.length > 0) && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Selenggarakan oleh
-                  </label>
-                  <select
-                    value={formValues.communityId || ""}
-                    onChange={(e) => {
-                      const val = e.target.value || null;
-                      setValue("communityId", val);
-                      if (val) setValue("organizationId", null);
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
-                  >
-                    <option value="">Personal (Tanpa Komunitas)</option>
-                    {memberships.map((m) => (
-                      <option key={m.community?.id || m.organization?.id} value={m.community?.id || m.organization?.id}>
-                        {m.community?.name || m.organization?.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Selenggarakan oleh <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={
+                    formValues.communityId
+                      ? `community:${formValues.communityId}`
+                      : formValues.organizationId
+                        ? `organization:${formValues.organizationId}`
+                        : ""
+                  }
+                  onChange={(e) => {
+                    const [type, id] = e.target.value.split(":");
+                    setValue("communityId", type === "community" ? id : null, { shouldValidate: true });
+                    setValue("organizationId", type === "organization" ? id : null, { shouldValidate: true });
+                  }}
+                  disabled={organizers.length === 0}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm disabled:bg-gray-100"
+                >
+                  <option value="">Pilih penyelenggara</option>
+                  {organizers.map((organizer) => (
+                    <option key={`${organizer.type}:${organizer.id}`} value={`${organizer.type}:${organizer.id}`}>
+                      {organizer.name} ({organizer.type === "community" ? "Komunitas" : "Organisasi"})
+                    </option>
+                  ))}
+                </select>
+                {organizers.length === 0 && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Event hanya dapat dibuat oleh pemilik komunitas atau pengelola organisasi yang disetujui.
+                  </p>
+                )}
+                {errors.communityId && <p className="mt-1 text-xs text-red-500">{errors.communityId.message}</p>}
+              </div>
             </div>
           )}
 

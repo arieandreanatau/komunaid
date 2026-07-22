@@ -97,7 +97,7 @@ describe("User Routes", () => {
         id: "user-1", name: "U", username: "u", email: "u@test.com", phone: "123", bio: "bio",
         location: "loc", avatar: "http://img", status: "ACTIVE",
         roles: [{ role: "MEMBER" }], interests: [{ interest: "coding" }],
-        joinedCommunities: [{ community: { id: "c1", name: "C1", slug: "c1", logo: "l", status: "APPROVED" }, role: "MEMBER" }],
+        joinedCommunities: [{ community: { id: "c1", name: "C1", slug: "c1", logo: "l", status: "APPROVED" }, role: "MEMBER", status: "ACTIVE", deletedAt: null }],
         organizationMembers: [{ organization: { id: "o1", name: "O1", slug: "o1", logo: "l", status: "ACTIVE" }, role: "OWNER" }],
         registeredEvents: [{ event: { id: "e1", title: "E1", slug: "e1", coverImage: "ci", eventDate: new Date(), status: "PUBLISHED" }, status: "CONFIRMED" }],
         notifications: [],
@@ -177,8 +177,8 @@ describe("User Routes", () => {
         location: null, avatar: null, status: "ACTIVE",
         roles: [], interests: [],
         joinedCommunities: [
-          { community: { id: "c1", name: "C1", slug: "c1", logo: "l1", status: "APPROVED" }, role: "OWNER" },
-          { community: { id: "c2", name: "C2", slug: "c2", logo: "l2", status: "PENDING" }, role: "MEMBER" },
+          { community: { id: "c1", name: "C1", slug: "c1", logo: "l1", status: "APPROVED" }, role: "OWNER", status: "ACTIVE", deletedAt: null },
+          { community: { id: "c2", name: "C2", slug: "c2", logo: "l2", status: "PENDING" }, role: "MEMBER", status: "ACTIVE", deletedAt: null },
         ],
         organizationMembers: [], registeredEvents: [], notifications: [],
         createdAt: new Date(),
@@ -192,6 +192,35 @@ describe("User Routes", () => {
       expect(body.data.user.communities).toHaveLength(2);
       expect(body.data.user.communities[0].role).toBe("OWNER");
       expect(body.data.user.communities[1].status).toBe("PENDING");
+      expect(body.data.user.createdCommunities).toHaveLength(1);
+      expect(body.data.user.followedCommunities).toHaveLength(1);
+      expect(body.data.user.pastCommunities).toHaveLength(0);
+    });
+
+    it("should separate communities that the user previously followed", async () => {
+      const token = await generateToken({ sub: "u1", email: "a@b.com", name: "A", username: "a", type: "access" });
+      const leftAt = new Date("2026-07-01T00:00:00.000Z");
+      mockAuth({
+        id: "u1", name: "A", username: "a", email: "a@b.com", phone: null, bio: null,
+        location: null, avatar: null, status: "ACTIVE", roles: [], interests: [],
+        joinedCommunities: [
+          { community: { id: "c1", name: "Past", slug: "past", logo: null, status: "APPROVED" }, role: "MEMBER", status: "ACTIVE", deletedAt: leftAt },
+          { community: { id: "c2", name: "Banned", slug: "banned", logo: null, status: "APPROVED" }, role: "MEMBER", status: "BANNED", deletedAt: leftAt },
+        ],
+        organizationMembers: [], registeredEvents: [], notifications: [], createdAt: new Date(),
+      });
+      (prisma.notification.count as any).mockResolvedValue(0);
+
+      const res = await app.request("/users/profile", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await res.json();
+
+      expect(body.data.user.communities).toHaveLength(0);
+      expect(body.data.user.pastCommunities).toEqual([
+        expect.objectContaining({ id: "c1", leftAt: leftAt.toISOString() }),
+        expect.objectContaining({ id: "c2", leftAt: leftAt.toISOString() }),
+      ]);
     });
 
     it("should return zero unreadNotifications when count is 0", async () => {
@@ -471,18 +500,28 @@ describe("User Routes", () => {
   });
 
   describe("GET /notifications", () => {
-    it("should return 401 without auth (matched by /:id)", async () => {
+    it("should return 401 without auth", async () => {
       const res = await app.request("/users/notifications");
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(401);
     });
 
-    it("should be shadowed by /:id route", async () => {
-      (prisma.user.findUnique as any).mockImplementation(async (args: any) => {
-        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0, status: "ACTIVE" };
-        return null;
+    it("should return unread notifications", async () => {
+      const token = await generateToken({ sub: "u1", email: "a@b.com", name: "A", username: "a", type: "access" });
+      mockAuth();
+      (prisma.notification.findMany as any).mockResolvedValue([{ id: "n1", isRead: false }]);
+      (prisma.notification.count as any).mockResolvedValue(1);
+
+      const res = await app.request("/users/notifications?unread=true&page=1&limit=1", {
+        headers: { Authorization: `Bearer ${token}` },
       });
-      const res = await app.request("/users/notifications");
-      expect(res.status).toBe(404);
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.data).toHaveLength(1);
+      expect(body.pagination.total).toBe(1);
+      expect(prisma.notification.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { userId: "u1", isRead: false } })
+      );
     });
   });
 
@@ -551,18 +590,21 @@ describe("User Routes", () => {
   });
 
   describe("GET /activity", () => {
-    it("should be shadowed by /:id route (no auth needed)", async () => {
+    it("should return 401 without auth", async () => {
       const res = await app.request("/users/activity");
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(401);
     });
 
-    it("should return 404 when user not found via /:id", async () => {
-      (prisma.user.findUnique as any).mockImplementation(async (args: any) => {
-        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0, status: "ACTIVE" };
-        return null;
+    it("should return activity history", async () => {
+      const token = await generateToken({ sub: "u1", email: "a@b.com", name: "A", username: "a", type: "access" });
+      mockAuth();
+      (prisma.activityHistory.findMany as any).mockResolvedValue([]);
+      (prisma.activityHistory.count as any).mockResolvedValue(0);
+
+      const res = await app.request("/users/activity", {
+        headers: { Authorization: `Bearer ${token}` },
       });
-      const res = await app.request("/users/activity");
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(200);
     });
   });
 });

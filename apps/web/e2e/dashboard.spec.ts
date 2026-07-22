@@ -140,3 +140,40 @@ test.describe("Dashboard - Responsive", () => {
     await expect(page.getByText("Selamat datang, Tablet User!")).toBeVisible();
   });
 });
+
+test.describe("Dashboard - Komunitas Saya", () => {
+  test.beforeEach(async ({ page }) => {
+    await setAuthCookie(page);
+    await mockLoginSuccess(page);
+    await mockProfile(page, {
+      communities: [
+        { id: "created-1", name: "Komunitas Buatan", slug: "komunitas-buatan", logo: null, role: "OWNER", status: "APPROVED" },
+        { id: "followed-1", name: "Komunitas Aktif", slug: "komunitas-aktif", logo: null, role: "MEMBER", status: "APPROVED" },
+      ],
+      createdCommunities: [
+        { id: "created-1", name: "Komunitas Buatan", slug: "komunitas-buatan", logo: null, role: "OWNER", status: "APPROVED" },
+      ],
+      followedCommunities: [
+        { id: "followed-1", name: "Komunitas Aktif", slug: "komunitas-aktif", logo: null, role: "MEMBER", status: "APPROVED" },
+      ],
+      pastCommunities: [
+        { id: "past-1", name: "Komunitas Lama", slug: "komunitas-lama", logo: null, role: "MEMBER", status: "APPROVED", leftAt: "2026-07-01T00:00:00.000Z" },
+      ],
+    });
+    await page.goto("/dashboard/communities");
+  });
+
+  test("separates created, followed, and past communities", async ({ page }) => {
+    await expect(page.getByRole("tab", { name: /Komunitas Yang Saya Buat/ })).toBeVisible();
+    await expect(page.getByRole("tab", { name: /Komunitas Yang Saya Ikuti/ })).toBeVisible();
+    await expect(page.getByRole("tab", { name: /Komunitas Yang Pernah Saya Ikuti/ })).toBeVisible();
+    await expect(page.getByText("Komunitas Buatan")).toBeVisible();
+
+    await page.getByRole("tab", { name: /Komunitas Yang Saya Ikuti/ }).click();
+    await expect(page.getByText("Komunitas Aktif")).toBeVisible();
+
+    await page.getByRole("tab", { name: /Komunitas Yang Pernah Saya Ikuti/ }).click();
+    await expect(page.getByText("Komunitas Lama")).toBeVisible();
+    await expect(page.getByText(/Keluar 1 Jul 2026/)).toBeVisible();
+  });
+});

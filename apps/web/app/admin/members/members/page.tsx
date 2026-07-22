@@ -39,6 +39,9 @@ export default function MembersListPage() {
   const [roleFilter, setRoleFilter] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [confirmModal, setConfirmModal] = useState<{ userId: string; action: "suspend" | "activate"; name: string } | null>(null);
+  const [resetPwModal, setResetPwModal] = useState<{ userId: string; name: string } | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [resetPwError, setResetPwError] = useState("");
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -65,6 +68,23 @@ export default function MembersListPage() {
       fetchUsers();
     } catch { console.error("Gagal"); }
     finally { setActionLoading(null); }
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetPwModal) return;
+    setResetPwError("");
+    if (!newPassword || newPassword.length < 8) {
+      setResetPwError("Password minimal 8 karakter");
+      return;
+    }
+    setActionLoading(resetPwModal.userId);
+    try {
+      await api.put(`/admin/users/${resetPwModal.userId}/reset-password`, { newPassword });
+      setResetPwModal(null);
+      setNewPassword("");
+    } catch (err: any) {
+      setResetPwError(err?.response?.data?.message || "Gagal mereset password");
+    } finally { setActionLoading(null); }
   };
 
   return (
@@ -169,6 +189,10 @@ export default function MembersListPage() {
                       <td className="px-4 py-3 hidden md:table-cell text-gray-500 text-xs">{formatDate(u.createdAt)}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-2">
+                          <button onClick={() => setResetPwModal({ userId: u.id, name: u.name })}
+                            className="px-3 py-1.5 text-xs font-medium text-amber-600 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors">
+                            Reset PW
+                          </button>
                           <Link href={`/admin/users/${u.id}`}
                             className="px-3 py-1.5 text-xs font-medium text-komuna-blue bg-komuna-blue/10 rounded-lg hover:bg-komuna-blue/20 transition-colors">
                             Detail
@@ -229,6 +253,41 @@ export default function MembersListPage() {
                   confirmModal.action === "suspend" ? "bg-red-600 hover:bg-red-700" : "bg-green-600 hover:bg-green-700"
                 }`}>
                 {actionLoading === confirmModal.userId ? "Memproses..." : "Konfirmasi"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {resetPwModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+            <h3 className="text-lg font-semibold text-komuna-navy mb-2">Reset Password</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Reset password untuk user <strong>{resetPwModal.name}</strong>
+            </p>
+            {resetPwError && (
+              <div className="mb-4 bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded-lg">{resetPwError}</div>
+            )}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Password Baru</label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Minimal 8 karakter, huruf besar/kecil, angka"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue"
+                autoFocus
+              />
+              <p className="mt-1 text-xs text-gray-400">Minimal 8 karakter, kombinasi huruf besar, huruf kecil, dan angka</p>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => { setResetPwModal(null); setNewPassword(""); setResetPwError(""); }}
+                disabled={actionLoading === resetPwModal.userId}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">Batal</button>
+              <button onClick={handleResetPassword} disabled={actionLoading === resetPwModal.userId}
+                className="px-4 py-2 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50">
+                {actionLoading === resetPwModal.userId ? "Menyimpan..." : "Simpan Password"}
               </button>
             </div>
           </div>

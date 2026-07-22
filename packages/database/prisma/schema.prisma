@@ -51,6 +51,7 @@ model User {
   reviewedVolunteerApps VolunteerApplication[] @relation("ReviewedVolunteerApps")
   picAssignments        VolunteerAssignment[]
   communityMedias       CommunityMedia[]
+  forumReplies          ForumReply[]
   loginHistory          LoginHistory[]
   refreshTokens         RefreshToken[]
 
@@ -278,6 +279,26 @@ model CommunitySettings {
 enum CommunityMediaType {
   ANNOUNCEMENT
   NEWS
+  GALLERY
+  FORUM_POST
+}
+
+model ForumReply {
+  id          String   @id @default(cuid())
+  threadId    String
+  content     String   @db.Text
+  createdById String
+  deletedAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  thread    CommunityMedia @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  createdBy User           @relation(fields: [createdById], references: [id])
+
+  @@index([threadId])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@map("forum_replies")
 }
 
 model CommunityMedia {
@@ -294,8 +315,9 @@ model CommunityMedia {
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 
-  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  createdBy User      @relation(fields: [createdById], references: [id])
+  community  Community     @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  createdBy  User          @relation(fields: [createdById], references: [id])
+  replies    ForumReply[]
 
   @@index([communityId])
   @@index([type])
