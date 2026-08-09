@@ -25,14 +25,17 @@ async function fetchCsrfToken(): Promise<string | null> {
       csrfToken = token;
       return token;
     }
-  } catch {
-    // Ignore errors during CSRF fetch
+  } catch (err: any) {
+    const token = err?.response?.headers?.["x-csrf-token"];
+    if (token) {
+      csrfToken = token;
+      return token;
+    }
   }
   return null;
 }
 
 function getCsrfToken(): string | null {
-  if (csrfToken) return csrfToken;
   if (typeof document !== "undefined") {
     const match = document.cookie.match(/csrf_token=([^;]+)/);
     if (match) {
@@ -40,6 +43,7 @@ function getCsrfToken(): string | null {
       return csrfToken;
     }
   }
+  csrfToken = null;
   return null;
 }
 

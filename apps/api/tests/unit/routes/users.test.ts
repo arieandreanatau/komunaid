@@ -104,6 +104,9 @@ describe("User Routes", () => {
         notifications: [],
         createdAt: new Date(),
       });
+      const savedDate = new Date();
+      (prisma.eventSave.findMany as any)
+        .mockResolvedValueOnce([{ event: { id: "e2", title: "E2", slug: "e2", coverImage: null, eventDate: savedDate, status: "PUBLISHED" }, createdAt: savedDate }]);
       (prisma.notification.count as any)
         .mockResolvedValueOnce(2)
         .mockResolvedValueOnce(1)

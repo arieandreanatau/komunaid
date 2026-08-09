@@ -61,16 +61,6 @@ userRoutes.get("/profile", authMiddleware, async (c) => {
         orderBy: { event: { eventDate: "asc" } },
         take: 50,
       },
-      savedEvents: {
-        where: { event: { deletedAt: null } },
-        include: {
-          event: {
-            select: { id: true, title: true, slug: true, coverImage: true, eventDate: true, status: true },
-          },
-        },
-        orderBy: { createdAt: "desc" },
-        take: 10,
-      },
       notifications: {
         where: { isRead: false },
         take: 5,
@@ -78,6 +68,22 @@ userRoutes.get("/profile", authMiddleware, async (c) => {
       },
     },
   });
+
+  let savedEventsRaw: { event: { id: string; title: string; slug: string; coverImage: string | null; eventDate: Date; status: string }; createdAt: Date }[] = [];
+  try {
+    savedEventsRaw = (await prisma.eventSave.findMany({
+      where: { userId: authUser.id, event: { deletedAt: null } },
+      include: {
+        event: {
+          select: { id: true, title: true, slug: true, coverImage: true, eventDate: true, status: true },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    })) ?? [];
+  } catch {
+    // event_saves table may not exist yet
+  }
 
   if (!user) {
     return c.json({ success: false, message: "User tidak ditemukan" }, 404);
@@ -96,7 +102,7 @@ userRoutes.get("/profile", authMiddleware, async (c) => {
     }),
     prisma.eventSave.count({
       where: { userId: authUser.id, event: { deletedAt: null } },
-    }),
+    }).catch(() => 0),
   ]);
 
   const mapCommunity = (membership: (typeof user.joinedCommunities)[number]) => ({
@@ -164,7 +170,7 @@ userRoutes.get("/profile", authMiddleware, async (c) => {
           registrationStatus: r.status,
         })),
         registeredEventsCount,
-        savedEvents: user.savedEvents?.map((saved) => ({
+        savedEvents: savedEventsRaw.map((saved) => ({
           id: saved.event.id,
           title: saved.event.title,
           slug: saved.event.slug,
@@ -172,7 +178,7 @@ userRoutes.get("/profile", authMiddleware, async (c) => {
           eventDate: saved.event.eventDate,
           status: saved.event.status,
           savedAt: saved.createdAt,
-        })) || [],
+        })),
         savedEventsCount,
         unreadNotifications: unreadCount,
         createdAt: user.createdAt,

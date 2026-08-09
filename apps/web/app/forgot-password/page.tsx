@@ -57,18 +57,18 @@ export default function ForgotPasswordPage() {
           )}
 
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-              Email
+            <label htmlFor="identifier" className="block text-sm font-medium text-gray-700">
+              Email atau Username
             </label>
             <input
-              id="email"
-              type="email"
-              {...register("email")}
+              id="identifier"
+              type="text"
+              {...register("identifier")}
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue"
-              placeholder="email@contoh.com"
+              placeholder="email@contoh.com atau username"
             />
-            {errors.email && (
-              <p className="mt-1 text-sm text-red-500">{errors.email.message}</p>
+            {errors.identifier && (
+              <p className="mt-1 text-sm text-red-500">{errors.identifier.message}</p>
             )}
           </div>
 

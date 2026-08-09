@@ -274,7 +274,7 @@ describe("Auth Integration Tests", () => {
       expect(res.status).toBe(401);
     });
 
-    it("should return 403 for suspended user", async () => {
+    it("should return 401 for suspended user (anti-enumeration)", async () => {
       const hash = await bcrypt.hash("Test1234", 1);
       (prisma.user.findUnique as any).mockResolvedValue({
         id: "user-1",
@@ -294,10 +294,12 @@ describe("Auth Integration Tests", () => {
         body: JSON.stringify({ identifier: "suspended@example.com", password: "Test1234" }),
       });
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(401);
+      const body = await res.json() as any;
+      expect(body.message).toBe("Email/username atau password salah");
     });
 
-    it("should return 403 for deactivated user", async () => {
+    it("should return 401 for deactivated user (anti-enumeration)", async () => {
       const hash = await bcrypt.hash("Test1234", 1);
       (prisma.user.findUnique as any).mockResolvedValue({
         id: "user-1",
@@ -317,10 +319,12 @@ describe("Auth Integration Tests", () => {
         body: JSON.stringify({ identifier: "deactivated@example.com", password: "Test1234" }),
       });
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(401);
+      const body = await res.json() as any;
+      expect(body.message).toBe("Email/username atau password salah");
     });
 
-    it("should return 403 for deleted user", async () => {
+    it("should return 401 for deleted user (anti-enumeration)", async () => {
       const hash = await bcrypt.hash("Test1234", 1);
       (prisma.user.findUnique as any).mockResolvedValue({
         id: "user-1",
@@ -340,7 +344,9 @@ describe("Auth Integration Tests", () => {
         body: JSON.stringify({ identifier: "deleted@example.com", password: "Test1234" }),
       });
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(401);
+      const body = await res.json() as any;
+      expect(body.message).toBe("Email/username atau password salah");
     });
 
     it("should login with username", async () => {
@@ -392,6 +398,50 @@ describe("Auth Integration Tests", () => {
         method: "POST",
       });
       expect(res.status).toBe(401);
+    });
+
+    it("should invalidate access JWT after logout", async () => {
+      const hash = await bcrypt.hash("Test1234", 1);
+      const userId = "logout-test-user";
+      const token = await generateToken({
+        sub: userId,
+        email: "logout@test.com",
+        name: "Logout Test",
+        username: "logouttest",
+        type: "access",
+        tokenVersion: 0,
+      });
+
+      let currentTokenVersion = 0;
+
+      (prisma.user.findUnique as any).mockImplementation(async ({ where }: any) => {
+        if (where.id === userId) {
+          return { tokenVersion: currentTokenVersion, status: "ACTIVE" };
+        }
+        if (where.id === undefined) {
+          return { tokenVersion: currentTokenVersion, status: "ACTIVE" };
+        }
+        return null;
+      });
+
+      (prisma.user.update as any).mockImplementation(async ({ where, data }: any) => {
+        if (where.id === userId && data.tokenVersion?.increment) {
+          currentTokenVersion += data.tokenVersion.increment;
+          return { tokenVersion: currentTokenVersion };
+        }
+        return {};
+      });
+
+      const logoutRes = await app.request("/api/v1/auth/logout", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(logoutRes.status).toBe(200);
+
+      const verifyRes = await app.request("/api/v1/auth/me", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(verifyRes.status).toBe(401);
     });
   });
 
@@ -461,7 +511,7 @@ describe("Auth Integration Tests", () => {
       const res = await app.request("/api/v1/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: "nonexistent@example.com" }),
+        body: JSON.stringify({ identifier: "nonexistent@example.com" }),
       });
 
       expect(res.status).toBe(200);
@@ -469,11 +519,34 @@ describe("Auth Integration Tests", () => {
       expect(body.success).toBe(true);
     });
 
-    it("should return 400 for invalid email format", async () => {
+    it("should accept username identifier", async () => {
+      (prisma.user.findUnique as any).mockResolvedValue(null);
+
       const res = await app.request("/api/v1/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: "not-email" }),
+        body: JSON.stringify({ identifier: "nonexistentuser" }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json() as any;
+      expect(body.success).toBe(true);
+    });
+
+    it("should return 400 for empty identifier", async () => {
+      const res = await app.request("/api/v1/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier: "" }),
+      });
+      expect(res.status).toBe(400);
+    });
+
+    it("should return 400 for missing identifier", async () => {
+      const res = await app.request("/api/v1/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
       });
       expect(res.status).toBe(400);
     });

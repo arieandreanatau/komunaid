@@ -187,20 +187,12 @@ authRoutes.post("/login", validate(loginSchema), async (c) => {
     include: { roles: true },
   });
 
+  const GENERIC_AUTH_ERROR = "Email/username atau password salah";
+  const DUMMY_HASH = "$2a$12$XOPbrlUPQdwdJUpSrIF6X.LbE14qsMmKGhM1A8W9iqaG3vv7TD7WO";
+
   if (!user) {
-    return c.json({ success: false, message: "Email/username atau password salah" }, 401);
-  }
-
-  if (user.deletedAt) {
-    return c.json({ success: false, message: "Akun sudah dihapus" }, 403);
-  }
-
-  if (user.status === "SUSPENDED") {
-    return c.json({ success: false, message: "Akun ditangguhkan. Hubungi administrator." }, 403);
-  }
-
-  if (user.status === "DEACTIVATED") {
-    return c.json({ success: false, message: "Akun sudah dinonaktifkan" }, 403);
+    await bcrypt.compare(data.password, DUMMY_HASH);
+    return c.json({ success: false, message: GENERIC_AUTH_ERROR }, 401);
   }
 
   const isValidPassword = await bcrypt.compare(data.password, user.password);
@@ -219,7 +211,32 @@ authRoutes.post("/login", validate(loginSchema), async (c) => {
     } catch (loginErr) {
       log.error({ err: loginErr }, "failed to record login failure");
     }
-    return c.json({ success: false, message: "Email/username atau password salah" }, 401);
+    return c.json({ success: false, message: GENERIC_AUTH_ERROR }, 401);
+  }
+
+  const accountFailureReason = user.deletedAt
+    ? "ACCOUNT_DELETED"
+    : user.status === "SUSPENDED"
+      ? "ACCOUNT_SUSPENDED"
+      : user.status === "DEACTIVATED"
+        ? "ACCOUNT_DEACTIVATED"
+        : null;
+
+  if (accountFailureReason) {
+    try {
+      await prisma.loginHistory.create({
+        data: {
+          userId: user.id,
+          ipAddress,
+          userAgent,
+          success: false,
+          failureReason: accountFailureReason,
+        },
+      });
+    } catch (loginErr) {
+      log.error({ err: loginErr }, "failed to record login failure");
+    }
+    return c.json({ success: false, message: GENERIC_AUTH_ERROR }, 401);
   }
 
   const accessToken = await generateAccessToken({
@@ -422,6 +439,11 @@ authRoutes.post("/logout", authMiddleware, async (c) => {
     }
   }
 
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { tokenVersion: { increment: 1 } },
+  });
+
   await createAuditLog({
     userId: user.id,
     actionType: AuditActions.USER_LOGOUT,
@@ -560,13 +582,16 @@ authRoutes.put("/change-password", authMiddleware, validate(changePasswordSchema
 authRoutes.post("/forgot-password", validate(forgotPasswordSchema), async (c) => {
   const data = c.get("validated");
 
-  const rateLimitResult = await forgotPasswordRateLimiter(data.email.toLowerCase());
+  const rateLimitResult = await forgotPasswordRateLimiter(data.identifier.toLowerCase());
   if (!rateLimitResult.allowed) {
     return c.json({ success: false, message: "Terlalu banyak permintaan reset. Coba lagi nanti." }, 429);
   }
 
+  const isEmail = data.identifier.includes("@");
   const user = await prisma.user.findUnique({
-    where: { email: data.email },
+    where: isEmail
+      ? { email: data.identifier }
+      : { username: data.identifier },
   });
 
   if (user && !user.deletedAt && user.status === "ACTIVE") {

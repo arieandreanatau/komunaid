@@ -13,7 +13,8 @@ function generateCsrfToken(): string {
 }
 
 function verifyCsrfToken(token: string, cookieToken: string): boolean {
-  if (!token || !cookieToken || token.length !== CSRF_TOKEN_BYTES * 2) return false;
+  if (!token || !cookieToken) return false;
+  if (token.length !== CSRF_TOKEN_BYTES * 2 || cookieToken.length !== CSRF_TOKEN_BYTES * 2) return false;
   try {
     return timingSafeEqual(Buffer.from(token, "utf8"), Buffer.from(cookieToken, "utf8"));
   } catch {
@@ -44,7 +45,7 @@ export function csrfProtection() {
         secure: IS_PRODUCTION,
         sameSite: "lax",
         path: "/",
-        maxAge: 15 * 60,
+        maxAge: 60 * 60,
       }));
       c.header("X-CSRF-Token", token);
       return next();
@@ -70,7 +71,7 @@ export function csrfProtection() {
       secure: IS_PRODUCTION,
       sameSite: "lax",
       path: "/",
-      maxAge: 15 * 60,
+      maxAge: 60 * 60,
     }));
     c.header("X-CSRF-Token", newToken);
 
