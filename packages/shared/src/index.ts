@@ -35,7 +35,7 @@ export const loginSchema = z.object({
 });
 
 export const forgotPasswordSchema = z.object({
-  email: z.string().email("Email tidak valid"),
+  identifier: z.string().min(1, "Email atau username wajib diisi"),
 });
 
 export const resetPasswordSchema = z
