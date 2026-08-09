@@ -279,18 +279,20 @@ describe("User Routes", () => {
       expect(body.data.user.phone).toBe("08123");
     });
 
-    it("should return 400 for invalid avatar URL", async () => {
+    it("should accept avatar as relative path from upload endpoint", async () => {
       const token = await generateToken({ sub: "user-1", email: "u@test.com", name: "U", username: "u", type: "access" });
+      mockAuth({ id: "user-1", name: "Old", phone: null, bio: null, location: null, avatar: null });
+      (prisma.user.update as any).mockResolvedValue({
+        id: "user-1", name: "U", email: "u@test.com", phone: null, bio: null, location: null,
+        avatar: "/uploads/avatars/2026-01-01/avatar-12345.jpg",
+      });
 
       const res = await app.request("/users/profile", {
         method: "PUT",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ avatar: "not-a-url" }),
+        body: JSON.stringify({ avatar: "/uploads/avatars/2026-01-01/avatar-12345.jpg" }),
       });
-      expect(res.status).toBe(400);
-      const body = await res.json();
-      expect(body.success).toBe(false);
-      expect(body.message).toBe("Validation Error");
+      expect(res.status).toBe(200);
     });
 
     it("should create an audit log on update", async () => {
@@ -438,7 +440,8 @@ describe("User Routes", () => {
       });
       expect(res.status).toBe(400);
       const body = await res.json();
-      expect(body.message).toBe("Interests harus berupa array");
+      expect(body.success).toBe(false);
+      expect(body.message).toBe("Validation Error");
     });
 
     it("should return 400 for more than 20 interests", async () => {
@@ -453,7 +456,7 @@ describe("User Routes", () => {
       });
       expect(res.status).toBe(400);
       const body = await res.json();
-      expect(body.message).toBe("Maksimal 20 interests");
+      expect(body.success).toBe(false);
     });
 
     it("should allow exactly 20 interests", async () => {
@@ -612,6 +615,118 @@ describe("User Routes", () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       expect(res.status).toBe(200);
+    });
+  });
+
+  describe("POST /profile/photo", () => {
+    it("should return 401 without auth", async () => {
+      const formData = new FormData();
+      const blob = new Blob(["fake-image-data"], { type: "image/jpeg" });
+      formData.append("file", blob, "test.jpg");
+      const res = await app.request("/users/profile/photo", {
+        method: "POST",
+        body: formData,
+      });
+      expect(res.status).toBe(401);
+    });
+
+    it("should reject non-image file type", async () => {
+      const token = await generateToken({ sub: "u1", email: "a@b.com", name: "A", username: "a", type: "access" });
+      mockAuth();
+
+      const formData = new FormData();
+      const blob = new Blob(["file content"], { type: "text/plain" });
+      formData.append("file", blob, "test.txt");
+
+      const res = await app.request("/users/profile/photo", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.success).toBe(false);
+    });
+
+    it("should reject when no file provided", async () => {
+      const token = await generateToken({ sub: "u1", email: "a@b.com", name: "A", username: "a", type: "access" });
+      mockAuth();
+
+      const formData = new FormData();
+      const res = await app.request("/users/profile/photo", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.success).toBe(false);
+      expect(body.message).toBe("File wajib diupload");
+    });
+  });
+
+  describe("PUT /profile - Mass Assignment Prevention", () => {
+    it("should ignore role field in request body", async () => {
+      const token = await generateToken({ sub: "user-1", email: "u@test.com", name: "U", username: "u", type: "access" });
+      mockAuth({ id: "user-1", name: "Old", phone: null, bio: null, location: null, avatar: null });
+      (prisma.user.update as any).mockResolvedValue({
+        id: "user-1", name: "New Name", email: "u@test.com", phone: null, bio: null, location: null, avatar: null,
+      });
+
+      const res = await app.request("/users/profile", {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "New Name", role: "ADMIN", is_verified: true, status: "ACTIVE" }),
+      });
+      expect(res.status).toBe(200);
+
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.not.objectContaining({ role: "ADMIN", is_verified: true, status: "ACTIVE" }),
+        })
+      );
+    });
+  });
+
+  describe("PUT /change-email - Audit Trail", () => {
+    it("should reject same email as current", async () => {
+      const token = await generateToken({ sub: "user-1", email: "current@test.com", name: "U", username: "u", type: "access" });
+      mockAuth({ id: "user-1", email: "current@test.com" });
+      (prisma.user.findUnique as any).mockImplementation(async (args: any) => {
+        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0, status: "ACTIVE" };
+        if (args?.select?.email !== undefined) return { email: "current@test.com" };
+        return null;
+      });
+
+      const res = await app.request("/users/change-email", {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "current@test.com" }),
+      });
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.message).toContain("sama");
+    });
+  });
+
+  describe("PUT /change-username - Audit Trail", () => {
+    it("should reject same username as current", async () => {
+      const token = await generateToken({ sub: "user-1", email: "u@test.com", name: "U", username: "currentuser", type: "access" });
+      mockAuth({ id: "user-1", username: "currentuser" });
+      (prisma.user.findUnique as any).mockImplementation(async (args: any) => {
+        if (args?.select?.tokenVersion !== undefined) return { tokenVersion: 0, status: "ACTIVE" };
+        if (args?.select?.username !== undefined) return { username: "currentuser" };
+        return null;
+      });
+
+      const res = await app.request("/users/change-username", {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ username: "currentuser" }),
+      });
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.message).toContain("sama");
     });
   });
 });

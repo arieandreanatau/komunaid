@@ -35,7 +35,7 @@ export const loginSchema = z.object({
 });
 
 export const forgotPasswordSchema = z.object({
-  email: z.string().email("Email tidak valid"),
+  identifier: z.string().min(1, "Email atau username wajib diisi"),
 });
 
 export const resetPasswordSchema = z
@@ -115,10 +115,15 @@ export const updateCategorySchema = createCategorySchema.partial();
 
 export const updateProfileSchema = z.object({
   name: z.string().min(2).max(100).optional(),
-  phone: z.string().optional(),
+  phone: z
+    .string()
+    .max(20, "Nomor telepon maksimal 20 karakter")
+    .regex(/^[\d\s\-+().]+$/, "Format nomor telepon tidak valid")
+    .optional()
+    .or(z.literal("")),
   bio: z.string().max(500).optional(),
   location: z.string().max(100).optional(),
-  avatar: z.string().url().optional(),
+  avatar: z.string().min(1).max(2000).optional(),
 });
 
 // ==========================================

@@ -225,16 +225,20 @@ describe("loginSchema", () => {
 // forgotPasswordSchema
 // ==========================================
 describe("forgotPasswordSchema", () => {
-  it("should accept valid email", () => {
-    expectValid(forgotPasswordSchema, { email: "john@example.com" });
+  it("should accept valid email identifier", () => {
+    expectValid(forgotPasswordSchema, { identifier: "john@example.com" });
   });
 
-  it("should reject invalid email", () => {
-    expectInvalid(forgotPasswordSchema, { email: "not-email" });
+  it("should accept valid username identifier", () => {
+    expectValid(forgotPasswordSchema, { identifier: "johndoe" });
   });
 
-  it("should reject empty email", () => {
-    expectInvalid(forgotPasswordSchema, { email: "" });
+  it("should reject empty identifier", () => {
+    expectInvalid(forgotPasswordSchema, { identifier: "" });
+  });
+
+  it("should reject missing identifier", () => {
+    expectInvalid(forgotPasswordSchema, {});
   });
 });
 
@@ -444,8 +448,12 @@ describe("updateProfileSchema", () => {
     expectValid(updateProfileSchema, { avatar: "https://example.com/avatar.jpg" });
   });
 
-  it("should reject invalid avatar URL", () => {
-    expectInvalid(updateProfileSchema, { avatar: "not-a-url" });
+  it("should accept relative avatar path from upload", () => {
+    expectValid(updateProfileSchema, { avatar: "/uploads/avatars/2026-01-01/avatar-12345.jpg" });
+  });
+
+  it("should reject empty avatar string via min(1)", () => {
+    expectInvalid(updateProfileSchema, { avatar: "" });
   });
 
   it("should accept valid bio", () => {
@@ -454,6 +462,22 @@ describe("updateProfileSchema", () => {
 
   it("should reject name shorter than 2 chars", () => {
     expectInvalid(updateProfileSchema, { name: "J" });
+  });
+
+  it("should accept valid phone number", () => {
+    expectValid(updateProfileSchema, { phone: "+62 812-3456-7890" });
+  });
+
+  it("should accept phone with digits, spaces, dashes, parens", () => {
+    expectValid(updateProfileSchema, { phone: "(021) 123-4567" });
+  });
+
+  it("should reject phone with invalid characters", () => {
+    expectInvalid(updateProfileSchema, { phone: "abc!@#$" });
+  });
+
+  it("should accept empty phone string (clear phone)", () => {
+    expectValid(updateProfileSchema, { phone: "" });
   });
 });
 

@@ -1,13 +1,16 @@
 import { Hono } from "hono";
 import { prisma } from "@komunaid/database";
-import { updateProfileSchema, paginationSchema } from "@komunaid/shared";
-import { MAX_INTERESTS, COMMUNITY_STATUSES } from "@komunaid/constants";
+import { updateProfileSchema, updateInterestsSchema } from "@komunaid/shared";
+import { COMMUNITY_STATUSES, ALLOWED_IMAGE_TYPES } from "@komunaid/constants";
 import { authMiddleware } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import { createAuditLog, AuditActions } from "../services/audit";
 import { parsePagination, paginatedResponse } from "../lib/pagination";
 import { sanitizeText } from "../lib/xss";
+import { createChildLogger } from "../lib/logger";
 import type { AuthUser } from "../middleware/auth";
+
+const log = createChildLogger("users");
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
 
@@ -188,7 +191,7 @@ userRoutes.put("/profile", authMiddleware, validate(updateProfileSchema), async 
 
   const sanitizedData: Record<string, unknown> = {};
   if (data.name !== undefined) sanitizedData.name = sanitizeText(data.name) || data.name;
-  if (data.phone !== undefined) sanitizedData.phone = data.phone;
+  if (data.phone !== undefined) sanitizedData.phone = data.phone === "" ? null : data.phone;
   if (data.bio !== undefined) sanitizedData.bio = sanitizeText(data.bio);
   if (data.location !== undefined) sanitizedData.location = sanitizeText(data.location) || data.location;
   if (data.avatar !== undefined) sanitizedData.avatar = data.avatar;
@@ -238,26 +241,123 @@ userRoutes.put("/profile", authMiddleware, validate(updateProfileSchema), async 
 });
 
 // ==========================================
+// UPLOAD PROFILE PHOTO
+// ==========================================
+
+const PHOTO_MAX_SIZE = 5 * 1024 * 1024;
+const PHOTO_MAGIC_SIGNATURES: Record<string, number[][]> = {
+  "image/jpeg": [[0xff, 0xd8, 0xff]],
+  "image/png": [[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]],
+  "image/webp": [[0x52, 0x49, 0x46, 0x46]],
+};
+
+function matchesPhotoMagic(buffer: Buffer, mime: string): boolean {
+  const signatures = PHOTO_MAGIC_SIGNATURES[mime];
+  if (!signatures || signatures.length === 0) return false;
+  return signatures.some((sig) => buffer.length >= sig.length && sig.every((byte, i) => buffer[i] === byte));
+}
+
+function getPhotoExtension(mime: string): string {
+  const map: Record<string, string> = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+  };
+  return map[mime] || ".bin";
+}
+
+function generatePhotoFilename(mime: string): string {
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substring(2, 10);
+  return `avatar-${timestamp}-${random}${getPhotoExtension(mime)}`;
+}
+
+userRoutes.post("/profile/photo", authMiddleware, async (c) => {
+  try {
+    const authUser = c.get("user");
+    const body = await c.req.parseBody();
+    const file = body["file"];
+
+    if (!file || typeof file === "string") {
+      return c.json({ success: false, message: "File wajib diupload" }, 400);
+    }
+
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      return c.json({ success: false, message: "Tipe file tidak didukung. Gunakan JPG, PNG, atau WebP" }, 400);
+    }
+
+    if (file.size > PHOTO_MAX_SIZE) {
+      return c.json({ success: false, message: "Ukuran file maksimal 5MB" }, 400);
+    }
+
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    if (!matchesPhotoMagic(buffer, file.type)) {
+      return c.json({ success: false, message: "File tidak valid (format tidak cocok)" }, 400);
+    }
+
+    const { writeFile, mkdir } = await import("node:fs/promises");
+    const { join } = await import("node:path");
+
+    const uploadDir = process.env.UPLOAD_DIR || join(process.cwd(), "uploads");
+    const dateDir = new Date().toISOString().split("T")[0];
+    const targetDir = join(uploadDir, "avatars", dateDir);
+
+    await mkdir(targetDir, { recursive: true });
+
+    const filename = generatePhotoFilename(file.type);
+    const filePath = join(targetDir, filename);
+
+    await writeFile(filePath, buffer);
+
+    const baseUrl = process.env.UPLOAD_BASE_URL || `/uploads/avatars/${dateDir}`;
+    const fileUrl = `${baseUrl}/${filename}`;
+
+    const before = await prisma.user.findUnique({
+      where: { id: authUser.id },
+      select: { avatar: true },
+    });
+
+    const updated = await prisma.user.update({
+      where: { id: authUser.id },
+      data: { avatar: fileUrl },
+      select: { id: true, avatar: true, name: true },
+    });
+
+    await createAuditLog({
+      userId: authUser.id,
+      actionType: AuditActions.USER_UPDATE_PROFILE_PHOTO,
+      resourceName: "User",
+      resourceId: authUser.id,
+      beforeData: { avatar: before?.avatar },
+      afterData: { avatar: fileUrl },
+    });
+
+    return c.json({
+      success: true,
+      message: "Foto profile berhasil diupdate",
+      data: { avatar: updated.avatar },
+    });
+  } catch (err: unknown) {
+    log.error({ err }, "profile photo upload failed");
+    return c.json({ success: false, message: "Gagal upload foto profile" }, 500);
+  }
+});
+
+// ==========================================
 // UPDATE INTERESTS
 // ==========================================
 
-userRoutes.put("/interests", authMiddleware, async (c) => {
+userRoutes.put("/interests", authMiddleware, validate(updateInterestsSchema), async (c) => {
   const authUser = c.get("user");
-  const body = await c.req.json();
-
-  const { interests } = body as { interests: string[] };
-
-  if (!Array.isArray(interests)) {
-    return c.json({ success: false, message: "Interests harus berupa array" }, 400);
-  }
-
-  if (interests.length > MAX_INTERESTS) {
-    return c.json({ success: false, message: `Maksimal ${MAX_INTERESTS} interests` }, 400);
-  }
+  const data = c.get("validated");
+  const { interests } = data as { interests: string[] };
 
   const sanitizedInterests = interests
     .map((i) => sanitizeText(i))
-    .filter((i): i is string => i !== null && i.length > 0);
+    .filter((i): i is string => i !== null && i.length > 0)
+    .slice(0, 20);
 
   await prisma.userInterest.deleteMany({
     where: { userId: authUser.id },
@@ -277,13 +377,13 @@ userRoutes.put("/interests", authMiddleware, async (c) => {
     actionType: AuditActions.USER_UPDATE_INTERESTS,
     resourceName: "User",
     resourceId: authUser.id,
-    afterData: { interests },
+    afterData: { interests: sanitizedInterests },
   });
 
   return c.json({
     success: true,
     message: "Interests berhasil diupdate",
-    data: { interests },
+    data: { interests: sanitizedInterests },
   });
 });
 
@@ -299,6 +399,15 @@ userRoutes.put("/change-email", authMiddleware, async (c) => {
     return c.json({ success: false, message: "Format email tidak valid" }, 400);
   }
 
+  const current = await prisma.user.findUnique({
+    where: { id: authUser.id },
+    select: { email: true },
+  });
+
+  if (current?.email === email) {
+    return c.json({ success: false, message: "Email sama dengan email saat ini" }, 400);
+  }
+
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
     return c.json({ success: false, message: "Email sudah digunakan" }, 409);
@@ -311,9 +420,10 @@ userRoutes.put("/change-email", authMiddleware, async (c) => {
 
   await createAuditLog({
     userId: authUser.id,
-    actionType: AuditActions.USER_UPDATE_PROFILE,
+    actionType: AuditActions.USER_CHANGE_EMAIL,
     resourceName: "User",
     resourceId: authUser.id,
+    beforeData: { email: current?.email },
     afterData: { email },
   });
 
@@ -332,6 +442,15 @@ userRoutes.put("/change-username", authMiddleware, async (c) => {
     return c.json({ success: false, message: "Username 3-20 karakter, huruf/angka/underscore" }, 400);
   }
 
+  const current = await prisma.user.findUnique({
+    where: { id: authUser.id },
+    select: { username: true },
+  });
+
+  if (current?.username === username) {
+    return c.json({ success: false, message: "Username sama dengan username saat ini" }, 400);
+  }
+
   const existing = await prisma.user.findUnique({ where: { username } });
   if (existing) {
     return c.json({ success: false, message: "Username sudah digunakan" }, 409);
@@ -344,9 +463,10 @@ userRoutes.put("/change-username", authMiddleware, async (c) => {
 
   await createAuditLog({
     userId: authUser.id,
-    actionType: AuditActions.USER_UPDATE_PROFILE,
+    actionType: AuditActions.USER_CHANGE_USERNAME,
     resourceName: "User",
     resourceId: authUser.id,
+    beforeData: { username: current?.username },
     afterData: { username },
   });
 
