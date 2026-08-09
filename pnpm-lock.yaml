@@ -113,6 +113,9 @@ importers:
       '@komunaid/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@prisma/client':
+        specifier: 6.19.3
+        version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
       '@tanstack/react-query':
         specifier: ^5.64.0
         version: 5.101.2(react@19.2.7)
