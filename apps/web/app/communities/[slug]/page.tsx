@@ -169,6 +169,7 @@ export default function CommunityDetailPage() {
         <Link href={`/dashboard/communities/${community!.id}`} className="px-5 py-2.5 bg-komuna-blue text-white rounded-lg font-medium hover:bg-komuna-navy transition-colors text-sm">
           Dashboard {community!.pendingJoinRequests > 0 && <span className="ml-1 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full font-bold">{community!.pendingJoinRequests}</span>}
         </Link>
+        {!isOwner && <button onClick={handleLeave} disabled={actionLoading} className="px-5 py-2.5 border border-red-300 text-red-600 rounded-lg font-medium hover:bg-red-50 transition-colors text-sm disabled:opacity-50">Keluar</button>}
       </div>
     );
     if (isMember) return (
