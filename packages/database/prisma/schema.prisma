@@ -193,6 +193,7 @@ enum MembershipStatus {
   PENDING
   REJECTED
   BANNED
+  LEFT
 }
 
 // NOTE: The @@unique constraints below do not fully prevent duplicate join requests

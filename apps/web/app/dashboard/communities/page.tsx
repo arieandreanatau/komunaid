@@ -18,6 +18,7 @@ interface UserCommunity {
   role: string;
   status: string;
   leftAt?: string | null;
+  leftReason?: "LEFT" | "BANNED" | "REMOVED" | null;
   categories?: { id: string; name: string }[];
   memberCount?: number;
   eventCount?: number;
@@ -201,8 +202,8 @@ export default function MyCommunitiesPage() {
   const communityGroups = useMemo(() => {
     const created = profile?.createdCommunities || communities.filter((c) => c.role === "OWNER");
     const followed = profile?.followedCommunities || communities.filter((c) => c.role !== "OWNER" && !c.leftAt);
-    const past = profile?.pastCommunities || communities.filter((c) => c.role !== "OWNER" && !!c.leftAt);
-    const left = communities.filter((c) => c.leftAt || c.status === "LEFT");
+    const past = profile?.pastCommunities || communities.filter((c) => c.role !== "OWNER" && !!c.leftAt && c.leftReason !== "LEFT");
+    const left = communities.filter((c) => c.leftReason === "LEFT" || (!c.leftReason && !!c.leftAt));
     return { created, followed, past, left };
   }, [profile, communities]);
 

@@ -131,6 +131,7 @@ userRoutes.get("/profile", authMiddleware, async (c) => {
     .map((membership) => ({
       ...mapCommunity(membership),
       leftAt: membership.deletedAt,
+      leftReason: membership.status === "LEFT" ? "LEFT" : membership.status === "BANNED" ? "BANNED" : "REMOVED",
     }));
 
   return c.json({

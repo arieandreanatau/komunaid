@@ -1469,6 +1469,47 @@ communityRoutes.post(
           403
         );
       }
+      if (existingMember.status === "LEFT" || existingMember.deletedAt) {
+        const reactivated = await prisma.communityMember.update({
+          where: {
+            communityId_userId: {
+              communityId,
+              userId: authUser.id,
+            },
+          },
+          data: {
+            status: community.membershipType === "OPEN" ? "ACTIVE" : "PENDING",
+            role: "MEMBER",
+            deletedAt: null,
+            joinedAt: new Date(),
+          },
+        });
+
+        await createAuditLog({
+          userId: authUser.id,
+          actionType: AuditActions.COMMUNITY_MEMBER_JOIN,
+          resourceName: "Community",
+          resourceId: communityId,
+        });
+
+        await prisma.membershipHistory.create({
+          data: {
+            communityId,
+            userId: authUser.id,
+            action: "COMMUNITY_MEMBER_JOIN",
+            details: { communityName: community.name, rejoined: true },
+            performedBy: authUser.id,
+          },
+        });
+
+        return c.json({
+          success: true,
+          message: community.membershipType === "OPEN"
+            ? "Berhasil bergabung kembali"
+            : "Permintaan bergabung telah dikirim",
+          data: { membership: reactivated },
+        });
+      }
       return c.json({ success: false, message: "Sudah menjadi anggota" }, 409);
     }
 
@@ -1606,7 +1647,7 @@ communityRoutes.post(
           userId: authUser.id,
         },
       },
-      data: { deletedAt: new Date() },
+      data: { status: "LEFT", deletedAt: new Date() },
     });
 
     await createAuditLog({
