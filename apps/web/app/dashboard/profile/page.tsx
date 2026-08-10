@@ -1,483 +1,147 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import api from "@/lib/api";
 import { useAuth } from "@/components/auth-provider";
 
+type ProfileForm = { name: string; phone: string; bio: string; location: string };
+
+const inputClass = "mt-1.5 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 hover:border-slate-400 focus:border-komuna-blue focus:ring-2 focus:ring-komuna-blue/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-500";
+
+function ProfileSection({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6" aria-labelledby={`${title}-title`}>
+      <div className="mb-5">
+        <h2 id={`${title}-title`} className="text-base font-bold text-komuna-navy">{title}</h2>
+        {description && <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Field({ label, hint, error, children }: { label: string; hint?: string; error?: string; children: React.ReactNode }) {
+  return <div><label className="block text-sm font-semibold text-slate-700">{label}</label>{children}{error ? <p role="alert" className="mt-1.5 text-sm text-red-600">{error}</p> : hint ? <p className="mt-1.5 text-xs leading-5 text-slate-500">{hint}</p> : null}</div>;
+}
+
 export default function ProfilePage() {
   const { user, setUser } = useAuth();
   const queryClient = useQueryClient();
-  const [success, setSuccess] = useState("");
-  const [error, setError] = useState("");
-  const [showPasswordForm, setShowPasswordForm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [notice, setNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [showUsernameForm, setShowUsernameForm] = useState(false);
+  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmNewPassword: "" });
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ["profile"],
     queryFn: async () => {
-      const res = await api.get("/users/profile");
-      return res.data.data?.user || res.data.user;
+      const response = await api.get("/users/profile");
+      return response.data.data?.user || response.data.user;
     },
   });
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm({
-    values: profile ? {
-      name: profile.name || "",
-      phone: profile.phone || "",
-      bio: profile.bio || "",
-      location: profile.location || "",
-    } : undefined,
-  });
+  const { register, handleSubmit, reset, watch, formState: { errors, isDirty, isSubmitting } } = useForm<ProfileForm>({ defaultValues: { name: "", phone: "", bio: "", location: "" } });
+  const bio = watch("bio") || "";
 
-  const mutation = useMutation({
-    mutationFn: (data: Record<string, string>) => api.put("/users/profile", data),
+  useEffect(() => {
+    if (profile) reset({ name: profile.name || "", phone: profile.phone || "", bio: profile.bio || "", location: profile.location || "" });
+  }, [profile, reset]);
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const preventUnload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", preventUnload);
+    return () => window.removeEventListener("beforeunload", preventUnload);
+  }, [isDirty]);
+
+  const showNotice = (type: "success" | "error", message: string) => {
+    setNotice({ type, message });
+    window.setTimeout(() => setNotice(null), 4000);
+  };
+
+  const profileMutation = useMutation({
+    mutationFn: (data: ProfileForm) => api.put("/users/profile", data),
     onSuccess: (res) => {
-      const updatedUser = res.data.data?.user || res.data.user;
-      setUser(updatedUser);
+      const updated = res.data.data?.user || res.data.user;
+      setUser({ ...user!, ...updated });
       queryClient.invalidateQueries({ queryKey: ["profile"] });
-      setSuccess("Profile berhasil diupdate!");
-      setError("");
-      setTimeout(() => setSuccess(""), 3000);
+      reset({ name: updated.name || "", phone: updated.phone || "", bio: updated.bio || "", location: updated.location || "" });
+      showNotice("success", "Profil berhasil diperbarui.");
     },
-    onError: (err: any) => {
-      setSuccess("");
-      setError(err?.response?.data?.message || "Gagal update profile");
-      setTimeout(() => setError(""), 3000);
-    },
+    onError: () => showNotice("error", "Profil gagal diperbarui. Silakan coba lagi."),
   });
 
   const photoMutation = useMutation({
     mutationFn: async (file: File) => {
-      const formData = new FormData();
-      formData.append("file", file);
-      return api.post("/users/profile/photo", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      const formData = new FormData(); formData.append("file", file);
+      return api.post("/users/profile/photo", formData, { headers: { "Content-Type": "multipart/form-data" } });
     },
-    onSuccess: (res) => {
-      const avatar = res.data.data?.avatar;
-      if (avatar) {
-        setUser({ ...user!, avatar });
-      }
-      queryClient.invalidateQueries({ queryKey: ["profile"] });
-      setSuccess("Foto profile berhasil diupdate!");
-      setError("");
-      setTimeout(() => setSuccess(""), 3000);
-    },
-    onError: (err: any) => {
-      setSuccess("");
-      setError(err?.response?.data?.message || "Gagal upload foto");
-      setTimeout(() => setError(""), 3000);
-    },
+    onSuccess: (res) => { const avatar = res.data.data?.avatar; if (avatar) setUser({ ...user!, avatar }); queryClient.invalidateQueries({ queryKey: ["profile"] }); showNotice("success", "Foto profil berhasil diperbarui."); },
+    onError: () => showNotice("error", "Foto profil gagal diunggah."),
   });
 
   const emailMutation = useMutation({
-    mutationFn: (email: string) => api.put("/users/change-email", { email }),
-    onSuccess: (res) => {
-      queryClient.invalidateQueries({ queryKey: ["profile"] });
-      setSuccess("Email berhasil diubah!");
-      setError("");
-      setTimeout(() => setSuccess(""), 3000);
-    },
-    onError: (err: any) => {
-      setSuccess("");
-      setError(err?.response?.data?.message || "Gagal mengubah email");
-      setTimeout(() => setError(""), 3000);
-    },
+    mutationFn: (value: string) => api.put("/users/change-email", { email: value }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["profile"] }); setShowEmailForm(false); showNotice("success", "Email berhasil diubah."); },
+    onError: (err: any) => showNotice("error", err?.response?.data?.message || "Email gagal diubah."),
   });
-
   const usernameMutation = useMutation({
-    mutationFn: (username: string) => api.put("/users/change-username", { username }),
-    onSuccess: (res) => {
-      queryClient.invalidateQueries({ queryKey: ["profile"] });
-      setSuccess("Username berhasil diubah!");
-      setError("");
-      setTimeout(() => setSuccess(""), 3000);
-    },
-    onError: (err: any) => {
-      setSuccess("");
-      setError(err?.response?.data?.message || "Gagal mengubah username");
-      setTimeout(() => setError(""), 3000);
-    },
+    mutationFn: (value: string) => api.put("/users/change-username", { username: value }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["profile"] }); setShowUsernameForm(false); showNotice("success", "Username berhasil diubah."); },
+    onError: (err: any) => showNotice("error", err?.response?.data?.message || "Username gagal diubah."),
   });
-
   const passwordMutation = useMutation({
-    mutationFn: (data: { currentPassword: string; newPassword: string; confirmNewPassword: string }) =>
-      api.put("/auth/change-password", data),
-    onSuccess: () => {
-      setSuccess("Password berhasil diubah! Silakan login kembali.");
-      setError("");
-      setShowPasswordForm(false);
-      setTimeout(() => setSuccess(""), 5000);
-    },
-    onError: (err: any) => {
-      setSuccess("");
-      setError(err?.response?.data?.message || "Gagal mengubah password");
-      setTimeout(() => setError(""), 3000);
-    },
+    mutationFn: (data: typeof passwordForm) => api.put("/auth/change-password", data),
+    onSuccess: () => { setPasswordForm({ currentPassword: "", newPassword: "", confirmNewPassword: "" }); setShowPasswordForm(false); showNotice("success", "Password berhasil diubah. Silakan login kembali."); },
+    onError: (err: any) => showNotice("error", err?.response?.data?.message || "Password gagal diubah."),
   });
 
-  const interestsMutation = useMutation({
-    mutationFn: (interests: string[]) => api.put("/users/interests", { interests }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["profile"] });
-      setSuccess("Interests berhasil diupdate!");
-      setError("");
-      setTimeout(() => setSuccess(""), 3000);
-    },
-    onError: (err: any) => {
-      setSuccess("");
-      setError(err?.response?.data?.message || "Gagal update interests");
-      setTimeout(() => setError(""), 3000);
-    },
-  });
-
-  const onSubmit = (data: Record<string, string>) => {
-    setSuccess("");
-    setError("");
-    mutation.mutate(data);
-  };
-
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      setError("Ukuran file maksimal 5MB");
-      return;
-    }
-    photoMutation.mutate(file);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) showNotice("error", "Format foto harus JPG, PNG, atau WebP.");
+    else if (file.size > 5 * 1024 * 1024) showNotice("error", "Ukuran foto maksimal 5MB.");
+    else photoMutation.mutate(file);
+    event.target.value = "";
   };
 
-  const [editingEmail, setEditingEmail] = useState(false);
-  const [newEmail, setNewEmail] = useState("");
-  const [editingUsername, setEditingUsername] = useState(false);
-  const [newUsername, setNewUsername] = useState("");
-  const [editingInterests, setEditingInterests] = useState(false);
-  const [interestsText, setInterestsText] = useState("");
+  if (isLoading) return <div className="mx-auto max-w-3xl space-y-5" aria-label="Memuat profil">{[1, 2, 3, 4].map((item) => <div key={item} className="h-40 animate-pulse rounded-xl bg-slate-200" />)}</div>;
 
-  const [passwordForm, setPasswordForm] = useState({
-    currentPassword: "",
-    newPassword: "",
-    confirmNewPassword: "",
-  });
-
-  if (isLoading) {
-    return <div className="space-y-4">{[1, 2, 3].map(i => <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse" />)}</div>;
-  }
-
+  const initial = profile?.name?.trim().charAt(0).toUpperCase() || "?";
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-komuna-navy">Profile Saya</h1>
+    <div className="mx-auto max-w-3xl pb-28">
+      <div className="mb-6"><h1 className="text-2xl font-bold tracking-tight text-komuna-navy">Profil Saya</h1><p className="mt-1.5 text-sm leading-6 text-slate-600">Kelola informasi pribadi dan preferensi akun Anda.</p></div>
+      {notice && <div role="status" className={`fixed right-4 top-20 z-[60] max-w-sm rounded-lg border px-4 py-3 text-sm font-medium shadow-lg ${notice.type === "success" ? "border-teal-200 bg-teal-50 text-teal-800" : "border-red-200 bg-red-50 text-red-700"}`}>{notice.message}</div>}
 
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-        <div className="flex items-center gap-4 mb-6">
-          <div className="relative group">
-            {profile?.avatar ? (
-              <img src={profile.avatar} alt={profile.name} className="h-20 w-20 rounded-full object-cover" />
-            ) : (
-              <div className="h-20 w-20 rounded-full bg-komuna-blue flex items-center justify-center text-white text-2xl font-bold">
-                {profile?.name?.charAt(0).toUpperCase()}
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={photoMutation.isPending}
-              className="absolute inset-0 rounded-full bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
-            >
-              <span className="text-white text-xs font-medium">
-                {photoMutation.isPending ? "Upload..." : "Ubah Foto"}
-              </span>
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              onChange={handlePhotoUpload}
-              className="hidden"
-            />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">{profile?.name}</h2>
-            <p className="text-sm text-gray-500">{profile?.email}</p>
-          </div>
-        </div>
-
-        {success && (
-          <div className="bg-green-50 border border-green-200 text-green-700 text-sm p-3 rounded-lg mb-4">{success}</div>
-        )}
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm p-3 rounded-lg mb-4">{error}</div>
-        )}
-
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Nama Lengkap</label>
-            <input {...register("name", { required: "Nama wajib diisi", minLength: { value: 2, message: "Minimal 2 karakter" } })}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue" />
-            {errors.name && <p className="mt-1 text-sm text-red-500">{String(errors.name.message)}</p>}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Email</label>
-            <div className="mt-1 flex gap-2">
-              <input
-                value={editingEmail ? newEmail : profile?.email || ""}
-                onChange={(e) => setNewEmail(e.target.value)}
-                disabled={!editingEmail}
-                className={`flex-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue ${editingEmail ? "border-gray-300" : "border-gray-200 bg-gray-50 text-gray-500"}`}
-              />
-              {editingEmail ? (
-                <>
-                  <button type="button" onClick={() => { emailMutation.mutate(newEmail); setEditingEmail(false); }}
-                    className="px-3 py-2 bg-komuna-blue text-white text-sm rounded-lg hover:bg-komuna-navy">Simpan</button>
-                  <button type="button" onClick={() => setEditingEmail(false)}
-                    className="px-3 py-2 border border-gray-300 text-sm rounded-lg hover:bg-gray-50">Batal</button>
-                </>
-              ) : (
-                <button type="button" onClick={() => { setNewEmail(profile?.email || ""); setEditingEmail(true); }}
-                  className="px-3 py-2 border border-gray-300 text-sm rounded-lg hover:bg-gray-50">Ubah</button>
-              )}
+      <div className="space-y-5">
+        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+            <div className="group relative h-24 w-24 shrink-0 sm:h-28 sm:w-28">
+              {profile?.avatar ? <img src={profile.avatar} alt={`Foto profil ${profile.name}`} className="h-full w-full rounded-full object-cover" /> : <div className="flex h-full w-full items-center justify-center rounded-full bg-komuna-blue text-3xl font-bold text-white">{initial}</div>}
+              <button type="button" onClick={() => fileInputRef.current?.click()} disabled={photoMutation.isPending} className="absolute inset-0 flex rounded-full bg-komuna-navy/65 p-2 text-center text-xs font-semibold text-white opacity-0 transition-opacity focus:opacity-100 group-hover:opacity-100 disabled:opacity-100" aria-label="Ubah foto profil"><span className="m-auto">{photoMutation.isPending ? "Mengunggah..." : "Ubah Foto"}</span></button>
+              <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handlePhotoUpload} className="sr-only" />
             </div>
+            <div className="min-w-0 flex-1"><p className="text-xl font-bold text-komuna-navy">{profile?.name || "Belum tersedia"}</p><p className="mt-1 text-sm text-slate-500">@{profile?.username || "belum-tersedia"}</p><p className="mt-2 text-sm font-medium text-komuna-teal">Member KomunaID</p><button type="button" onClick={() => fileInputRef.current?.click()} disabled={photoMutation.isPending} className="mt-3 text-sm font-semibold text-komuna-blue hover:text-komuna-navy disabled:opacity-50">{photoMutation.isPending ? "Mengunggah..." : profile?.avatar ? "Ganti Foto" : "Ubah Foto"}</button><p className="mt-1 text-xs text-slate-500">JPG, PNG, atau WebP. Maksimal 5MB.</p></div>
           </div>
+        </section>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Username</label>
-            <div className="mt-1 flex gap-2">
-              <input
-                value={editingUsername ? newUsername : profile?.username || ""}
-                onChange={(e) => setNewUsername(e.target.value)}
-                disabled={!editingUsername}
-                className={`flex-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue ${editingUsername ? "border-gray-300" : "border-gray-200 bg-gray-50 text-gray-500"}`}
-              />
-              {editingUsername ? (
-                <>
-                  <button type="button" onClick={() => { usernameMutation.mutate(newUsername); setEditingUsername(false); }}
-                    className="px-3 py-2 bg-komuna-blue text-white text-sm rounded-lg hover:bg-komuna-navy">Simpan</button>
-                  <button type="button" onClick={() => setEditingUsername(false)}
-                    className="px-3 py-2 border border-gray-300 text-sm rounded-lg hover:bg-gray-50">Batal</button>
-                </>
-              ) : (
-                <button type="button" onClick={() => { setNewUsername(profile?.username || ""); setEditingUsername(true); }}
-                  className="px-3 py-2 border border-gray-300 text-sm rounded-lg hover:bg-gray-50">Ubah</button>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Telepon</label>
-            <input {...register("phone")}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue"
-              placeholder="Nomor telepon" />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Lokasi</label>
-            <input {...register("location")}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue"
-              placeholder="Kota, Provinsi" />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Bio</label>
-            <textarea {...register("bio")} rows={3}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue resize-none"
-              placeholder="Ceritakan tentang diri Anda..." />
-            <p className="mt-1 text-xs text-gray-400">Maksimal 500 karakter</p>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <button type="submit" disabled={isSubmitting}
-              className="px-6 py-2.5 bg-komuna-blue text-white text-sm font-medium rounded-lg hover:bg-komuna-navy disabled:opacity-50 transition-colors">
-              {isSubmitting ? "Menyimpan..." : "Simpan Perubahan"}
-            </button>
-          </div>
+        <form onSubmit={handleSubmit((data) => profileMutation.mutate(data))} className="space-y-5">
+          <ProfileSection title="Informasi Dasar" description="Kelola informasi yang ditampilkan pada profil Anda.">
+            <div className="space-y-5"><Field label="Nama Lengkap" error={errors.name?.message}><input {...register("name", { required: "Nama lengkap wajib diisi.", minLength: { value: 2, message: "Nama lengkap minimal 2 karakter." } })} className={inputClass} autoComplete="name" /></Field><Field label="Username" hint="Username digunakan untuk identitas akun Anda."><div className="mt-1.5 flex gap-2"><input value={profile?.username || ""} readOnly className={`${inputClass} mt-0`} /><button type="button" onClick={() => { setUsername(profile?.username || ""); setShowUsernameForm(!showUsernameForm); }} className="rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-komuna-blue/20">Ubah</button></div></Field>{showUsernameForm && <div className="rounded-lg bg-slate-50 p-4"><Field label="Username Baru"><input value={username} onChange={(event) => setUsername(event.target.value)} className={inputClass} autoComplete="username" /></Field><div className="mt-3 flex gap-2"><button type="button" onClick={() => usernameMutation.mutate(username)} disabled={usernameMutation.isPending} className="rounded-lg bg-komuna-blue px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">{usernameMutation.isPending ? "Menyimpan..." : "Simpan Username"}</button><button type="button" onClick={() => setShowUsernameForm(false)} className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-200">Batal</button></div></div>}<Field label="Bio" hint={`${bio.length} / 500`}><textarea {...register("bio", { maxLength: { value: 500, message: "Bio maksimal 500 karakter." } })} rows={5} maxLength={500} className={`${inputClass} resize-y`} placeholder="Ceritakan tentang diri Anda..." /></Field></div>
+          </ProfileSection>
+          <ProfileSection title="Informasi Kontak">
+            <div className="space-y-5"><Field label="Email" hint="Email digunakan untuk autentikasi dan notifikasi akun."><input value={profile?.email || ""} readOnly className={inputClass} aria-readonly="true" /></Field><button type="button" onClick={() => { setEmail(profile?.email || ""); setShowEmailForm(!showEmailForm); }} className="text-sm font-semibold text-komuna-blue hover:text-komuna-navy">Ubah email</button>{showEmailForm && <div className="rounded-lg bg-slate-50 p-4"><Field label="Email Baru"><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} className={inputClass} autoComplete="email" /></Field><div className="mt-3 flex gap-2"><button type="button" onClick={() => emailMutation.mutate(email)} disabled={emailMutation.isPending} className="rounded-lg bg-komuna-blue px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">{emailMutation.isPending ? "Menyimpan..." : "Simpan Email"}</button><button type="button" onClick={() => setShowEmailForm(false)} className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-200">Batal</button></div></div>}<Field label="Telepon"><input {...register("phone")} type="tel" className={inputClass} placeholder="08xxxxxxxxxx" autoComplete="tel" /></Field></div>
+          </ProfileSection>
+          <ProfileSection title="Lokasi"><Field label="Lokasi"><div className="relative mt-1.5"><svg className="pointer-events-none absolute left-3 top-3 h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg><input {...register("location")} className={`${inputClass} mt-0 pl-10`} placeholder="Masukkan lokasi Anda" autoComplete="address-level2" /></div></Field></ProfileSection>
+          <ProfileSection title="Keamanan Akun" description="Kelola keamanan akun dan password Anda."><div className="flex flex-col gap-4 rounded-lg border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between"><div><h3 className="font-semibold text-slate-800">Password</h3><p className="mt-1 text-sm text-slate-500">Password terakhir diperbarui: Belum tersedia</p></div><button type="button" onClick={() => setShowPasswordForm(!showPasswordForm)} className="rounded-lg border border-komuna-blue px-4 py-2.5 text-sm font-semibold text-komuna-blue hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-komuna-blue/20">{showPasswordForm ? "Tutup" : "Ubah Password"}</button></div>{showPasswordForm && <div className="mt-5 space-y-4 border-t border-slate-100 pt-5"><Field label="Password Saat Ini"><input type="password" value={passwordForm.currentPassword} onChange={(event) => setPasswordForm({ ...passwordForm, currentPassword: event.target.value })} className={inputClass} autoComplete="current-password" /></Field><Field label="Password Baru" hint="Minimal 8 karakter, kombinasi huruf besar, huruf kecil, dan angka."><input type="password" value={passwordForm.newPassword} onChange={(event) => setPasswordForm({ ...passwordForm, newPassword: event.target.value })} className={inputClass} autoComplete="new-password" /></Field><Field label="Konfirmasi Password Baru"><input type="password" value={passwordForm.confirmNewPassword} onChange={(event) => setPasswordForm({ ...passwordForm, confirmNewPassword: event.target.value })} className={inputClass} autoComplete="new-password" /></Field><button type="button" onClick={() => { if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmNewPassword) return showNotice("error", "Semua field password wajib diisi."); if (passwordForm.newPassword !== passwordForm.confirmNewPassword) return showNotice("error", "Password baru tidak cocok."); passwordMutation.mutate(passwordForm); }} disabled={passwordMutation.isPending} className="rounded-lg bg-komuna-blue px-4 py-2.5 text-sm font-semibold text-white hover:bg-komuna-navy disabled:opacity-50">{passwordMutation.isPending ? "Menyimpan..." : "Simpan Password"}</button></div>}</ProfileSection>
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] backdrop-blur"><div className="mx-auto flex max-w-3xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-slate-500">{isDirty ? "Perubahan belum disimpan." : "Tidak ada perubahan baru."}</p><div className="flex gap-2"><button type="button" onClick={() => reset()} disabled={!isDirty || isSubmitting} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">Batalkan</button><button type="submit" disabled={!isDirty || isSubmitting} className="rounded-lg bg-komuna-blue px-4 py-2.5 text-sm font-semibold text-white hover:bg-komuna-navy disabled:cursor-not-allowed disabled:opacity-50">{isSubmitting ? "Menyimpan..." : "Simpan Perubahan"}</button></div></div></div>
         </form>
-      </div>
-
-      {/* Interests Section */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Minat & Ketertarikan</h2>
-          <button
-            type="button"
-            onClick={() => {
-              if (editingInterests) {
-                setEditingInterests(false);
-              } else {
-                setInterestsText((profile?.interests || []).join(", "));
-                setEditingInterests(true);
-              }
-            }}
-            className="text-sm text-komuna-blue hover:underline font-medium"
-          >
-            {editingInterests ? "Batal" : "Ubah"}
-          </button>
-        </div>
-
-        {editingInterests ? (
-          <div className="space-y-3">
-            <textarea
-              value={interestsText}
-              onChange={(e) => setInterestsText(e.target.value)}
-              rows={3}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue resize-none"
-              placeholder="Masukkan minat, pisahkan dengan koma (contoh: coding, musik, olahraga)"
-            />
-            <p className="text-xs text-gray-400">Pisahkan dengan koma. Maksimal 20 minat.</p>
-            <button
-              type="button"
-              onClick={() => {
-                const interests = interestsText.split(",").map(s => s.trim()).filter(s => s.length > 0);
-                interestsMutation.mutate(interests);
-                setEditingInterests(false);
-              }}
-              disabled={interestsMutation.isPending}
-              className="px-4 py-2 bg-komuna-blue text-white text-sm font-medium rounded-lg hover:bg-komuna-navy disabled:opacity-50 transition-colors"
-            >
-              {interestsMutation.isPending ? "Menyimpan..." : "Simpan Minat"}
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {profile?.interests && profile.interests.length > 0 ? (
-              profile.interests.map((interest: string, i: number) => (
-                <span key={i} className="px-3 py-1 bg-komuna-blue/10 text-komuna-blue text-sm rounded-full">
-                  {interest}
-                </span>
-              ))
-            ) : (
-              <p className="text-sm text-gray-500">Belum ada minat yang ditambahkan.</p>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Communities Section */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Komunitas yang Diikuti</h2>
-        {profile?.communities && profile.communities.length > 0 ? (
-          <div className="space-y-3">
-            {profile.communities.map((community: any) => (
-              <div key={community.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                {community.logo ? (
-                  <img src={community.logo} alt={community.name} className="h-10 w-10 rounded-full object-cover" />
-                ) : (
-                  <div className="h-10 w-10 rounded-full bg-komuna-blue/20 flex items-center justify-center text-komuna-blue text-sm font-bold">
-                    {community.name.charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{community.name}</p>
-                  <p className="text-xs text-gray-500">{community.role}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-gray-500">Belum bergabung dengan komunitas manapun.</p>
-        )}
-      </div>
-
-      {/* Events Section */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Event yang Diikuti</h2>
-        {profile?.events && profile.events.length > 0 ? (
-          <div className="space-y-3">
-            {profile.events.map((event: any) => (
-              <div key={event.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                {event.coverImage ? (
-                  <img src={event.coverImage} alt={event.title} className="h-10 w-10 rounded-lg object-cover" />
-                ) : (
-                  <div className="h-10 w-10 rounded-lg bg-komuna-blue/20 flex items-center justify-center text-komuna-blue text-xs font-bold">
-                    Event
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{event.title}</p>
-                  <p className="text-xs text-gray-500">
-                    {new Date(event.eventDate).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
-                    {event.registrationStatus && ` - ${event.registrationStatus}`}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-gray-500">Belum terdaftar di event manapun.</p>
-        )}
-      </div>
-
-      {/* Password Section */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Ubah Password</h2>
-          <button
-            type="button"
-            onClick={() => setShowPasswordForm(!showPasswordForm)}
-            className="text-sm text-komuna-blue hover:underline font-medium"
-          >
-            {showPasswordForm ? "Batal" : "Ubah Password"}
-          </button>
-        </div>
-
-        {showPasswordForm && (
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Password Saat Ini</label>
-              <input
-                type="password"
-                value={passwordForm.currentPassword}
-                onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Password Baru</label>
-              <input
-                type="password"
-                value={passwordForm.newPassword}
-                onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue"
-              />
-              <p className="mt-1 text-xs text-gray-400">Minimal 8 karakter, kombinasi huruf besar, huruf kecil, dan angka</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Konfirmasi Password Baru</label>
-              <input
-                type="password"
-                value={passwordForm.confirmNewPassword}
-                onChange={(e) => setPasswordForm({ ...passwordForm, confirmNewPassword: e.target.value })}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmNewPassword) {
-                  setError("Semua field password wajib diisi");
-                  return;
-                }
-                if (passwordForm.newPassword !== passwordForm.confirmNewPassword) {
-                  setError("Password baru tidak cocok");
-                  return;
-                }
-                passwordMutation.mutate(passwordForm);
-              }}
-              disabled={passwordMutation.isPending}
-              className="px-6 py-2.5 bg-komuna-blue text-white text-sm font-medium rounded-lg hover:bg-komuna-navy disabled:opacity-50 transition-colors"
-            >
-              {passwordMutation.isPending ? "Menyimpan..." : "Simpan Password"}
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );
