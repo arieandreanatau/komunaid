@@ -271,7 +271,7 @@ export default function DashboardLayout({
 
       {!isCollapsed && (
         <div className="border-t border-slate-100 p-4">
-          <div className="rounded-xl bg-gradient-to-br from-blue-50 to-cyan-50 p-4">
+          <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4 max-xl:hidden">
             <p className="text-sm font-bold text-komuna-navy">Mulai Berkontribusi</p>
             <p className="mt-1 text-xs leading-relaxed text-slate-500">
               Buat komunitas atau bergabung dengan komunitas yang sesuai dengan minatmu.
@@ -289,7 +289,7 @@ export default function DashboardLayout({
                   href="/communities/create"
                   className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-komuna-blue px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-komuna-navy"
                 >
-                  + Buat Komunitas
+                  Buat Komunitas
                 </Link>
               )}
               <Link
