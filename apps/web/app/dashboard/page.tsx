@@ -301,8 +301,6 @@ export default function DashboardPage() {
   const followedCommunities = profile.followedCommunities || profile.communities || [];
   const registeredEvents = profile.events || [];
   const savedEventsCount = profile.savedEventsCount ?? profile.savedEvents?.length ?? 0;
-  const createdCommunities = profile.createdCommunities || [];
-  const hasCreateCommunityPermission = true;
   const upcomingRegisteredEvents = registeredEvents
     .filter((event) => new Date(event.eventDate).getTime() >= new Date().setHours(0, 0, 0, 0))
     .sort((a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime());
@@ -352,7 +350,6 @@ export default function DashboardPage() {
 
   const isLoadingProfile = profileQuery.isLoading;
   const isErrorProfile = profileQuery.isError;
-  const hasProfileData = !isLoadingProfile && !isErrorProfile && profileQuery.data;
 
   return (
     <div className="space-y-6 pb-8">
@@ -371,8 +368,7 @@ export default function DashboardPage() {
             ) : (
               <>
                 <h1 className="text-2xl font-bold sm:text-3xl">
-                  Selamat datang kembali{", "}
-                  {profile.name || "Member"}{profile.name ? "!" : ""}
+                  Selamat datang, {profile.name || "Member"}!
                 </h1>
                 <p className="mt-2 max-w-xl text-sm leading-6 text-blue-100">
                   Temukan komunitas baru, pantau agenda, dan ikuti aktivitas terbaru dalam satu tempat.
@@ -381,12 +377,10 @@ export default function DashboardPage() {
             )}
           </div>
           <div className="flex flex-wrap gap-2">
-            {hasCreateCommunityPermission ? (
-              <Link href="/communities/create" className="inline-flex w-fit items-center gap-2 rounded-lg border border-white/30 bg-white/10 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-white/20">
-                <Icon name="plus" className="h-4 w-4" />
-                Buat Komunitas
-              </Link>
-            ) : null}
+            <Link href="/communities/create" className="inline-flex w-fit items-center gap-2 rounded-lg border border-white/30 bg-white/10 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+              <Icon name="plus" className="h-4 w-4" />
+              Buat Komunitas
+            </Link>
             <Link href="/communities" className="inline-flex w-fit items-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-bold text-komuna-navy transition-colors hover:bg-blue-50">
               <Icon name="sparkles" className="h-4 w-4 text-komuna-blue" />
               Jelajahi Komunitas
@@ -717,7 +711,19 @@ export default function DashboardPage() {
                 </div>
               ))}
             </div>
-          ) : feed.length ? (
+           ) : notificationsQuery.isError && activitiesQuery.isError ? (
+             <div className="rounded-xl bg-red-50 p-4 text-center" role="alert">
+               <p className="text-sm text-red-600">Aktivitas dan notifikasi gagal dimuat.</p>
+               <button
+                 type="button"
+                 onClick={() => { notificationsQuery.refetch(); activitiesQuery.refetch(); }}
+                 className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-red-700 hover:text-red-900"
+               >
+                 <Icon name="refresh" className="h-3.5 w-3.5" />
+                 Coba Lagi
+               </button>
+             </div>
+           ) : feed.length ? (
             <div className="divide-y divide-slate-100">
               {feed.map((item) => {
                 const style = FEED_STYLES[item.kind];
@@ -738,7 +744,19 @@ export default function DashboardPage() {
                 );
               })}
             </div>
-          ) : (
+           ) : notificationsQuery.isError || activitiesQuery.isError ? (
+             <div className="rounded-xl bg-amber-50 p-4 text-center" role="status">
+               <p className="text-sm text-amber-700">Sebagian pembaruan belum dapat dimuat.</p>
+               <button
+                 type="button"
+                 onClick={() => { if (notificationsQuery.isError) notificationsQuery.refetch(); if (activitiesQuery.isError) activitiesQuery.refetch(); }}
+                 className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-amber-800 hover:text-amber-950"
+               >
+                 <Icon name="refresh" className="h-3.5 w-3.5" />
+                 Coba Lagi
+               </button>
+             </div>
+           ) : (
             <p className="rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">Belum ada aktivitas atau notifikasi.</p>
           )}
         </div>

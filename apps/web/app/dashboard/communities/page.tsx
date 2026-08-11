@@ -9,6 +9,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Pagination } from "@/components/pagination";
+import { useToast } from "@/components/ui/toast";
 
 interface UserCommunity {
   id: string;
@@ -55,6 +56,7 @@ const STATUS_LABELS: Record<string, string> = {
   DRAFT: "Draft",
   INACTIVE: "Nonaktif",
   ARCHIVED: "Arsip",
+  SUSPENDED: "Ditangguhkan",
   PENDING: "Menunggu",
   APPROVED: "Disetujui",
   REJECTED: "Ditolak",
@@ -67,6 +69,7 @@ const STATUS_VARIANT: Record<string, string> = {
   DRAFT: "default",
   INACTIVE: "archived",
   ARCHIVED: "archived",
+  SUSPENDED: "rejected",
   PENDING: "pending",
   REJECTED: "rejected",
   REVISION_REQUIRED: "pending",
@@ -74,9 +77,12 @@ const STATUS_VARIANT: Record<string, string> = {
 
 const CREATED_FILTERS = [
   { value: "all", label: "Semua" },
-  { value: "ACTIVE", label: "Aktif" },
   { value: "DRAFT", label: "Draft" },
-  { value: "INACTIVE", label: "Nonaktif" },
+  { value: "PENDING", label: "Menunggu" },
+  { value: "APPROVED", label: "Disetujui" },
+  { value: "REVISION_REQUIRED", label: "Perlu Revisi" },
+  { value: "REJECTED", label: "Ditolak" },
+  { value: "SUSPENDED", label: "Ditangguhkan" },
   { value: "ARCHIVED", label: "Arsip" },
 ];
 
@@ -180,6 +186,7 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
 
 export default function MyCommunitiesPage() {
   const { user } = useAuth();
+  const { addToast } = useToast();
   const [tab, setTab] = useState<CommunityTab>("created");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -202,8 +209,9 @@ export default function MyCommunitiesPage() {
   const communityGroups = useMemo(() => {
     const created = profile?.createdCommunities || communities.filter((c) => c.role === "OWNER");
     const followed = profile?.followedCommunities || communities.filter((c) => c.role !== "OWNER" && !c.leftAt);
-    const past = profile?.pastCommunities || communities.filter((c) => c.role !== "OWNER" && !!c.leftAt && c.leftReason !== "LEFT");
-    const left = communities.filter((c) => c.leftReason === "LEFT" || (!c.leftReason && !!c.leftAt));
+    const history = profile?.pastCommunities || communities.filter((c) => c.role !== "OWNER" && !!c.leftAt);
+    const left = history.filter((c) => c.leftReason === "LEFT" || (!c.leftReason && !!c.leftAt));
+    const past = history.filter((c) => c.leftReason !== "LEFT" && (!!c.leftReason || !c.leftAt));
     return { created, followed, past, left };
   }, [profile, communities]);
 
@@ -269,8 +277,10 @@ export default function MyCommunitiesPage() {
     setLeaving(true);
     try {
       await api.post(`/communities/${leaveTarget.id}/leave`);
-      refetch();
+      await refetch();
+      addToast("Anda telah meninggalkan komunitas.", "success");
     } catch {
+      addToast("Komunitas gagal ditinggalkan. Silakan coba lagi.", "error");
     } finally {
       setLeaving(false);
       setLeaveTarget(null);
@@ -346,8 +356,8 @@ export default function MyCommunitiesPage() {
         </div>
       )}
 
-      <div className="border-b border-slate-200" role="tablist" aria-label="Tab komunitas">
-        <div className="flex overflow-x-auto gap-0 scrollbar-hide" role="tablist">
+      <div className="border-b border-slate-200">
+        <div className="flex overflow-x-auto gap-0 scrollbar-hide" role="tablist" aria-label="Tab komunitas">
           {TABS.map((t) => (
             <button
               key={t.id}

@@ -26,9 +26,17 @@ export function ConfirmDialog({
   loading = false,
 }: ConfirmDialogProps) {
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const previousActiveElement = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    if (open) cancelRef.current?.focus();
+    if (!open) return;
+    previousActiveElement.current = document.activeElement as HTMLElement;
+    document.body.style.overflow = "hidden";
+    cancelRef.current?.focus();
+    return () => {
+      document.body.style.overflow = "";
+      previousActiveElement.current?.focus();
+    };
   }, [open]);
 
   useEffect(() => {

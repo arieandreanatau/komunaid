@@ -6,6 +6,8 @@ import { useAuth } from "@/components/auth-provider";
 import api from "@/lib/api";
 import { Pagination } from "@/components/pagination";
 import { Badge } from "@/components/ui/badge";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 
 interface Submission {
   id: string;
@@ -240,6 +242,7 @@ function ApprovalTimeline({
 
 export default function MySubmissionsPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { addToast } = useToast();
 
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
@@ -248,6 +251,7 @@ export default function MySubmissionsPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
+  const [submitTarget, setSubmitTarget] = useState<Submission | null>(null);
 
   const fetchSubmissions = useCallback(async () => {
     try {
@@ -276,16 +280,18 @@ export default function MySubmissionsPage() {
     }
   }, [authLoading, isAuthenticated, fetchSubmissions]);
 
-  const handleSubmit = async (id: string) => {
-    if (!confirm("Yakin ingin mengajukan komunitas ini untuk review?")) return;
+  const handleSubmit = async () => {
+    if (!submitTarget) return;
     try {
-      setSubmittingId(id);
-      await api.post(`/communities/${id}/submit`);
-      fetchSubmissions();
+      setSubmittingId(submitTarget.id);
+      await api.post(`/communities/${submitTarget.id}/submit`);
+      await fetchSubmissions();
+      addToast("Pengajuan komunitas berhasil dikirim.", "success");
     } catch (err: any) {
-      alert(err?.response?.data?.message || "Gagal mengajukan komunitas.");
+      addToast(err?.response?.data?.message || "Gagal mengajukan komunitas.", "error");
     } finally {
       setSubmittingId(null);
+      setSubmitTarget(null);
     }
   };
 
@@ -454,7 +460,7 @@ export default function MySubmissionsPage() {
                             Edit
                           </Link>
                           <button
-                            onClick={() => handleSubmit(submission.id)}
+                            onClick={() => setSubmitTarget(submission)}
                             disabled={submittingId === submission.id}
                             className="px-4 py-2 text-sm font-medium text-white bg-komuna-blue rounded-lg hover:bg-komuna-navy disabled:opacity-50 transition-colors inline-flex items-center gap-2"
                           >
@@ -475,7 +481,7 @@ export default function MySubmissionsPage() {
                             Perbaiki Pengajuan
                           </Link>
                           <button
-                            onClick={() => handleSubmit(submission.id)}
+                            onClick={() => setSubmitTarget(submission)}
                             disabled={submittingId === submission.id}
                             className="px-4 py-2 text-sm font-medium text-white bg-komuna-blue rounded-lg hover:bg-komuna-navy disabled:opacity-50 transition-colors inline-flex items-center gap-2"
                           >
@@ -523,6 +529,17 @@ export default function MySubmissionsPage() {
       {totalPages > 1 && (
         <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
       )}
+      <ConfirmDialog
+        open={!!submitTarget}
+        title="Kirim Pengajuan Komunitas?"
+        message={`Pengajuan ${submitTarget?.name || "komunitas"} akan dikirim untuk review.`}
+        confirmLabel="Kirim Pengajuan"
+        cancelLabel="Batal"
+        variant="primary"
+        loading={!!submittingId}
+        onConfirm={handleSubmit}
+        onCancel={() => setSubmitTarget(null)}
+      />
     </div>
   );
 }

@@ -60,9 +60,8 @@ export default function DashboardLayout({
   const [collapsed, setCollapsed] = useState(false);
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
-  const [approvedCommunity, setApprovedCommunity] = useState<Community | null>(null);
-  const [approvedOrganization, setApprovedOrganization] = useState<Organization | null>(null);
   const sidebarRef = useRef<HTMLElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   const { data: unreadCount = 0 } = useQuery<number>({
     queryKey: ["notifications", "unread-count"],
     enabled: isAuthenticated,
@@ -72,6 +71,20 @@ export default function DashboardLayout({
     },
     refetchInterval: 60000,
   });
+  const { data: profile } = useQuery<UserProfile>({
+    queryKey: ["profile"],
+    enabled: isAuthenticated,
+    queryFn: async () => {
+      const response = await api.get("/users/profile");
+      return response.data.data?.user || response.data.user;
+    },
+  });
+  const approvedCommunity = profile?.communities?.find(
+    (community) => community.role === "OWNER" && community.status === "APPROVED"
+  ) || null;
+  const approvedOrganization = profile?.organizations?.find(
+    (organization) => organization.role === "OWNER" && organization.status === "APPROVED"
+  ) || null;
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -99,35 +112,6 @@ export default function DashboardLayout({
   }, []);
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      if (isAuthenticated) {
-        try {
-          const response = await api.get("/users/profile");
-          const profile: UserProfile = response.data.data?.user || response.data.user;
-          const ownedApproved = profile.communities?.find(
-            (c) => c.role === "OWNER" && c.status === "APPROVED"
-          );
-          if (ownedApproved) {
-            setApprovedCommunity(ownedApproved);
-          }
-          if (profile.organizations) {
-            const ownedApprovedOrg = profile.organizations.find(
-              (o) => o.role === "OWNER" && o.status === "APPROVED"
-            );
-            if (ownedApprovedOrg) {
-              setApprovedOrganization(ownedApprovedOrg);
-            }
-          }
-        } catch (error) {
-          console.error("Failed to fetch profile:", error);
-        }
-      }
-    };
-
-    fetchProfile();
-  }, [isAuthenticated]);
-
-  useEffect(() => {
     setSidebarOpen(false);
   }, [pathname]);
 
@@ -136,8 +120,15 @@ export default function DashboardLayout({
       if (e.key === "Escape") setSidebarOpen(false);
     };
     if (sidebarOpen) {
+      const menuButton = menuButtonRef.current;
+      document.body.style.overflow = "hidden";
       document.addEventListener("keydown", handleEscape);
-      return () => document.removeEventListener("keydown", handleEscape);
+      window.requestAnimationFrame(() => sidebarRef.current?.focus());
+      return () => {
+        document.body.style.overflow = "";
+        document.removeEventListener("keydown", handleEscape);
+        menuButton?.focus();
+      };
     }
   }, [sidebarOpen]);
 
@@ -213,15 +204,19 @@ export default function DashboardLayout({
     ...(communityManagementSection.items.length > 0 ? [communityManagementSection] : []),
     ...(organizationManagementSection.items.length > 0 ? [organizationManagementSection] : []),
   ];
+  const activeHref = allSections
+    .flatMap((section) => section.items)
+    .filter((item) => pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`)))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
 
   const renderSidebarItem = (item: SidebarItem, isCollapsed: boolean) => {
-    const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
+    const isActive = item.href === activeHref;
     return (
       <Link
         key={item.href}
         href={item.href}
         onClick={() => setSidebarOpen(false)}
-        className={`relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+        className={`relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-komuna-blue focus-visible:ring-offset-1 ${
           isCollapsed ? "justify-center px-2" : ""
         } ${
           isActive
@@ -230,6 +225,7 @@ export default function DashboardLayout({
         }`}
         title={isCollapsed ? item.label : undefined}
         aria-label={isCollapsed ? item.label : undefined}
+        aria-current={isActive ? "page" : undefined}
       >
         <SidebarIcon path={item.icon} className="h-5 w-5 shrink-0" />
         {!isCollapsed && <span className="truncate">{item.label}</span>}
@@ -337,7 +333,7 @@ export default function DashboardLayout({
             <button
               type="button"
               onClick={toggleCollapsed}
-              className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-komuna-blue"
               aria-label={collapsed ? "Perluas sidebar" : "Sembunyikan sidebar"}
               title={collapsed ? "Perluas sidebar" : "Sembunyikan sidebar"}
             >
@@ -358,9 +354,13 @@ export default function DashboardLayout({
         {/* Mobile Sidebar Toggle */}
         <div className="lg:hidden fixed bottom-4 left-4 z-40">
           <button
+            ref={menuButtonRef}
+            type="button"
             aria-label={sidebarOpen ? "Tutup menu dashboard" : "Buka menu dashboard"}
+            aria-expanded={sidebarOpen}
+            aria-controls="mobile-dashboard-sidebar"
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="flex h-12 w-12 items-center justify-center rounded-full bg-komuna-blue text-white shadow-lg transition-colors hover:bg-komuna-navy"
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-komuna-blue text-white shadow-lg transition-colors hover:bg-komuna-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-komuna-blue focus-visible:ring-offset-2"
           >
             {sidebarOpen ? (
               <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -383,7 +383,9 @@ export default function DashboardLayout({
               aria-hidden="true"
             />
             <aside
+              id="mobile-dashboard-sidebar"
               ref={sidebarRef}
+              tabIndex={-1}
               className="absolute left-0 top-0 bottom-0 flex w-72 flex-col bg-white shadow-2xl transition-transform"
               role="dialog"
               aria-modal="true"
@@ -392,6 +394,7 @@ export default function DashboardLayout({
               <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
                 <span className="text-sm font-bold text-komuna-navy">Menu Dashboard</span>
                 <button
+                  type="button"
                   aria-label="Tutup menu dashboard"
                   onClick={() => setSidebarOpen(false)}
                   className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"

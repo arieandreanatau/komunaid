@@ -16,6 +16,15 @@ export async function mockCommunities(page: Page, data: unknown[] = []) {
 }
 
 export async function mockEvents(page: Page, data: unknown[] = []) {
+  // Public pages mount Header/AuthProvider, which requests auth/me on load.
+  // Keep event-list E2E isolated from the local Hono API and its DB.
+  await page.route("**/api/v1/auth/me", async (route) => {
+    await route.fulfill({
+      status: 401,
+      contentType: "application/json",
+      body: JSON.stringify({ message: "Unauthorized" }),
+    });
+  });
   await page.route("**/api/v1/events*", async (route) => {
     await route.fulfill({
       status: 200,
@@ -24,6 +33,14 @@ export async function mockEvents(page: Page, data: unknown[] = []) {
         data,
         pagination: { total: data.length, totalPages: 1, page: 1, limit: 12 },
       }),
+    });
+  });
+  // Route handlers execute newest-first in Playwright. Detail must override list.
+  await page.route(/\/api\/v1\/events\/[^/?]+(?:\?.*)?$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ data: data[0] || null }),
     });
   });
 }
@@ -71,6 +88,13 @@ export async function mockLoginSuccess(page: Page, userData?: object) {
           token: "mock.jwt.token",
         },
       }),
+    });
+  });
+  await page.route("**/api/v1/auth/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ data: { user: defaultUser } }),
     });
   });
 }

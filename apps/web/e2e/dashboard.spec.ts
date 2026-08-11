@@ -1,13 +1,21 @@
 import { test, expect } from "@playwright/test";
 import { mockLoginSuccess, mockProfile } from "./helpers/api";
+import { SignJWT } from "jose";
 
-function setAuthCookie(page: import("@playwright/test").Page) {
-  const fakeToken =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9." +
-    btoa(JSON.stringify({ sub: "user1", exp: Math.floor(Date.now() / 1000) + 3600 })) +
-    ".fake";
+async function setAuthCookie(page: import("@playwright/test").Page) {
+  const token = await new SignJWT({
+    email: "test@example.com",
+    name: "Test User",
+    type: "access",
+    roles: ["MEMBER"],
+  })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject("user1")
+    .setIssuedAt()
+    .setExpirationTime("1h")
+    .sign(new TextEncoder().encode(process.env.JWT_SECRET || "test-playwright-jwt-secret"));
   return page.context().addCookies([
-    { name: "token", value: fakeToken, domain: "localhost", path: "/" },
+    { name: "token", value: token, domain: "localhost", path: "/" },
   ]);
 }
 
@@ -65,8 +73,9 @@ test.describe("Dashboard - Profile", () => {
   });
 
   test("shows create community and explore links", async ({ page }) => {
-    await expect(page.getByRole("link", { name: "Buat Komunitas" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Jelajahi Komunitas" })).toBeVisible();
+    const main = page.getByRole("main");
+    await expect(main.getByRole("link", { name: "Buat Komunitas", exact: true })).toBeVisible();
+    await expect(main.getByRole("link", { name: "Jelajahi Komunitas", exact: true })).toBeVisible();
   });
 });
 
@@ -80,7 +89,7 @@ test.describe("Dashboard - Notifications", () => {
     await setAuthCookie(page);
     await mockLoginSuccess(page);
     await mockProfile(page);
-    await page.route("**/api/v1/notifications*", async (route) => {
+    await page.route("**/api/v1/users/notifications*", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -157,23 +166,23 @@ test.describe("Dashboard - Komunitas Saya", () => {
         { id: "followed-1", name: "Komunitas Aktif", slug: "komunitas-aktif", logo: null, role: "MEMBER", status: "APPROVED" },
       ],
       pastCommunities: [
-        { id: "past-1", name: "Komunitas Lama", slug: "komunitas-lama", logo: null, role: "MEMBER", status: "APPROVED", leftAt: "2026-07-01T00:00:00.000Z" },
+        { id: "past-1", name: "Komunitas Lama", slug: "komunitas-lama", logo: null, role: "MEMBER", status: "APPROVED", leftAt: "2026-07-01T00:00:00.000Z", leftReason: "REMOVED" },
       ],
     });
     await page.goto("/dashboard/communities");
   });
 
   test("separates created, followed, and past communities", async ({ page }) => {
-    await expect(page.getByRole("tab", { name: /Komunitas Yang Saya Buat/ })).toBeVisible();
-    await expect(page.getByRole("tab", { name: /Komunitas Yang Saya Ikuti/ })).toBeVisible();
-    await expect(page.getByRole("tab", { name: /Komunitas Yang Pernah Saya Ikuti/ })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Dibuat oleh Saya" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Diikuti", exact: true })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Pernah Diikuti" })).toBeVisible();
     await expect(page.getByText("Komunitas Buatan")).toBeVisible();
 
-    await page.getByRole("tab", { name: /Komunitas Yang Saya Ikuti/ }).click();
+    await page.getByRole("tab", { name: "Diikuti", exact: true }).click();
     await expect(page.getByText("Komunitas Aktif")).toBeVisible();
 
-    await page.getByRole("tab", { name: /Komunitas Yang Pernah Saya Ikuti/ }).click();
+    await page.getByRole("tab", { name: "Pernah Diikuti" }).click();
     await expect(page.getByText("Komunitas Lama")).toBeVisible();
-    await expect(page.getByText(/Keluar 1 Jul 2026/)).toBeVisible();
+    await expect(page.getByText("Pernah bergabung")).toBeVisible();
   });
 });

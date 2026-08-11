@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { cloneElement, isValidElement, useEffect, useId, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import api from "@/lib/api";
@@ -23,7 +23,14 @@ function ProfileSection({ title, description, children }: { title: string; descr
 }
 
 function Field({ label, hint, error, children }: { label: string; hint?: string; error?: string; children: React.ReactNode }) {
-  return <div><label className="block text-sm font-semibold text-slate-700">{label}</label>{children}{error ? <p role="alert" className="mt-1.5 text-sm text-red-600">{error}</p> : hint ? <p className="mt-1.5 text-xs leading-5 text-slate-500">{hint}</p> : null}</div>;
+  const labelId = useId();
+  const control = isValidElement(children)
+    ? cloneElement(children as React.ReactElement<{ "aria-labelledby"?: string; "aria-invalid"?: boolean }>, {
+        "aria-labelledby": labelId,
+        "aria-invalid": !!error,
+      })
+    : children;
+  return <div><span id={labelId} className="block text-sm font-semibold text-slate-700">{label}</span>{control}{error ? <p role="alert" className="mt-1.5 text-sm text-red-600">{error}</p> : hint ? <p className="mt-1.5 text-xs leading-5 text-slate-500">{hint}</p> : null}</div>;
 }
 
 export default function ProfilePage() {
@@ -38,7 +45,7 @@ export default function ProfilePage() {
   const [username, setUsername] = useState("");
   const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmNewPassword: "" });
 
-  const { data: profile, isLoading } = useQuery({
+  const { data: profile, isLoading, isError, refetch } = useQuery({
     queryKey: ["profile"],
     queryFn: async () => {
       const response = await api.get("/users/profile");
@@ -112,12 +119,13 @@ export default function ProfilePage() {
   };
 
   if (isLoading) return <div className="mx-auto max-w-3xl space-y-5" aria-label="Memuat profil">{[1, 2, 3, 4].map((item) => <div key={item} className="h-40 animate-pulse rounded-xl bg-slate-200" />)}</div>;
+  if (isError) return <div className="mx-auto max-w-3xl rounded-xl border border-red-200 bg-red-50 px-5 py-12 text-center" role="alert"><h1 className="text-lg font-bold text-komuna-navy">Profil tidak dapat dimuat</h1><p className="mt-2 text-sm text-slate-600">Terjadi kendala saat mengambil data profil. Silakan coba lagi.</p><button type="button" onClick={() => refetch()} className="mt-4 rounded-lg bg-komuna-blue px-4 py-2.5 text-sm font-bold text-white hover:bg-komuna-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-komuna-blue focus-visible:ring-offset-2">Coba Lagi</button></div>;
 
   const initial = profile?.name?.trim().charAt(0).toUpperCase() || "?";
   return (
     <div className="mx-auto max-w-3xl pb-28">
       <div className="mb-6"><h1 className="text-2xl font-bold tracking-tight text-komuna-navy">Profil Saya</h1><p className="mt-1.5 text-sm leading-6 text-slate-600">Kelola informasi pribadi dan preferensi akun Anda.</p></div>
-      {notice && <div role="status" className={`fixed right-4 top-20 z-[60] max-w-sm rounded-lg border px-4 py-3 text-sm font-medium shadow-lg ${notice.type === "success" ? "border-teal-200 bg-teal-50 text-teal-800" : "border-red-200 bg-red-50 text-red-700"}`}>{notice.message}</div>}
+      {notice && <div role={notice.type === "error" ? "alert" : "status"} className={`fixed right-4 top-20 z-[60] max-w-sm rounded-lg border px-4 py-3 text-sm font-medium shadow-lg ${notice.type === "success" ? "border-teal-200 bg-teal-50 text-teal-800" : "border-red-200 bg-red-50 text-red-700"}`}>{notice.message}</div>}
 
       <div className="space-y-5">
         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
@@ -133,7 +141,7 @@ export default function ProfilePage() {
 
         <form onSubmit={handleSubmit((data) => profileMutation.mutate(data))} className="space-y-5">
           <ProfileSection title="Informasi Dasar" description="Kelola informasi yang ditampilkan pada profil Anda.">
-            <div className="space-y-5"><Field label="Nama Lengkap" error={errors.name?.message}><input {...register("name", { required: "Nama lengkap wajib diisi.", minLength: { value: 2, message: "Nama lengkap minimal 2 karakter." } })} className={inputClass} autoComplete="name" /></Field><Field label="Username" hint="Username digunakan untuk identitas akun Anda."><div className="mt-1.5 flex gap-2"><input value={profile?.username || ""} readOnly className={`${inputClass} mt-0`} /><button type="button" onClick={() => { setUsername(profile?.username || ""); setShowUsernameForm(!showUsernameForm); }} className="rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-komuna-blue/20">Ubah</button></div></Field>{showUsernameForm && <div className="rounded-lg bg-slate-50 p-4"><Field label="Username Baru"><input value={username} onChange={(event) => setUsername(event.target.value)} className={inputClass} autoComplete="username" /></Field><div className="mt-3 flex gap-2"><button type="button" onClick={() => usernameMutation.mutate(username)} disabled={usernameMutation.isPending} className="rounded-lg bg-komuna-blue px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">{usernameMutation.isPending ? "Menyimpan..." : "Simpan Username"}</button><button type="button" onClick={() => setShowUsernameForm(false)} className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-200">Batal</button></div></div>}<Field label="Bio" hint={`${bio.length} / 500`}><textarea {...register("bio", { maxLength: { value: 500, message: "Bio maksimal 500 karakter." } })} rows={5} maxLength={500} className={`${inputClass} resize-y`} placeholder="Ceritakan tentang diri Anda..." /></Field></div>
+            <div className="space-y-5"><Field label="Nama Lengkap" error={errors.name?.message}><input {...register("name", { required: "Nama lengkap wajib diisi.", minLength: { value: 2, message: "Nama lengkap minimal 2 karakter." } })} className={inputClass} autoComplete="name" /></Field><Field label="Username" hint="Username digunakan untuk identitas akun Anda."><div className="mt-1.5 flex gap-2"><input value={profile?.username || ""} readOnly aria-label="Username saat ini" className={`${inputClass} mt-0`} /><button type="button" onClick={() => { setUsername(profile?.username || ""); setShowUsernameForm(!showUsernameForm); }} className="rounded-lg border border-slate-300 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-komuna-blue/20">Ubah</button></div></Field>{showUsernameForm && <div className="rounded-lg bg-slate-50 p-4"><Field label="Username Baru"><input value={username} onChange={(event) => setUsername(event.target.value)} className={inputClass} autoComplete="username" /></Field><div className="mt-3 flex gap-2"><button type="button" onClick={() => usernameMutation.mutate(username)} disabled={usernameMutation.isPending} className="rounded-lg bg-komuna-blue px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">{usernameMutation.isPending ? "Menyimpan..." : "Simpan Username"}</button><button type="button" onClick={() => setShowUsernameForm(false)} className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-200">Batal</button></div></div>}<Field label="Bio" hint={`${bio.length} / 500`}><textarea {...register("bio", { maxLength: { value: 500, message: "Bio maksimal 500 karakter." } })} rows={5} maxLength={500} className={`${inputClass} resize-y`} placeholder="Ceritakan tentang diri Anda..." /></Field></div>
           </ProfileSection>
           <ProfileSection title="Informasi Kontak">
             <div className="space-y-5"><Field label="Email" hint="Email digunakan untuk autentikasi dan notifikasi akun."><input value={profile?.email || ""} readOnly className={inputClass} aria-readonly="true" /></Field><button type="button" onClick={() => { setEmail(profile?.email || ""); setShowEmailForm(!showEmailForm); }} className="text-sm font-semibold text-komuna-blue hover:text-komuna-navy">Ubah email</button>{showEmailForm && <div className="rounded-lg bg-slate-50 p-4"><Field label="Email Baru"><input type="email" value={email} onChange={(event) => setEmail(event.target.value)} className={inputClass} autoComplete="email" /></Field><div className="mt-3 flex gap-2"><button type="button" onClick={() => emailMutation.mutate(email)} disabled={emailMutation.isPending} className="rounded-lg bg-komuna-blue px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">{emailMutation.isPending ? "Menyimpan..." : "Simpan Email"}</button><button type="button" onClick={() => setShowEmailForm(false)} className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-200">Batal</button></div></div>}<Field label="Telepon"><input {...register("phone")} type="tel" className={inputClass} placeholder="08xxxxxxxxxx" autoComplete="tel" /></Field></div>

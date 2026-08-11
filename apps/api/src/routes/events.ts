@@ -18,13 +18,13 @@ async function getEventOrganizerRole(userId: string, event: any): Promise<string
     const membership = await prisma.communityMember.findUnique({
       where: { communityId_userId: { communityId: event.communityId, userId } },
     });
-    return membership?.role || null;
+    return membership?.status === "ACTIVE" && membership.deletedAt === null ? membership.role : null;
   }
   if (event.organizationId) {
     const membership = await prisma.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId: event.organizationId, userId } },
     });
-    return membership?.role || null;
+    return membership?.status === "ACTIVE" && membership.deletedAt === null ? membership.role : null;
   }
   return null;
 }
@@ -399,8 +399,8 @@ eventRoutes.post("/", authMiddleware, validate(createEventSchema), async (c) => 
     const membership = await prisma.communityMember.findUnique({
       where: { communityId_userId: { communityId: data.communityId, userId: authUser.id } },
     });
-    if (!membership || !["OWNER"].includes(membership.role)) {
-      return c.json({ success: false, message: "Hanya pemilik komunitas yang dapat membuat event" }, 403);
+    if (!membership || membership.status !== "ACTIVE" || membership.deletedAt !== null || !["OWNER", "ADMIN", "EVENT_MANAGER"].includes(membership.role)) {
+      return c.json({ success: false, message: "Tidak memiliki akses membuat event di komunitas ini" }, 403);
     }
   }
 
@@ -408,7 +408,7 @@ eventRoutes.post("/", authMiddleware, validate(createEventSchema), async (c) => 
     const membership = await prisma.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId: data.organizationId, userId: authUser.id } },
     });
-    if (!membership || !["OWNER", "ADMIN"].includes(membership.role)) {
+    if (!membership || membership.status !== "ACTIVE" || membership.deletedAt !== null || !["OWNER", "ADMIN"].includes(membership.role)) {
       return c.json({ success: false, message: "Tidak memiliki akses membuat event di organisasi ini" }, 403);
     }
   }

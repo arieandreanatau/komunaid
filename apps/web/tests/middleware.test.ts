@@ -24,6 +24,8 @@ function createMockRequest(pathname: string, token?: string): NextRequest {
 }
 
 const mockedJwtVerify = vi.mocked(jwtVerify);
+const memberPayload = { payload: { sub: "user-1", type: "access", roles: ["MEMBER"] } } as never;
+const adminPayload = { payload: { sub: "admin-1", type: "access", roles: ["PLATFORM_ADMIN"] } } as never;
 
 function expectNoRedirect(res: Response) {
   expect(res.headers.get("location")).toBeNull();
@@ -86,14 +88,14 @@ describe("middleware - admin routes", () => {
   });
 
   it("allows admin route with valid token", async () => {
-    mockedJwtVerify.mockResolvedValueOnce({} as never);
+    mockedJwtVerify.mockResolvedValueOnce(adminPayload);
     const req = createMockRequest("/admin", "valid-token");
     const res = await middleware(req);
     expectNoRedirect(res);
   });
 
   it("allows /admin/some-path with valid token", async () => {
-    mockedJwtVerify.mockResolvedValueOnce({} as never);
+    mockedJwtVerify.mockResolvedValueOnce(adminPayload);
     const req = createMockRequest("/admin/settings", "valid-token");
     const res = await middleware(req);
     expectNoRedirect(res);
@@ -108,7 +110,7 @@ describe("middleware - admin guest routes", () => {
   });
 
   it("redirects authenticated user from /admin/login to /admin", async () => {
-    mockedJwtVerify.mockResolvedValueOnce({} as never);
+    mockedJwtVerify.mockResolvedValueOnce(adminPayload);
     const req = createMockRequest("/admin/login", "valid-token");
     const res = await middleware(req);
     expect(res.status).toBe(307);
@@ -134,14 +136,14 @@ describe("middleware - protected routes", () => {
   });
 
   it("allows /dashboard with valid token", async () => {
-    mockedJwtVerify.mockResolvedValueOnce({} as never);
+    mockedJwtVerify.mockResolvedValueOnce(memberPayload);
     const req = createMockRequest("/dashboard", "valid-token");
     const res = await middleware(req);
     expectNoRedirect(res);
   });
 
   it("allows /dashboard/settings with valid token", async () => {
-    mockedJwtVerify.mockResolvedValueOnce({} as never);
+    mockedJwtVerify.mockResolvedValueOnce(memberPayload);
     const req = createMockRequest("/dashboard/settings", "valid-token");
     const res = await middleware(req);
     expectNoRedirect(res);
@@ -179,7 +181,7 @@ describe("middleware - community management routes", () => {
   });
 
   it("allows community management route with valid token", async () => {
-    mockedJwtVerify.mockResolvedValueOnce({} as never);
+    mockedJwtVerify.mockResolvedValueOnce(memberPayload);
     const req = createMockRequest("/communities/my-org/edit", "valid-token");
     const res = await middleware(req);
     expectNoRedirect(res);
@@ -205,28 +207,25 @@ describe("middleware - guest routes", () => {
     expectNoRedirect(res);
   });
 
-  it("redirects authenticated user from /login to /dashboard", async () => {
-    mockedJwtVerify.mockResolvedValueOnce({} as never);
+  it("allows authenticated user to revisit /login", async () => {
+    mockedJwtVerify.mockResolvedValueOnce(memberPayload);
     const req = createMockRequest("/login", "valid-token");
     const res = await middleware(req);
-    expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toContain("/dashboard");
+    expectNoRedirect(res);
   });
 
-  it("redirects authenticated user from /register to /dashboard", async () => {
-    mockedJwtVerify.mockResolvedValueOnce({} as never);
+  it("allows authenticated user to revisit /register", async () => {
+    mockedJwtVerify.mockResolvedValueOnce(memberPayload);
     const req = createMockRequest("/register", "valid-token");
     const res = await middleware(req);
-    expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toContain("/dashboard");
+    expectNoRedirect(res);
   });
 
-  it("redirects authenticated user from /forgot-password to /dashboard", async () => {
-    mockedJwtVerify.mockResolvedValueOnce({} as never);
+  it("allows authenticated user to revisit /forgot-password", async () => {
+    mockedJwtVerify.mockResolvedValueOnce(memberPayload);
     const req = createMockRequest("/forgot-password", "valid-token");
     const res = await middleware(req);
-    expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toContain("/dashboard");
+    expectNoRedirect(res);
   });
 });
 

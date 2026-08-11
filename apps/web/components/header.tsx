@@ -17,7 +17,7 @@ export function Header() {
   const router = useRouter();
 
   const { data: unreadNotifications = 0 } = useQuery({
-    queryKey: ["notifications", "unread-count", user?.id],
+    queryKey: ["notifications", "unread-count"],
     enabled: isAuthenticated,
     queryFn: async () => {
       const response = await api.get("/users/notifications?unread=true&page=1&limit=1");
