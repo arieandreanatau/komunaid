@@ -72,8 +72,8 @@ export default async function HomePage() {
 
             <div className="relative mx-auto w-full max-w-xl">
               <div className="absolute -right-5 -top-5 h-24 w-24 rounded-full bg-komuna-coral" />
-              <div className="relative overflow-hidden rounded-[2rem] bg-komuna-dark p-5 shadow-[0_24px_60px_rgba(11,41,41,0.2)] sm:p-7">
-                <div className="min-h-[360px] rounded-[1.4rem] bg-[linear-gradient(145deg,#0F5B52_0%,#0B2929_72%)] p-6 text-white sm:p-8">
+              <div className="relative overflow-hidden rounded-[2rem] bg-komuna-navy p-5 shadow-[0_24px_60px_rgba(10,29,77,0.22)] sm:p-7">
+                <div className="min-h-[360px] rounded-[1.4rem] bg-gradient-to-br from-komuna-navy via-komuna-blue to-komuna-teal p-6 text-white sm:p-8">
                   <div className="flex items-center justify-between">
                     <span className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold tracking-wide">MULAI DARI MINATMU</span>
                     <span className="h-10 w-10 rounded-full bg-komuna-coral" />
