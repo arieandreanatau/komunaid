@@ -56,21 +56,16 @@ function isValidTransition(from: string, to: string): boolean {
 // ==========================================
 
 eventRoutes.get("/", optionalAuthMiddleware, validate(eventQuerySchema, "query"), async (c) => {
-  const user = c.get("user");
   const q = c.get("validated");
   const page = q.page as number;
   const limit = q.limit as number;
 
-  const where: any = { deletedAt: null };
-
-  if (user) {
-    where.status = q.status && q.status.length > 0
-      ? q.status
-      : { notIn: ["DRAFT", "CANCELLED", "ARCHIVED"] };
-  } else {
-    where.status = { notIn: ["DRAFT", "CANCELLED", "ARCHIVED"] };
-    where.visibility = "PUBLIC";
-  }
+  // Public discovery never exposes another organizer's private or internal event.
+  const where: any = {
+    deletedAt: null,
+    visibility: "PUBLIC",
+    status: { notIn: ["DRAFT", "CANCELLED", "ARCHIVED"] },
+  };
 
   if (q.search) {
     where.OR = [
@@ -81,7 +76,9 @@ eventRoutes.get("/", optionalAuthMiddleware, validate(eventQuerySchema, "query")
 
   if (q.communityId) where.communityId = q.communityId;
   if (q.organizationId) where.organizationId = q.organizationId;
-  if (q.status && q.status.length > 0 && user) where.status = q.status;
+  if (q.status && !["DRAFT", "CANCELLED", "ARCHIVED"].includes(q.status)) {
+    where.status = q.status;
+  }
 
   if (q.upcoming) {
     where.eventDate = { gte: new Date() };
@@ -282,15 +279,11 @@ eventRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
     return c.json({ success: false, message: "Event tidak ditemukan" }, 404);
   }
 
-  if (!user && ["DRAFT", "CANCELLED", "ARCHIVED"].includes(event.status)) {
+  const role = user ? await getEventOrganizerRole(user.id, event) : null;
+  const isOrganizer = user ? canManageEvent(role, user.id, event) : false;
+  const isPublicEvent = event.visibility === "PUBLIC" && !["DRAFT", "CANCELLED", "ARCHIVED"].includes(event.status);
+  if (!isPublicEvent && !isOrganizer) {
     return c.json({ success: false, message: "Event tidak ditemukan" }, 404);
-  }
-
-  if (event.visibility === "PRIVATE" && (!user || (user.id !== event.createdById))) {
-    const role = user ? await getEventOrganizerRole(user.id, event) : null;
-    if (!role || !canManageEvent(role, user!.id, event)) {
-      return c.json({ success: false, message: "Event ini privat" }, 403);
-    }
   }
 
   let userRegistration = null;
@@ -305,9 +298,6 @@ eventRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
       }).then(Boolean),
     ]);
   }
-
-  const role = user ? await getEventOrganizerRole(user.id, event) : null;
-  const isOrganizer = user ? canManageEvent(role, user.id, event) : false;
 
   const galleryParsed = (() => {
     try {

@@ -46,35 +46,35 @@ export function Header() {
 
   const tentangItems = [
     { href: "/about", label: "Tentang Kami" },
-    { href: "/faq", label: "FAQ" },
     { href: "/contact", label: "Kontak" },
-    { href: "/submit", label: "Submit Pesan" },
-    { href: "/organization-structure", label: "Struktur Organisasi" },
   ];
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
-      <div className="container mx-auto flex h-16 items-center justify-between px-4">
+    <header className="sticky top-0 z-50 w-full border-b border-komuna-forest/10 bg-komuna-cream/95 backdrop-blur supports-[backdrop-filter]:bg-komuna-cream/80">
+      <div className="mx-auto flex h-[4.5rem] max-w-7xl items-center justify-between px-4">
         <Link href="/" className="flex items-center gap-2">
           <img src="/icon_komuna.png" alt="KomunaID" className="h-8 w-8" />
-          <span className="font-bold text-xl text-komuna-navy">KomunaID</span>
+          <span className="font-display text-2xl font-semibold text-komuna-dark">KomunaID</span>
         </Link>
 
         {/* Desktop Nav */}
-        <nav className="hidden md:flex items-center gap-6 text-sm font-medium" aria-label="Navigasi utama">
-          <Link href="/communities" className="text-gray-600 hover:text-komuna-blue transition-colors">
+        <nav className="hidden lg:flex items-center gap-6 text-sm font-bold" aria-label="Navigasi utama">
+          <Link href="/" className="text-komuna-dark/70 hover:text-komuna-forest transition-colors">
+            Beranda
+          </Link>
+          <Link href="/communities" className="text-komuna-dark/70 hover:text-komuna-forest transition-colors">
             Komunitas
           </Link>
-          <Link href="/events" className="text-gray-600 hover:text-komuna-blue transition-colors">
+          <Link href="/events" className="text-komuna-dark/70 hover:text-komuna-forest transition-colors">
             Event
           </Link>
-          <Link href="/volunteer" className="text-gray-600 hover:text-komuna-blue transition-colors">
+          <Link href="/volunteer" className="text-komuna-dark/70 hover:text-komuna-forest transition-colors">
             Volunteer
           </Link>
           <div className="relative" ref={tentangRef}>
             <button
               onClick={() => setTentangOpen(!tentangOpen)}
-              className="flex items-center gap-1 text-gray-600 hover:text-komuna-blue transition-colors"
+               className="flex items-center gap-1 text-komuna-dark/70 hover:text-komuna-forest transition-colors"
               aria-expanded={tentangOpen}
               aria-haspopup="true"
             >
@@ -106,6 +106,7 @@ export function Header() {
               </div>
             )}
           </div>
+          <Link href="/faq" className="text-komuna-dark/70 hover:text-komuna-forest transition-colors">FAQ</Link>
         </nav>
 
         <div className="flex items-center gap-2">
@@ -245,13 +246,13 @@ export function Header() {
             <>
               <Link
                 href="/login"
-                className="px-4 py-2 text-sm font-medium text-komuna-navy hover:text-komuna-blue transition-colors"
+                className="px-4 py-2 text-sm font-bold text-komuna-forest hover:text-komuna-dark transition-colors"
               >
                 Masuk
               </Link>
               <Link
                 href="/register"
-                className="px-4 py-2 text-sm font-medium text-white bg-komuna-blue rounded-lg hover:bg-komuna-navy transition-colors"
+                className="rounded-xl bg-komuna-forest px-4 py-2 text-sm font-bold text-white hover:bg-komuna-dark transition-colors"
               >
                 Daftar
               </Link>
@@ -260,7 +261,7 @@ export function Header() {
 
           {/* Mobile menu button */}
           <button
-            className="md:hidden p-2 rounded-lg hover:bg-gray-100"
+            className="lg:hidden p-2 rounded-lg hover:bg-komuna-soft"
             onClick={() => setMenuOpen(!menuOpen)}
             aria-label={menuOpen ? "Tutup menu" : "Buka menu"}
             aria-expanded={menuOpen}
@@ -278,7 +279,10 @@ export function Header() {
 
       {/* Mobile Nav */}
       {menuOpen && (
-        <nav className="md:hidden border-t bg-white px-4 py-3 space-y-2" aria-label="Navigasi mobile">
+        <nav className="lg:hidden border-t border-komuna-forest/10 bg-komuna-cream px-4 py-3 space-y-2" aria-label="Navigasi mobile">
+          <Link href="/" className="block py-2 text-sm font-semibold text-komuna-dark/70 hover:text-komuna-forest" onClick={() => setMenuOpen(false)}>
+            Beranda
+          </Link>
           <Link href="/communities" className="block py-2 text-sm text-gray-600 hover:text-komuna-blue" onClick={() => setMenuOpen(false)}>
             Komunitas
           </Link>
@@ -287,6 +291,9 @@ export function Header() {
           </Link>
           <Link href="/volunteer" className="block py-2 text-sm text-gray-600 hover:text-komuna-blue" onClick={() => setMenuOpen(false)}>
             Volunteer
+          </Link>
+          <Link href="/faq" className="block py-2 text-sm text-gray-600 hover:text-komuna-blue" onClick={() => setMenuOpen(false)}>
+            FAQ
           </Link>
           <div className="border-t pt-2 mt-2">
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1 px-2">Tentang</p>

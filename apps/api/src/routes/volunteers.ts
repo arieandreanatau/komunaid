@@ -24,13 +24,13 @@ async function getEventOrganizerRole(userId: string, event: any): Promise<string
     const membership = await prisma.communityMember.findUnique({
       where: { communityId_userId: { communityId: event.communityId, userId } },
     });
-    return membership?.role || null;
+    return membership?.status === "ACTIVE" && membership.deletedAt === null ? membership.role : null;
   }
   if (event.organizationId) {
     const membership = await prisma.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId: event.organizationId, userId } },
     });
-    return membership?.role || null;
+    return membership?.status === "ACTIVE" && membership.deletedAt === null ? membership.role : null;
   }
   return null;
 }
@@ -59,16 +59,20 @@ function isValidOpportunityTransition(from: string, to: string): boolean {
 // ==========================================
 
 volunteerRoutes.get("/", optionalAuthMiddleware, validate(volunteerOpportunityQuerySchema, "query"), async (c) => {
-  const user = c.get("user");
   const q = c.get("validated");
   const page = q.page as number;
   const limit = q.limit as number;
 
-  const where: any = { deletedAt: null };
-
-  if (!user) {
-    where.status = { notIn: ["DRAFT", "ARCHIVED"] };
-  }
+  // Public discovery exposes opportunities only from eligible public events.
+  const where: any = {
+    deletedAt: null,
+    status: { notIn: ["DRAFT", "ARCHIVED"] },
+    event: {
+      deletedAt: null,
+      visibility: "PUBLIC",
+      status: { notIn: ["DRAFT", "CANCELLED", "ARCHIVED"] },
+    },
+  };
 
   if (q.search) {
     where.OR = [
@@ -77,7 +81,7 @@ volunteerRoutes.get("/", optionalAuthMiddleware, validate(volunteerOpportunityQu
     ];
   }
 
-  if (q.status) where.status = q.status;
+  if (q.status && !["DRAFT", "ARCHIVED"].includes(q.status)) where.status = q.status;
   if (q.eventId) where.eventId = q.eventId;
 
   const orderBy: any = { [q.orderBy]: q.sort };
@@ -313,7 +317,7 @@ volunteerRoutes.get("/detail/:slug", optionalAuthMiddleware, async (c) => {
       event: {
         select: {
           id: true, title: true, slug: true, eventDate: true, endDate: true,
-          location: true, locationType: true, status: true,
+          location: true, locationType: true, status: true, visibility: true, createdById: true, communityId: true, organizationId: true, deletedAt: true,
           community: { select: { id: true, name: true, slug: true } },
           organization: { select: { id: true, name: true, slug: true } },
         },
@@ -328,7 +332,13 @@ volunteerRoutes.get("/detail/:slug", optionalAuthMiddleware, async (c) => {
     return c.json({ success: false, message: "Volunteer opportunity tidak ditemukan" }, 404);
   }
 
-  if (!user && ["DRAFT", "ARCHIVED"].includes(opportunity.status)) {
+  const organizerRole = user ? await getEventOrganizerRole(user.id, opportunity.event) : null;
+  const isOrganizer = user ? canManageEvent(organizerRole, user.id, opportunity.event) : false;
+  const isPublicOpportunity =
+    !["DRAFT", "ARCHIVED"].includes(opportunity.status) &&
+    opportunity.event.visibility === "PUBLIC" &&
+    !["DRAFT", "CANCELLED", "ARCHIVED"].includes(opportunity.event.status);
+  if (!isPublicOpportunity && !isOrganizer) {
     return c.json({ success: false, message: "Volunteer opportunity tidak ditemukan" }, 404);
   }
 
