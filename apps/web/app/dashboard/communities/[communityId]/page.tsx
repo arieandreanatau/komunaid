@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import api from "@/lib/api";
-import { Header } from "@/components/header";
 import { useAuth } from "@/components/auth-provider";
 
 interface DashboardData {
@@ -93,13 +92,23 @@ const statusLabel: Record<string, string> = {
   REJECTED: "Ditolak",
 };
 
-export default function CommunityDashboardPage() {
+export default function CommunityDashboardPage({
+  initialTab = "ringkasan",
+  communityIdOverride,
+  communitySlug,
+}: {
+  initialTab?: Tab;
+  communityIdOverride?: string;
+  communitySlug?: string;
+}) {
   const params = useParams();
   const router = useRouter();
-  const communityId = params.communityId as string;
+  const routeSlug = communitySlug || (params.slug as string | undefined);
+  const [resolvedCommunityId, setResolvedCommunityId] = useState(communityIdOverride);
+  const communityId = resolvedCommunityId || (routeSlug ? "" : ((params.idkomunitas || params.communityId) as string));
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<Tab>("ringkasan");
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [insight, setInsight] = useState<InsightData | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
@@ -107,6 +116,17 @@ export default function CommunityDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState(false);
+
+  useEffect(() => {
+    if (!routeSlug || communityIdOverride) return;
+    api.get(`/communities/${routeSlug}`).then(({ data }) => {
+      const community = data.data || data;
+      setResolvedCommunityId(community.id);
+    }).catch((err) => {
+      setError(err?.response?.status === 404 ? "Komunitas tidak ditemukan" : "Dashboard tidak dapat dimuat");
+      setLoading(false);
+    });
+  }, [routeSlug, communityIdOverride]);
 
   const [memberSearch, setMemberSearch] = useState("");
   const [memberRoleFilter, setMemberRoleFilter] = useState("");
@@ -139,12 +159,19 @@ export default function CommunityDashboardPage() {
       setLoading(true);
       setError(null);
       const { data } = await api.get(`/communities/${communityId}/dashboard`);
-      setDashboard(data.data || data);
-      const comm = (data.data || data).community;
-      setIsOwner(
-        (data.data || data).community.status !== undefined &&
-          (data.userRole === "OWNER" || data.isOwner === true)
-      );
+       const payload = data.data || data;
+       const comm = payload.community || payload.communityInfo;
+       if (!comm) throw Object.assign(new Error("Dashboard tidak dapat dimuat"), { response: { status: 500 } });
+       setDashboard({
+         ...payload,
+         community: comm,
+         pendingRequests: payload.pendingRequests ?? payload.pendingJoinRequestCount ?? 0,
+         activeEvents: payload.activeEvents ?? payload.activeEventCount ?? 0,
+       });
+       setIsOwner(
+         comm.status !== undefined &&
+           (payload.userRole === "OWNER" || payload.isOwner === true || comm.owner?.id === user?.id)
+       );
       setSettingsForm({
         name: comm.name,
         description: comm.description || "",
@@ -153,10 +180,14 @@ export default function CommunityDashboardPage() {
         status: comm.status,
       });
     } catch (err: any) {
-      if (err?.response?.status === 403) {
+      if (err?.response?.status === 401) {
+        setError("Login diperlukan");
+      } else if (err?.response?.status === 403) {
         setError("Anda tidak memiliki akses ke dashboard komunitas ini. Hanya pemilik atau admin yang dapat mengakses.");
+      } else if (err?.response?.status === 404) {
+        setError("Komunitas tidak ditemukan");
       } else {
-        setError(err?.response?.data?.message || "Gagal memuat dashboard.");
+        setError("Dashboard tidak dapat dimuat");
       }
     } finally {
       setLoading(false);
@@ -270,7 +301,6 @@ export default function CommunityDashboardPage() {
   if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Header />
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="h-8 w-8 border-4 border-komuna-blue border-t-transparent rounded-full animate-spin" />
         </div>
@@ -283,7 +313,6 @@ export default function CommunityDashboardPage() {
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Header />
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center max-w-md mx-auto px-4">
             <div className="h-16 w-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -311,8 +340,6 @@ export default function CommunityDashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
-
       <div className="flex">
         <aside className="hidden lg:block w-64 border-r bg-white min-h-[calc(100vh-4rem)] sticky top-16">
           <nav className="p-4 space-y-1">

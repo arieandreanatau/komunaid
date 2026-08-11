@@ -104,8 +104,11 @@ test.describe("Accessibility - Keyboard Navigation", () => {
     await page.goto("/");
     const registerLink = page.getByRole("link", { name: "Mulai Sekarang" });
     await registerLink.focus();
-    await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/register/);
+    await Promise.all([
+      page.waitForURL(/\/register(?:\?|$)/, { waitUntil: "commit" }),
+      page.keyboard.press("Enter"),
+    ]);
+    expect(page.url()).toMatch(/\/register(?:\?|$)/);
   });
 
   test("Escape key can close modals/menus", async ({ page }) => {

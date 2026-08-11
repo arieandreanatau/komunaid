@@ -33,7 +33,7 @@ export default async function HomePage() {
   return (
     <div className="min-h-screen bg-komuna-cream text-komuna-dark">
       <a
-        href="#main-content"
+        href="#content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-komuna-coral focus:px-4 focus:py-2 focus:font-semibold focus:text-white"
       >
         Langsung ke konten utama
@@ -42,7 +42,7 @@ export default async function HomePage() {
       <JsonLd type="organization" />
       <Header />
 
-      <main id="main-content">
+      <main id="content">
         <section className="relative isolate overflow-hidden bg-komuna-soft px-4 pb-16 pt-14 sm:pb-24 sm:pt-20">
           <div className="absolute -left-20 top-20 h-72 w-72 rounded-full bg-komuna-coral/20 blur-3xl" />
           <div className="absolute right-[-7rem] top-[-5rem] h-80 w-80 rounded-full border-[28px] border-komuna-forest/10" />
@@ -58,9 +58,9 @@ export default async function HomePage() {
                 Temukan komunitas, kegiatan, dan kesempatan volunteer yang sesuai dengan minatmu.
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                <Link href="/communities" className="rounded-xl bg-komuna-forest px-6 py-3.5 text-center text-sm font-bold text-white transition hover:bg-komuna-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-komuna-forest">
-                  Jelajahi Komunitas
-                </Link>
+                <a href="/register" className="rounded-xl bg-komuna-forest px-6 py-3.5 text-center text-sm font-bold text-white transition hover:bg-komuna-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-komuna-forest">
+                  Mulai Sekarang
+                </a>
                 <Link href="/events" className="rounded-xl border border-komuna-forest/20 bg-white px-6 py-3.5 text-center text-sm font-bold text-komuna-forest transition hover:border-komuna-forest hover:bg-komuna-forest/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-komuna-forest">
                   Temukan Event
                 </Link>
