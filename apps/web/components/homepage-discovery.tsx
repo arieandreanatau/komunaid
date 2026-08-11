@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useDeferredValue, useState } from "react";
+import { FormEvent, useDeferredValue, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { HomepageCommunity, HomepageEvent, HomepageVolunteer } from "@/lib/homepage-data";
 
@@ -33,17 +33,54 @@ function SectionHeading({ eyebrow, title, copy, href }: { eyebrow: string; title
 
 export function HomepageDiscovery({ communities, events, volunteers }: { communities: HomepageCommunity[]; events: HomepageEvent[]; volunteers: HomepageVolunteer[] }) {
   const router = useRouter();
+  const [discoveryCommunities, setDiscoveryCommunities] = useState(communities);
+  const [discoveryEvents, setDiscoveryEvents] = useState(events);
+  const [discoveryVolunteers, setDiscoveryVolunteers] = useState(volunteers);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("Semua");
   const deferredSearch = useDeferredValue(search.trim().toLocaleLowerCase("id-ID"));
-  const visibleCommunities = communities
+
+  useEffect(() => {
+    if (communities.length > 0 && events.length > 0 && volunteers.length > 0) return;
+
+    let cancelled = false;
+    async function loadDiscovery() {
+      const [communityResponse, eventResponse, volunteerResponse] = await Promise.allSettled([
+        fetch("/api/v1/communities?limit=24&sort=desc&orderBy=memberCount"),
+        fetch("/api/v1/events/popular/upcoming"),
+        fetch("/api/v1/volunteer?limit=6&status=OPEN"),
+      ]);
+      if (cancelled) return;
+
+      const readData = async <T,>(result: PromiseSettledResult<Response>): Promise<T | null> => {
+        if (result.status !== "fulfilled" || !result.value.ok) return null;
+        const payload = await result.value.json();
+        return payload.data ?? null;
+      };
+
+      const [loadedCommunities, loadedEvents, loadedVolunteers] = await Promise.all([
+        readData<HomepageCommunity[]>(communityResponse),
+        readData<HomepageEvent[]>(eventResponse),
+        readData<HomepageVolunteer[]>(volunteerResponse),
+      ]);
+      if (cancelled) return;
+      if (loadedCommunities) setDiscoveryCommunities(loadedCommunities);
+      if (loadedEvents) setDiscoveryEvents(loadedEvents);
+      if (loadedVolunteers) setDiscoveryVolunteers(loadedVolunteers);
+    }
+
+    void loadDiscovery();
+    return () => { cancelled = true; };
+  }, [communities.length, events.length, volunteers.length]);
+
+  const visibleCommunities = discoveryCommunities
     .filter((community) => category === "Semua" || community.categories.some((item) => item.name.localeCompare(category, "id", { sensitivity: "base" }) === 0))
     .filter((community) => !deferredSearch || [community.name, community.description, community.location, ...community.categories.map((item) => item.name)].filter(Boolean).join(" ").toLocaleLowerCase("id-ID").includes(deferredSearch))
     .slice(0, 4);
   const searchMatches = [
-    ...communities.filter((item) => [item.name, item.description].filter(Boolean).join(" ").toLocaleLowerCase("id-ID").includes(deferredSearch)).map((item) => ({ type: "Komunitas", label: item.name, href: `/communities/${item.slug}` })),
-    ...events.filter((item) => [item.title, item.description].filter(Boolean).join(" ").toLocaleLowerCase("id-ID").includes(deferredSearch)).map((item) => ({ type: "Event", label: item.title, href: `/events/${item.slug}` })),
-    ...volunteers.filter((item) => [item.title, item.description].filter(Boolean).join(" ").toLocaleLowerCase("id-ID").includes(deferredSearch)).map((item) => ({ type: "Volunteer", label: item.title, href: `/volunteer/${item.slug}` })),
+    ...discoveryCommunities.filter((item) => [item.name, item.description].filter(Boolean).join(" ").toLocaleLowerCase("id-ID").includes(deferredSearch)).map((item) => ({ type: "Komunitas", label: item.name, href: `/communities/${item.slug}` })),
+    ...discoveryEvents.filter((item) => [item.title, item.description].filter(Boolean).join(" ").toLocaleLowerCase("id-ID").includes(deferredSearch)).map((item) => ({ type: "Event", label: item.title, href: `/events/${item.slug}` })),
+    ...discoveryVolunteers.filter((item) => [item.title, item.description].filter(Boolean).join(" ").toLocaleLowerCase("id-ID").includes(deferredSearch)).map((item) => ({ type: "Volunteer", label: item.title, href: `/volunteer/${item.slug}` })),
   ].slice(0, 6);
 
   function handleSearch(event: FormEvent<HTMLFormElement>) {
@@ -91,12 +128,12 @@ export function HomepageDiscovery({ communities, events, volunteers }: { communi
 
       <section id="event" className="bg-komuna-soft px-4 py-16 sm:py-24">
         <div className="mx-auto max-w-7xl"><SectionHeading eyebrow="Kegiatan" title="Kegiatan Mendatang" copy="Pilih kegiatan dari komunitas dan ambil bagian dalam pertemuan yang bermakna." href="/events" />
-          {events.length > 0 ? <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">{events.slice(0, 3).map((event) => <Link key={event.id} href={`/events/${event.slug}`} className="group overflow-hidden rounded-2xl bg-white transition hover:-translate-y-1 hover:shadow-xl"><div className="h-44 overflow-hidden">{event.coverImage || event.thumbnail ? <img src={event.coverImage || event.thumbnail || ""} alt="" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" loading="lazy" /> : <ImageFallback label={event.title} tone="coral" />}</div><div className="p-5"><p className="text-sm font-bold text-komuna-coral">{formatDate(event.eventDate)}</p><h3 className="mt-2 line-clamp-1 text-xl font-bold text-komuna-dark">{event.title}</h3><p className="mt-2 line-clamp-1 text-sm text-komuna-forest">{event.community?.name || event.organization?.name || "KomunaID"}</p><div className="mt-4 flex justify-between gap-3 text-xs text-komuna-dark/60"><span>{event.locationType === "ONLINE" ? "Online" : event.location || "Lokasi menyusul"}</span><span>{event.registeredCount}/{event.quota} peserta</span></div><span className="mt-5 inline-block text-sm font-bold text-komuna-forest">Lihat Event &rarr;</span></div></Link>)}</div> : <div className="rounded-2xl border border-dashed border-komuna-forest/20 bg-white p-10 text-center"><p className="font-display text-2xl text-komuna-dark">Belum ada event mendatang.</p></div>}</div>
+          {discoveryEvents.length > 0 ? <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">{discoveryEvents.slice(0, 3).map((event) => <Link key={event.id} href={`/events/${event.slug}`} className="group overflow-hidden rounded-2xl bg-white transition hover:-translate-y-1 hover:shadow-xl"><div className="h-44 overflow-hidden">{event.coverImage || event.thumbnail ? <img src={event.coverImage || event.thumbnail || ""} alt="" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" loading="lazy" /> : <ImageFallback label={event.title} tone="coral" />}</div><div className="p-5"><p className="text-sm font-bold text-komuna-coral">{formatDate(event.eventDate)}</p><h3 className="mt-2 line-clamp-1 text-xl font-bold text-komuna-dark">{event.title}</h3><p className="mt-2 line-clamp-1 text-sm text-komuna-forest">{event.community?.name || event.organization?.name || "KomunaID"}</p><div className="mt-4 flex justify-between gap-3 text-xs text-komuna-dark/60"><span>{event.locationType === "ONLINE" ? "Online" : event.location || "Lokasi menyusul"}</span><span>{event.registeredCount}/{event.quota} peserta</span></div><span className="mt-5 inline-block text-sm font-bold text-komuna-forest">Lihat Event &rarr;</span></div></Link>)}</div> : <div className="rounded-2xl border border-dashed border-komuna-forest/20 bg-white p-10 text-center"><p className="font-display text-2xl text-komuna-dark">Belum ada event mendatang.</p></div>}</div>
       </section>
 
       <section id="volunteer" className="px-4 py-16 sm:py-24">
         <div className="mx-auto max-w-7xl"><SectionHeading eyebrow="Kontribusi" title="Temukan Kesempatan Volunteer" copy="Ambil bagian dalam kegiatan komunitas lewat peran volunteer yang tersedia." href="/volunteer" />
-          {volunteers.length > 0 ? <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">{volunteers.slice(0, 3).map((volunteer) => <Link key={volunteer.id} href={`/volunteer/${volunteer.slug}`} className="group rounded-2xl border border-komuna-forest/10 bg-white p-6 transition hover:-translate-y-1 hover:shadow-xl"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-komuna-soft text-2xl text-komuna-coral" aria-hidden="true">+</div><p className="mt-6 text-sm font-bold text-komuna-coral">{volunteer.status === "OPEN" ? "Pendaftaran terbuka" : volunteer.status}</p><h3 className="mt-2 line-clamp-1 text-xl font-bold text-komuna-dark">{volunteer.title}</h3><p className="mt-2 line-clamp-1 text-sm text-komuna-forest">{volunteer.event?.community?.name || volunteer.event?.title || "Komunitas"}</p><p className="mt-4 line-clamp-2 min-h-10 text-sm leading-5 text-komuna-dark/65">{volunteer.description || "Kesempatan untuk berkontribusi bersama komunitas."}</p><div className="mt-5 flex justify-between gap-3 text-xs text-komuna-dark/60"><span>{formatDate(volunteer.activityStartDate || volunteer.event?.eventDate)}</span><span className="truncate">{volunteer.event?.location || "Lokasi menyusul"}</span></div><span className="mt-5 inline-block text-sm font-bold text-komuna-forest">Lihat Detail &rarr;</span></Link>)}</div> : <div className="rounded-2xl border border-dashed border-komuna-forest/20 bg-komuna-soft p-10 text-center"><p className="font-display text-2xl text-komuna-dark">Kesempatan volunteer akan hadir di sini.</p></div>}</div>
+          {discoveryVolunteers.length > 0 ? <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">{discoveryVolunteers.slice(0, 3).map((volunteer) => <Link key={volunteer.id} href={`/volunteer/${volunteer.slug}`} className="group rounded-2xl border border-komuna-forest/10 bg-white p-6 transition hover:-translate-y-1 hover:shadow-xl"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-komuna-soft text-2xl text-komuna-coral" aria-hidden="true">+</div><p className="mt-6 text-sm font-bold text-komuna-coral">{volunteer.status === "OPEN" ? "Pendaftaran terbuka" : volunteer.status}</p><h3 className="mt-2 line-clamp-1 text-xl font-bold text-komuna-dark">{volunteer.title}</h3><p className="mt-2 line-clamp-1 text-sm text-komuna-forest">{volunteer.event?.community?.name || volunteer.event?.title || "Komunitas"}</p><p className="mt-4 line-clamp-2 min-h-10 text-sm leading-5 text-komuna-dark/65">{volunteer.description || "Kesempatan untuk berkontribusi bersama komunitas."}</p><div className="mt-5 flex justify-between gap-3 text-xs text-komuna-dark/60"><span>{formatDate(volunteer.activityStartDate || volunteer.event?.eventDate)}</span><span className="truncate">{volunteer.event?.location || "Lokasi menyusul"}</span></div><span className="mt-5 inline-block text-sm font-bold text-komuna-forest">Lihat Detail &rarr;</span></Link>)}</div> : <div className="rounded-2xl border border-dashed border-komuna-forest/20 bg-komuna-soft p-10 text-center"><p className="font-display text-2xl text-komuna-dark">Kesempatan volunteer akan hadir di sini.</p></div>}</div>
       </section>
 
       <section className="bg-komuna-forest px-4 py-16 text-white sm:py-24">
