@@ -177,7 +177,10 @@ export default function CreateEventPage() {
         setCategories(catRes.data.data || []);
         const profile = profileRes.data.data?.user || profileRes.data.user;
         const communities = (profile?.communities || [])
-          .filter((membership: ProfileMembership) => membership.status === "APPROVED" && membership.role === "OWNER")
+          .filter(
+            (membership: ProfileMembership) =>
+              membership.status === "APPROVED" && ["OWNER", "ADMIN", "EVENT_MANAGER"].includes(membership.role)
+          )
           .map((membership: ProfileMembership) => ({
             id: membership.id,
             name: membership.name,

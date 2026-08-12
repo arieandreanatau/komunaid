@@ -14,19 +14,16 @@ interface Community {
   slug: string;
   status: string;
 }
-
 interface Organization {
   id: string;
   name: string;
   slug: string;
   status: string;
 }
-
 interface UserProfile {
   communities: (Community & { role: string })[];
   organizations: (Organization & { role: string })[];
 }
-
 interface SidebarItem {
   href: string;
   label: string;
@@ -60,9 +57,8 @@ export default function DashboardLayout({
   const [collapsed, setCollapsed] = useState(false);
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
-  const [approvedCommunity, setApprovedCommunity] = useState<Community | null>(null);
-  const [approvedOrganization, setApprovedOrganization] = useState<Organization | null>(null);
   const sidebarRef = useRef<HTMLElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   const { data: unreadCount = 0 } = useQuery<number>({
     queryKey: ["notifications", "unread-count"],
     enabled: isAuthenticated,
@@ -72,6 +68,23 @@ export default function DashboardLayout({
     },
     refetchInterval: 60000,
   });
+  const { data: profile } = useQuery<UserProfile>({
+    queryKey: ["profile"],
+    enabled: isAuthenticated,
+    queryFn: async () => {
+      const response = await api.get("/users/profile");
+      return response.data.data?.user || response.data.user;
+    },
+  });
+  const managedCommunities = (profile?.communities || []).filter(
+    (community) => ["OWNER", "ADMIN"].includes(community.role)
+  );
+  const volunteerCommunities = (profile?.communities || []).filter(
+    (community) => ["OWNER", "ADMIN", "VOLUNTEER_COORDINATOR"].includes(community.role)
+  );
+  const approvedOrganization = profile?.organizations?.find(
+    (organization) => organization.role === "OWNER" && organization.status === "APPROVED"
+  ) || null;
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -99,35 +112,6 @@ export default function DashboardLayout({
   }, []);
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      if (isAuthenticated) {
-        try {
-          const response = await api.get("/users/profile");
-          const profile: UserProfile = response.data.data?.user || response.data.user;
-          const ownedApproved = profile.communities?.find(
-            (c) => c.role === "OWNER" && c.status === "APPROVED"
-          );
-          if (ownedApproved) {
-            setApprovedCommunity(ownedApproved);
-          }
-          if (profile.organizations) {
-            const ownedApprovedOrg = profile.organizations.find(
-              (o) => o.role === "OWNER" && o.status === "APPROVED"
-            );
-            if (ownedApprovedOrg) {
-              setApprovedOrganization(ownedApprovedOrg);
-            }
-          }
-        } catch (error) {
-          console.error("Failed to fetch profile:", error);
-        }
-      }
-    };
-
-    fetchProfile();
-  }, [isAuthenticated]);
-
-  useEffect(() => {
     setSidebarOpen(false);
   }, [pathname]);
 
@@ -136,10 +120,22 @@ export default function DashboardLayout({
       if (e.key === "Escape") setSidebarOpen(false);
     };
     if (sidebarOpen) {
+      const menuButton = menuButtonRef.current;
+      document.body.style.overflow = "hidden";
       document.addEventListener("keydown", handleEscape);
-      return () => document.removeEventListener("keydown", handleEscape);
+      window.requestAnimationFrame(() => sidebarRef.current?.focus());
+      return () => {
+        document.body.style.overflow = "";
+        document.removeEventListener("keydown", handleEscape);
+        menuButton?.focus();
+      };
     }
   }, [sidebarOpen]);
+
+  const communityItems: SidebarItem[] = [
+    { href: "/dashboard/communities", label: "Komunitas Saya", icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 0 014 0z" },
+    { href: "/dashboard/my-submissions", label: "Pengajuan Komunitas", icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
+  ];
 
   const baseSections: SidebarSection[] = [
     {
@@ -151,16 +147,21 @@ export default function DashboardLayout({
     {
       id: "komunitas",
       label: "Komunitas",
-      items: [
-        { href: "/dashboard/communities", label: "Komunitas Saya", icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" },
-        { href: "/dashboard/my-submissions", label: "Pengajuan Komunitas", icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
-      ],
+      items: communityItems,
     },
     {
       id: "event",
       label: "Event",
       items: [
         { href: "/dashboard/events", label: "Event Saya", icon: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" },
+      ],
+    },
+    {
+      id: "volunteer",
+      label: "Volunteer",
+      items: [
+        { href: "/dashboard/volunteers", label: "Volunteer Saya", icon: "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 011 8 0z" },
+        { href: "/dashboard/volunteers/propose", label: "Ajukan Program", icon: "M12 4v16m8-8H4" },
       ],
     },
     {
@@ -182,21 +183,6 @@ export default function DashboardLayout({
     },
   ];
 
-  const communityManagementSection: SidebarSection = {
-    id: "community-mgmt",
-    label: "Komunitas Saya",
-    items: approvedCommunity
-      ? [
-          { href: `/dashboard/communities/${approvedCommunity.id}`, label: "Dasbor Komunitas", icon: "M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" },
-          { href: `/communities/${approvedCommunity.slug}/members`, label: "Anggota Komunitas", icon: "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" },
-          { href: `/communities/${approvedCommunity.slug}/settings`, label: "Pengaturan Komunitas", icon: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z" },
-          { href: `/communities/${approvedCommunity.slug}`, label: "Detail Komunitas", icon: "M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
-          { href: "/events", label: "Acara", icon: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" },
-          { href: "/dashboard/volunteer", label: "Volunteer Saya", icon: "M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" },
-        ]
-      : [],
-  };
-
   const organizationManagementSection: SidebarSection = {
     id: "org-mgmt",
     label: "Organisasi Saya",
@@ -207,21 +193,43 @@ export default function DashboardLayout({
         ]
       : [],
   };
+  const communityManagementSections: SidebarSection[] = managedCommunities.map((community) => ({
+    id: `community-${community.id}`,
+    label: `${community.name} · ${community.role === "OWNER" ? "Pemilik" : "Admin"}`,
+    items: [
+      { href: `/dashboard/communities/${community.id}/overview`, label: "Ringkasan", icon: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" },
+      { href: `/dashboard/communities/${community.id}/members`, label: "Anggota", icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" },
+      { href: `/dashboard/communities/${community.id}/requests`, label: "Permintaan", icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
+      ...(community.role === "OWNER" ? [{ href: `/dashboard/communities/${community.id}/settings`, label: "Pengaturan", icon: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 000 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z" }] : []),
+    ],
+  }));
+  const communityVolunteerSections: SidebarSection[] = volunteerCommunities.map((community) => ({
+    id: `community-volunteer-${community.id}`,
+    label: `${community.name} · Volunteer`,
+    items: [
+      { href: `/dashboard/communities/${community.id}/volunteer`, label: "Kelola Volunteer", icon: "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" },
+    ],
+  }));
 
   const allSections = [
     ...baseSections,
-    ...(communityManagementSection.items.length > 0 ? [communityManagementSection] : []),
+    ...communityManagementSections,
+    ...communityVolunteerSections,
     ...(organizationManagementSection.items.length > 0 ? [organizationManagementSection] : []),
   ];
+  const activeHref = allSections
+    .flatMap((section) => section.items)
+    .filter((item) => pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`)))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
 
   const renderSidebarItem = (item: SidebarItem, isCollapsed: boolean) => {
-    const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
+    const isActive = item.href === activeHref;
     return (
       <Link
         key={item.href}
         href={item.href}
         onClick={() => setSidebarOpen(false)}
-        className={`relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+        className={`relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-komuna-blue focus-visible:ring-offset-1 ${
           isCollapsed ? "justify-center px-2" : ""
         } ${
           isActive
@@ -230,6 +238,7 @@ export default function DashboardLayout({
         }`}
         title={isCollapsed ? item.label : undefined}
         aria-label={isCollapsed ? item.label : undefined}
+        aria-current={isActive ? "page" : undefined}
       >
         <SidebarIcon path={item.icon} className="h-5 w-5 shrink-0" />
         {!isCollapsed && <span className="truncate">{item.label}</span>}
@@ -277,9 +286,9 @@ export default function DashboardLayout({
               Buat komunitas atau bergabung dengan komunitas yang sesuai dengan minatmu.
             </p>
             <div className="mt-3 flex flex-col gap-2">
-              {approvedCommunity ? (
-                <Link
-                  href={`/dashboard/communities/${approvedCommunity.id}`}
+               {managedCommunities[0] ? (
+                 <Link
+                   href={`/dashboard/communities/${managedCommunities[0].id}/overview`}
                   className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-komuna-blue px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-komuna-navy"
                 >
                   Kelola Komunitas
@@ -337,7 +346,7 @@ export default function DashboardLayout({
             <button
               type="button"
               onClick={toggleCollapsed}
-              className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-komuna-blue"
               aria-label={collapsed ? "Perluas sidebar" : "Sembunyikan sidebar"}
               title={collapsed ? "Perluas sidebar" : "Sembunyikan sidebar"}
             >
@@ -358,9 +367,13 @@ export default function DashboardLayout({
         {/* Mobile Sidebar Toggle */}
         <div className="lg:hidden fixed bottom-4 left-4 z-40">
           <button
+            ref={menuButtonRef}
+            type="button"
             aria-label={sidebarOpen ? "Tutup menu dashboard" : "Buka menu dashboard"}
+            aria-expanded={sidebarOpen}
+            aria-controls="mobile-dashboard-sidebar"
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="flex h-12 w-12 items-center justify-center rounded-full bg-komuna-blue text-white shadow-lg transition-colors hover:bg-komuna-navy"
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-komuna-blue text-white shadow-lg transition-colors hover:bg-komuna-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-komuna-blue focus-visible:ring-offset-2"
           >
             {sidebarOpen ? (
               <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -383,7 +396,9 @@ export default function DashboardLayout({
               aria-hidden="true"
             />
             <aside
+              id="mobile-dashboard-sidebar"
               ref={sidebarRef}
+              tabIndex={-1}
               className="absolute left-0 top-0 bottom-0 flex w-72 flex-col bg-white shadow-2xl transition-transform"
               role="dialog"
               aria-modal="true"
@@ -392,6 +407,7 @@ export default function DashboardLayout({
               <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
                 <span className="text-sm font-bold text-komuna-navy">Menu Dashboard</span>
                 <button
+                  type="button"
                   aria-label="Tutup menu dashboard"
                   onClick={() => setSidebarOpen(false)}
                   className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
@@ -416,3 +432,5 @@ export default function DashboardLayout({
     </div>
   );
 }
+
+

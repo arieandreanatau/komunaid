@@ -8,6 +8,7 @@ export interface SidebarItem {
 export interface TabItem {
   href: string;
   label: string;
+  superAdminOnly?: boolean;
 }
 
 export interface WorkspaceConfig {
@@ -86,6 +87,7 @@ export const workspaces: Record<string, WorkspaceConfig> = {
     icon: ICONS.volunteer,
     tabs: [
       { href: "/admin/volunteer", label: "Overview" },
+      { href: "/admin/volunteer/review-queue", label: "Review Queue", superAdminOnly: true },
       { href: "/admin/volunteer/programs", label: "Programs" },
       { href: "/admin/volunteer/applications", label: "Applications" },
       { href: "/admin/volunteer/attendance", label: "Attendance" },

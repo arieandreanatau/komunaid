@@ -78,52 +78,49 @@ test.describe("Landing Page", () => {
   test("displays hero section with main heading", async ({ page }) => {
     await page.goto("/");
     const heading = page.locator("h1");
-    await expect(heading).toContainText("Platform Komunitas");
-    await expect(heading).toContainText("Digital Indonesia");
+    await expect(heading).toContainText("Temukan komunitas");
+    await expect(heading).toContainText("bertumbuh bersama");
   });
 
   test("displays tagline text", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByText("Terhubung. Berdaya. Berdampak.")).toBeVisible();
+    await expect(page.getByText("Temukan komunitas, kegiatan, dan kesempatan volunteer yang sesuai dengan minatmu.").first()).toBeVisible();
   });
 
   test("has CTA buttons in hero section", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("link", { name: "Mulai Sekarang" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Jelajahi Komunitas" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Temukan Event" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Jelajahi Komunitas" }).first()).toBeVisible();
   });
 
-  test("CTA 'Mulai Sekarang' links to register", async ({ page }) => {
+  test("CTA 'Jelajahi Komunitas' links to community directory", async ({ page }) => {
     await page.goto("/");
-    const cta = page.getByRole("link", { name: "Mulai Sekarang" });
-    await expect(cta).toHaveAttribute("href", "/register");
+    const cta = page.getByRole("link", { name: "Jelajahi Komunitas" }).first();
+    await expect(cta).toHaveAttribute("href", "/communities");
   });
 
-  test("displays features section", async ({ page }) => {
+  test("displays community discovery section", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByText("Mengapa KomunaID?")).toBeVisible();
-    await expect(page.getByText("Komunitas Terstruktur")).toBeVisible();
-    await expect(page.getByText("Event Management")).toBeVisible();
-    await expect(page.getByText("Volunteer Matching")).toBeVisible();
+    await expect(page.locator("#komunitas h2")).toHaveText("Temukan Komunitas");
+    await expect(page.locator("#event h2")).toHaveText("Kegiatan Mendatang");
+    await expect(page.locator("#volunteer h2")).toHaveText("Temukan Kesempatan Volunteer");
   });
 
-  test("displays statistics section", async ({ page }) => {
+  test("does not display fake statistics", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByText("Statistik Kami")).toBeVisible();
-    await expect(page.getByText("Komunitas")).toBeVisible();
-    await expect(page.getByText("Anggota")).toBeVisible();
+    await expect(page.getByText("Statistik Kami")).toHaveCount(0);
   });
 
-  test("displays 'Jadi Relawan' section", async ({ page }) => {
+  test("displays volunteer discovery section", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByText("Jadi Relawan, Berikan Dampak")).toBeVisible();
-    await expect(page.getByRole("link", { name: "Lihat Peluang Volunteer" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Temukan Kesempatan Volunteer" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Lihat semua" }).last()).toBeVisible();
   });
 
-  test("displays 'Jadi Komunitas' section", async ({ page }) => {
+  test("displays CTA and how it works sections", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByText("Jadi Komunitas, Bangun Gerakan")).toBeVisible();
-    await expect(page.getByRole("link", { name: "Daftar Gratis" })).toBeVisible();
+    await expect(page.getByText("Cara Kerja KomunaID")).toBeVisible();
+    await expect(page.getByText("Siap menemukan komunitasmu?")).toBeVisible();
   });
 
   test("has header and footer", async ({ page }) => {
@@ -136,7 +133,7 @@ test.describe("Landing Page", () => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/");
     await expect(page.locator("h1")).toBeVisible();
-    const cta = page.getByRole("link", { name: "Mulai Sekarang" });
+    const cta = page.getByRole("link", { name: "Jelajahi Komunitas" }).first();
     await expect(cta).toBeVisible();
   });
 
@@ -144,6 +141,6 @@ test.describe("Landing Page", () => {
     await page.setViewportSize({ width: 768, height: 1024 });
     await page.goto("/");
     await expect(page.locator("h1")).toBeVisible();
-    await expect(page.getByText("Mengapa KomunaID?")).toBeVisible();
+    await expect(page.locator("#komunitas h2")).toHaveText("Temukan Komunitas");
   });
 });

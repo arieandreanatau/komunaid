@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 import { useAuthStore, type User } from "@/lib/auth";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface AuthContextType {
   user: User | null;
@@ -16,6 +17,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading, setUser, setLoading } = useAuthStore();
+  const queryClient = useQueryClient();
   const loginTimestampRef = useRef<number>(0);
 
   const fetchUser = useCallback(async () => {
@@ -44,13 +46,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [fetchUser]);
 
   const setUserSafe = useCallback((u: User | null) => {
+    if (user?.id && user.id !== u?.id) {
+      queryClient.clear();
+    }
     if (u) {
       loginTimestampRef.current = Date.now();
     } else {
       loginTimestampRef.current = 0;
     }
     setUser(u);
-  }, [setUser]);
+  }, [queryClient, setUser, user?.id]);
 
   const logout = useCallback(async () => {
     loginTimestampRef.current = 0;
@@ -59,9 +64,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // Logout even if API call fails
     } finally {
+      queryClient.clear();
       setUser(null);
     }
-  }, [setUser]);
+  }, [queryClient, setUser]);
 
   return (
     <AuthContext.Provider

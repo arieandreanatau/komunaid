@@ -190,7 +190,7 @@ describe("Events Integration Tests", () => {
       const token = await generateToken({ sub: "user-1", email: "test@test.com", name: "Test", username: "test", type: "access" });
       (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
       (prisma.communityMember.findUnique as any).mockResolvedValue({
-        role: "OWNER", communityId: "comm-1", userId: "user-1",
+        role: "OWNER", status: "ACTIVE", deletedAt: null, communityId: "comm-1", userId: "user-1",
       });
 
       const res = await app.request("/api/v1/events", {

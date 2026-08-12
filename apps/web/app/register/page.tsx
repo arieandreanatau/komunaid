@@ -112,7 +112,8 @@ export default function RegisterPage() {
                   <input
                     id="name"
                     type="text"
-                    {...register("name")}
+                    required
+                    {...register("name", { required: true })}
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue"
                     placeholder="Masukkan nama lengkap"
                   />

@@ -39,6 +39,11 @@ userRoutes.get("/profile", authMiddleware, async (c) => {
         },
       },
       organizationMembers: {
+        where: {
+          status: "ACTIVE",
+          deletedAt: null,
+          organization: { deletedAt: null },
+        },
         include: {
           organization: {
             select: { id: true, name: true, slug: true, logo: true, status: true },

@@ -45,5 +45,9 @@ export default defineConfig({
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    env: {
+      ...process.env,
+      JWT_SECRET: process.env.JWT_SECRET || "test-playwright-jwt-secret",
+    },
   },
 });

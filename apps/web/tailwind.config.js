@@ -15,6 +15,11 @@ module.exports = {
           teal: "#11A79B",
           aqua: "#00C8E6",
           white: "#FFFFFF",
+          forest: "#1D4ED8",
+          coral: "#00C8E6",
+          dark: "#0A1D4D",
+          cream: "#FFFFFF",
+          soft: "#EFF6FF",
         },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -48,6 +53,7 @@ module.exports = {
       },
       fontFamily: {
         sans: ["Plus Jakarta Sans", "sans-serif"],
+        display: ["var(--font-fraunces)", "Fraunces", "serif"],
       },
       borderRadius: {
         lg: "var(--radius)",

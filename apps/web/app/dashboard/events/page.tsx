@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { useAuth } from "@/components/auth-provider";
+import { Pagination } from "@/components/pagination";
+import { useToast } from "@/components/ui/toast";
 
 type TabKey = "all" | "created" | "registered" | "saved";
 type LifecycleFilter = "" | "upcoming" | "ongoing" | "completed" | "cancelled";
@@ -78,10 +80,9 @@ const REG_STATUS_MAP: Record<string, { label: string; className: string }> = {
 };
 
 const ATTENDANCE_MAP: Record<string, { label: string; className: string }> = {
+  NOT_CHECKED_IN: { label: "Belum Check-in", className: "bg-gray-100 text-gray-600" },
   CHECKED_IN: { label: "Hadir", className: "bg-green-100 text-green-700" },
   CHECKED_OUT: { label: "Selesai", className: "bg-blue-100 text-blue-700" },
-  ABSENT: { label: "Tidak Hadir", className: "bg-red-100 text-red-700" },
-  REGISTERED: { label: "Terdaftar", className: "bg-gray-100 text-gray-600" },
 };
 
 function getLifecycleStatus(eventDate: string, status: string): string {
@@ -434,6 +435,7 @@ export default function MyEventsPage() {
   const searchParams = useSearchParams();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const queryClient = useQueryClient();
+  const { addToast } = useToast();
 
   const [activeTab, setActiveTab] = useState<TabKey>("all");
   const [lifecycleFilter, setLifecycleFilter] = useState<LifecycleFilter>("");
@@ -444,7 +446,6 @@ export default function MyEventsPage() {
   const [createdPage, setCreatedPage] = useState(1);
   const [registeredPage, setRegisteredPage] = useState(1);
   const [savedPage, setSavedPage] = useState(1);
-  const [userCommunities, setUserCommunities] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -459,16 +460,25 @@ export default function MyEventsPage() {
     }
   }, [searchParams]);
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      api.get("/users/profile").then((res) => {
-        const profile = res.data.data?.user || res.data.user;
-        if (profile?.communities) {
-          setUserCommunities(profile.communities.map((c: any) => ({ id: c.id, name: c.name })));
-        }
-      }).catch(() => {});
-    }
-  }, [isAuthenticated]);
+  const profileQuery = useQuery({
+    queryKey: ["profile"],
+    enabled: !!isAuthenticated,
+    queryFn: async () => {
+      const response = await api.get("/users/profile");
+      return response.data.data?.user || response.data.user;
+    },
+  });
+  const manageableCommunities: Array<{ id: string; name: string; role: string; status: string }> =
+    profileQuery.data?.communities?.filter(
+      (community: { role: string; status: string }) =>
+        ["OWNER", "ADMIN", "EVENT_MANAGER"].includes(community.role) && community.status === "APPROVED"
+    ) || [];
+  const manageableOrganizations: Array<{ role: string; status: string }> =
+    profileQuery.data?.organizations?.filter(
+      (organization: { role: string; status: string }) =>
+        ["OWNER", "ADMIN"].includes(organization.role) && organization.status === "APPROVED"
+    ) || [];
+  const filterCommunities: Array<{ id: string; name: string }> = profileQuery.data?.communities || [];
 
   useEffect(() => {
     setCreatedPage(1);
@@ -534,7 +544,9 @@ export default function MyEventsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["myCreatedEvents"] });
+      addToast("Event berhasil diterbitkan.", "success");
     },
+    onError: () => addToast("Event gagal diterbitkan.", "error"),
   });
 
   const archiveMutation = useMutation({
@@ -543,7 +555,9 @@ export default function MyEventsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["myCreatedEvents"] });
+      addToast("Event berhasil diarsipkan.", "success");
     },
+    onError: () => addToast("Event gagal diarsipkan.", "error"),
   });
 
   const createdEvents: CreatedEvent[] = createdData?.data || [];
@@ -642,7 +656,7 @@ export default function MyEventsPage() {
     { value: "cancelled", label: "Dibatalkan" },
   ];
 
-  const canCreateEvent = true;
+  const canCreateEvent = manageableCommunities.length > 0 || manageableOrganizations.length > 0;
 
   if (authLoading) {
     return (
@@ -663,7 +677,7 @@ export default function MyEventsPage() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-komuna-navy">Event Saya</h1>
           <p className="text-sm text-gray-500 mt-1">Kelola event yang kamu buat, ikuti, dan simpan.</p>
@@ -724,7 +738,7 @@ export default function MyEventsPage() {
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
             <p className="text-sm font-medium text-gray-500">Mendatang</p>
             <p className="text-2xl font-bold text-komuna-navy mt-1">{allUpcomingCount}</p>
-            <p className="text-xs text-gray-400 mt-1">Event yang akan datang</p>
+            <p className="text-xs text-gray-400 mt-1">Pada data yang sedang tampil</p>
           </div>
         </div>
       )}
@@ -813,7 +827,7 @@ export default function MyEventsPage() {
               aria-label="Filter komunitas"
             >
               <option value="">Semua Komunitas</option>
-              {userCommunities.map((c) => (
+              {filterCommunities.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
@@ -892,45 +906,7 @@ export default function MyEventsPage() {
                 archivePending={archiveMutation.isPending}
               />
             ))}
-            {createdPagination.totalPages > 1 && (
-              <div className="flex items-center justify-center gap-2 pt-2">
-                <button
-                  onClick={() => setCreatedPage(Math.max(1, createdPage - 1))}
-                  disabled={createdPage <= 1}
-                  className="px-3 py-1.5 rounded-lg text-sm border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Sebelumnya
-                </button>
-                {Array.from({ length: Math.min(createdPagination.totalPages, 5) }, (_, i) => {
-                  let pageNum: number;
-                  if (createdPagination.totalPages <= 5) {
-                    pageNum = i + 1;
-                  } else if (createdPage <= 3) {
-                    pageNum = i + 1;
-                  } else if (createdPage >= createdPagination.totalPages - 2) {
-                    pageNum = createdPagination.totalPages - 4 + i;
-                  } else {
-                    pageNum = createdPage - 2 + i;
-                  }
-                  return (
-                    <button
-                      key={pageNum}
-                      onClick={() => setCreatedPage(pageNum)}
-                      className={`w-9 h-9 rounded-lg text-sm ${pageNum === createdPage ? "bg-komuna-blue text-white" : "border border-gray-200 bg-white hover:bg-gray-50"}`}
-                    >
-                      {pageNum}
-                    </button>
-                  );
-                })}
-                <button
-                  onClick={() => setCreatedPage(Math.min(createdPagination.totalPages, createdPage + 1))}
-                  disabled={createdPage >= createdPagination.totalPages}
-                  className="px-3 py-1.5 rounded-lg text-sm border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Berikutnya
-                </button>
-              </div>
-            )}
+            <Pagination page={createdPage} totalPages={createdPagination.totalPages} onPageChange={setCreatedPage} />
           </div>
         )
       ) : activeTab === "registered" ? (
@@ -967,45 +943,7 @@ export default function MyEventsPage() {
                 tab="registered"
               />
             ))}
-            {registeredPagination.totalPages > 1 && (
-              <div className="flex items-center justify-center gap-2 pt-2">
-                <button
-                  onClick={() => setRegisteredPage(Math.max(1, registeredPage - 1))}
-                  disabled={registeredPage <= 1}
-                  className="px-3 py-1.5 rounded-lg text-sm border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Sebelumnya
-                </button>
-                {Array.from({ length: Math.min(registeredPagination.totalPages, 5) }, (_, i) => {
-                  let pageNum: number;
-                  if (registeredPagination.totalPages <= 5) {
-                    pageNum = i + 1;
-                  } else if (registeredPage <= 3) {
-                    pageNum = i + 1;
-                  } else if (registeredPage >= registeredPagination.totalPages - 2) {
-                    pageNum = registeredPagination.totalPages - 4 + i;
-                  } else {
-                    pageNum = registeredPage - 2 + i;
-                  }
-                  return (
-                    <button
-                      key={pageNum}
-                      onClick={() => setRegisteredPage(pageNum)}
-                      className={`w-9 h-9 rounded-lg text-sm ${pageNum === registeredPage ? "bg-komuna-blue text-white" : "border border-gray-200 bg-white hover:bg-gray-50"}`}
-                    >
-                      {pageNum}
-                    </button>
-                  );
-                })}
-                <button
-                  onClick={() => setRegisteredPage(Math.min(registeredPagination.totalPages, registeredPage + 1))}
-                  disabled={registeredPage >= registeredPagination.totalPages}
-                  className="px-3 py-1.5 rounded-lg text-sm border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Berikutnya
-                </button>
-              </div>
-            )}
+            <Pagination page={registeredPage} totalPages={registeredPagination.totalPages} onPageChange={setRegisteredPage} />
           </div>
         )
       ) : (
@@ -1042,45 +980,7 @@ export default function MyEventsPage() {
                 tab="saved"
               />
             ))}
-            {savedPagination.totalPages > 1 && (
-              <div className="flex items-center justify-center gap-2 pt-2">
-                <button
-                  onClick={() => setSavedPage(Math.max(1, savedPage - 1))}
-                  disabled={savedPage <= 1}
-                  className="px-3 py-1.5 rounded-lg text-sm border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Sebelumnya
-                </button>
-                {Array.from({ length: Math.min(savedPagination.totalPages, 5) }, (_, i) => {
-                  let pageNum: number;
-                  if (savedPagination.totalPages <= 5) {
-                    pageNum = i + 1;
-                  } else if (savedPage <= 3) {
-                    pageNum = i + 1;
-                  } else if (savedPage >= savedPagination.totalPages - 2) {
-                    pageNum = savedPagination.totalPages - 4 + i;
-                  } else {
-                    pageNum = savedPage - 2 + i;
-                  }
-                  return (
-                    <button
-                      key={pageNum}
-                      onClick={() => setSavedPage(pageNum)}
-                      className={`w-9 h-9 rounded-lg text-sm ${pageNum === savedPage ? "bg-komuna-blue text-white" : "border border-gray-200 bg-white hover:bg-gray-50"}`}
-                    >
-                      {pageNum}
-                    </button>
-                  );
-                })}
-                <button
-                  onClick={() => setSavedPage(Math.min(savedPagination.totalPages, savedPage + 1))}
-                  disabled={savedPage >= savedPagination.totalPages}
-                  className="px-3 py-1.5 rounded-lg text-sm border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Berikutnya
-                </button>
-              </div>
-            )}
+            <Pagination page={savedPage} totalPages={savedPagination.totalPages} onPageChange={setSavedPage} />
           </div>
         )
       )}

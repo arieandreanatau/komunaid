@@ -300,6 +300,7 @@ communityRoutes.get("/meta/provinces", async (c) => {
     where: {
       deletedAt: null,
       status: "APPROVED",
+      visibility: "PUBLIC",
       province: { not: null },
     },
     select: { province: true },
@@ -411,7 +412,11 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
         take: 20,
       },
       events: {
-        where: { deletedAt: null },
+        where: {
+          deletedAt: null,
+          visibility: "PUBLIC",
+          status: { notIn: ["DRAFT", "CANCELLED", "ARCHIVED"] },
+        },
         orderBy: { eventDate: "asc" },
         take: 20,
       },

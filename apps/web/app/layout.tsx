@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
+import { Fraunces, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 
@@ -7,6 +7,12 @@ const plusJakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-plus-jakarta",
+});
+
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-fraunces",
 });
 
 export const metadata: Metadata = {
@@ -71,7 +77,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0A1D4D",
+  themeColor: "#0F5B52",
   width: "device-width",
   initialScale: 1,
 };
@@ -82,7 +88,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="id" className={plusJakarta.variable}>
+    <html lang="id" className={`${plusJakarta.variable} ${fraunces.variable}`}>
       <head>
         <link rel="icon" href="/favicon.png" sizes="any" />
         <link rel="apple-touch-icon" href="/icon_komuna.png" />

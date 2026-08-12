@@ -51,6 +51,11 @@ model User {
   volunteerApplications VolunteerApplication[]
   reviewedVolunteerApps VolunteerApplication[] @relation("ReviewedVolunteerApps")
   picAssignments        VolunteerAssignment[]
+  organizedVolunteerPrograms VolunteerProgram[] @relation("VolunteerProgramOrganizer")
+  volunteerProgramAccesses VolunteerProgramOrganizerAccess[]
+  volunteerProgramApplications VolunteerProgramApplication[]
+  reviewedVolunteerProgramApplications VolunteerProgramApplication[] @relation("ReviewedVolunteerProgramApplications")
+  reviewedVolunteerPrograms VolunteerProgram[] @relation("ReviewedVolunteerPrograms")
   communityMedias       CommunityMedia[]
   forumReplies          ForumReply[]
   loginHistory          LoginHistory[]
@@ -126,6 +131,7 @@ model Community {
   owner               User                 @relation(fields: [ownerId], references: [id])
   members             CommunityMember[]
   events              Event[]
+  volunteerPrograms   VolunteerProgram[]
   categories          CommunityCategory[]
   joinRequests        JoinRequest[]
   tags                CommunityTag[]
@@ -185,6 +191,7 @@ enum CommunityRole {
   OWNER
   ADMIN
   EVENT_MANAGER
+  VOLUNTEER_COORDINATOR
   MEMBER
 }
 
@@ -667,6 +674,161 @@ enum VolunteerOpportunityStatus {
   OPEN
   CLOSED
   ARCHIVED
+}
+
+// ==========================================
+// GLOBAL VOLUNTEER PROGRAM
+//
+// Legacy VolunteerOpportunity remains event-scoped. These models support the
+// product-level volunteer program lifecycle for both communities and users.
+// ==========================================
+
+model VolunteerProgram {
+  id              String                  @id @default(cuid())
+  title           String
+  slug            String                  @unique
+  description     String?                 @db.Text
+  location        String?
+  capacity        Int
+  registrationDeadline DateTime?
+  startDate       DateTime
+  endDate         DateTime
+  status          VolunteerProgramStatus  @default(DRAFT)
+  organizerType   VolunteerOrganizerType
+  communityId     String?
+  organizerUserId String
+  reviewNote      String?                 @db.Text
+  reviewedAt      DateTime?
+  reviewedById    String?
+  deletedAt       DateTime?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  community       Community?              @relation(fields: [communityId], references: [id], onDelete: SetNull)
+  organizerUser   User                    @relation("VolunteerProgramOrganizer", fields: [organizerUserId], references: [id])
+  reviewedBy      User?                   @relation("ReviewedVolunteerPrograms", fields: [reviewedById], references: [id])
+  accesses        VolunteerProgramOrganizerAccess[]
+  applications    VolunteerProgramApplication[]
+
+  @@index([communityId, status])
+  @@index([organizerUserId, status])
+  @@index([organizerType, status])
+  @@index([status, startDate])
+  @@index([deletedAt])
+  @@map("volunteer_programs")
+}
+
+enum VolunteerOrganizerType {
+  COMMUNITY
+  INDEPENDENT
+}
+
+enum VolunteerProgramStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  REVISION_REQUIRED
+  REJECTED
+  APPROVED
+  SCHEDULED
+  REGISTRATION_OPEN
+  REGISTRATION_CLOSED
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+model VolunteerProgramOrganizerAccess {
+  id                 String                         @id @default(cuid())
+  volunteerProgramId String
+  userId             String
+  accessType         VolunteerProgramAccessType     @default(PROGRAM_ORGANIZER)
+  status             VolunteerProgramAccessStatus   @default(ACTIVE)
+  startsAt           DateTime
+  expiresAt          DateTime
+  grantedAt          DateTime                       @default(now())
+  revokedAt          DateTime?
+  createdAt          DateTime                       @default(now())
+  updatedAt          DateTime                       @updatedAt
+
+  volunteerProgram VolunteerProgram @relation(fields: [volunteerProgramId], references: [id], onDelete: Cascade)
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([volunteerProgramId, userId])
+  @@index([userId, status, expiresAt])
+  @@index([volunteerProgramId, status])
+  @@map("volunteer_program_organizer_accesses")
+}
+
+enum VolunteerProgramAccessType {
+  PROGRAM_ORGANIZER
+}
+
+enum VolunteerProgramAccessStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+model VolunteerProgramApplication {
+  id                 String                            @id @default(cuid())
+  volunteerProgramId String
+  userId             String
+  motivation         String?                           @db.Text
+  status             VolunteerProgramApplicationStatus @default(PENDING)
+  cancellationReason String?                           @db.Text
+  reviewedAt         DateTime?
+  reviewedById       String?
+  reviewNote         String?                           @db.Text
+  createdAt          DateTime                          @default(now())
+  updatedAt          DateTime                          @updatedAt
+
+  volunteerProgram VolunteerProgram              @relation(fields: [volunteerProgramId], references: [id], onDelete: Cascade)
+  user             User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy       User?                         @relation("ReviewedVolunteerProgramApplications", fields: [reviewedById], references: [id])
+  participation    VolunteerProgramParticipation?
+
+  @@unique([volunteerProgramId, userId])
+  @@index([userId, status])
+  @@index([volunteerProgramId, status])
+  @@map("volunteer_program_applications")
+}
+
+enum VolunteerProgramApplicationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED_BY_USER
+  CANCELLED_BY_ORGANIZER
+}
+
+model VolunteerProgramParticipation {
+  id            String                             @id @default(cuid())
+  applicationId String                             @unique
+  status        VolunteerProgramParticipationStatus @default(UPCOMING)
+  attendance    VolunteerProgramAttendanceStatus    @default(NOT_RECORDED)
+  attendedAt    DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime                           @default(now())
+  updatedAt     DateTime                           @updatedAt
+
+  application VolunteerProgramApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([attendance])
+  @@map("volunteer_program_participations")
+}
+
+enum VolunteerProgramParticipationStatus {
+  UPCOMING
+  COMPLETED
+  CANCELLED
+}
+
+enum VolunteerProgramAttendanceStatus {
+  NOT_RECORDED
+  ATTENDED
+  NO_SHOW
 }
 
 model VolunteerPosition {

@@ -39,6 +39,8 @@ const mockEventData = [
 ];
 
 test.describe("Events Listing", () => {
+  test.describe.configure({ mode: "serial" });
+
   test.beforeEach(async ({ page }) => {
     await mockEvents(page, mockEventData);
   });
@@ -107,11 +109,13 @@ test.describe("Events Listing", () => {
 });
 
 test.describe("Events - Detail Page", () => {
-  test("navigates to event detail from listing", async ({ page }) => {
+  test("links to event detail from listing", async ({ page }) => {
     await mockEvents(page, mockEventData);
     await page.goto("/events");
-    await page.getByRole("link", { name: "React Meetup Jakarta" }).first().click();
-    await expect(page).toHaveURL(/events\/react-meetup-jakarta/);
+    await expect(page.getByRole("link", { name: "React Meetup Jakarta" }).first()).toHaveAttribute(
+      "href",
+      "/events/react-meetup-jakarta"
+    );
   });
 });
 

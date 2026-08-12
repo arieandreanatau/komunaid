@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import api from "@/lib/api";
-import { Header } from "@/components/header";
 import { useAuth } from "@/components/auth-provider";
 
 interface DashboardData {
@@ -32,7 +31,7 @@ interface ActivityItem {
   userName: string;
   userAvatar: string | null;
   createdAt: string;
-  details: string | null;
+  details: unknown | null;
 }
 
 interface Member {
@@ -41,6 +40,18 @@ interface Member {
   name: string;
   username: string;
   avatar: string | null;
+  role: string;
+  joinedAt: string;
+}
+
+interface MemberResponseItem {
+  id: string;
+  user: {
+    id: string;
+    name: string;
+    username: string;
+    avatar: string | null;
+  };
   role: string;
   joinedAt: string;
 }
@@ -78,6 +89,8 @@ const tabs: { key: Tab; label: string }[] = [
 const roleBadge: Record<string, string> = {
   OWNER: "bg-purple-100 text-purple-700",
   ADMIN: "bg-amber-100 text-amber-700",
+  EVENT_MANAGER: "bg-blue-100 text-blue-700",
+  VOLUNTEER_COORDINATOR: "bg-teal-100 text-teal-700",
   MEMBER: "bg-gray-100 text-gray-600",
 };
 
@@ -93,13 +106,31 @@ const statusLabel: Record<string, string> = {
   REJECTED: "Ditolak",
 };
 
-export default function CommunityDashboardPage() {
+function formatActivityDetails(details: unknown): string | null {
+  if (typeof details === "string") return details;
+  if (!details || typeof details !== "object" || Array.isArray(details)) return null;
+
+  const values = Object.values(details as Record<string, unknown>);
+  const text = values.find((value): value is string => typeof value === "string" && value.trim().length > 0);
+  return text || null;
+}
+
+export function CommunityDashboardRoute({
+  tab,
+  communityIdOverride,
+  communitySlug,
+}: {
+  tab: Tab;
+  communityIdOverride?: string;
+  communitySlug?: string;
+}) {
   const params = useParams();
   const router = useRouter();
-  const communityId = params.communityId as string;
+  const routeSlug = communitySlug || (params.slug as string | undefined);
+  const [resolvedCommunityId, setResolvedCommunityId] = useState(communityIdOverride);
+  const communityId = resolvedCommunityId || (routeSlug ? "" : ((params.idkomunitas || params.communityId) as string));
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<Tab>("ringkasan");
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [insight, setInsight] = useState<InsightData | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
@@ -107,6 +138,17 @@ export default function CommunityDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState(false);
+
+  useEffect(() => {
+    if (!routeSlug || communityIdOverride) return;
+    api.get(`/communities/${routeSlug}`).then(({ data }) => {
+      const community = data.data || data;
+      setResolvedCommunityId(community.id);
+    }).catch((err) => {
+      setError(err?.response?.status === 404 ? "Komunitas tidak ditemukan" : "Dashboard tidak dapat dimuat");
+      setLoading(false);
+    });
+  }, [routeSlug, communityIdOverride]);
 
   const [memberSearch, setMemberSearch] = useState("");
   const [memberRoleFilter, setMemberRoleFilter] = useState("");
@@ -139,12 +181,19 @@ export default function CommunityDashboardPage() {
       setLoading(true);
       setError(null);
       const { data } = await api.get(`/communities/${communityId}/dashboard`);
-      setDashboard(data.data || data);
-      const comm = (data.data || data).community;
-      setIsOwner(
-        (data.data || data).community.status !== undefined &&
-          (data.userRole === "OWNER" || data.isOwner === true)
-      );
+       const payload = data.data || data;
+       const comm = payload.community || payload.communityInfo;
+       if (!comm) throw Object.assign(new Error("Dashboard tidak dapat dimuat"), { response: { status: 500 } });
+       setDashboard({
+         ...payload,
+         community: comm,
+         pendingRequests: payload.pendingRequests ?? payload.pendingJoinRequestCount ?? 0,
+         activeEvents: payload.activeEvents ?? payload.activeEventCount ?? 0,
+       });
+       setIsOwner(
+         comm.status !== undefined &&
+           (payload.userRole === "OWNER" || payload.isOwner === true || comm.owner?.id === user?.id)
+       );
       setSettingsForm({
         name: comm.name,
         description: comm.description || "",
@@ -153,10 +202,14 @@ export default function CommunityDashboardPage() {
         status: comm.status,
       });
     } catch (err: any) {
-      if (err?.response?.status === 403) {
+      if (err?.response?.status === 401) {
+        setError("Login diperlukan");
+      } else if (err?.response?.status === 403) {
         setError("Anda tidak memiliki akses ke dashboard komunitas ini. Hanya pemilik atau admin yang dapat mengakses.");
+      } else if (err?.response?.status === 404) {
+        setError("Komunitas tidak ditemukan");
       } else {
-        setError(err?.response?.data?.message || "Gagal memuat dashboard.");
+        setError("Dashboard tidak dapat dimuat");
       }
     } finally {
       setLoading(false);
@@ -168,10 +221,20 @@ export default function CommunityDashboardPage() {
       const { data } = await api.get(`/communities/${communityId}/members`, {
         params: { page: memberPage, limit: 10, search: memberSearch, role: memberRoleFilter },
       });
-      const result = data.data || data;
-      setMembers(result.members || result.data || []);
-      setMemberTotalPages(result.totalPages || 1);
-    } catch {}
+      const items = (data.data || []) as MemberResponseItem[];
+      setMembers(items.map((member) => ({
+        id: member.id,
+        userId: member.user.id,
+        name: member.user.name,
+        username: member.user.username,
+        avatar: member.user.avatar,
+        role: member.role,
+        joinedAt: member.joinedAt,
+      })));
+      setMemberTotalPages(data.pagination?.totalPages || 1);
+    } catch (err: any) {
+      setError(err?.response?.status === 403 ? "Anda tidak memiliki akses untuk melihat anggota komunitas ini." : "Anggota komunitas tidak dapat dimuat");
+    }
   }, [communityId, memberPage, memberSearch, memberRoleFilter]);
 
   const fetchJoinRequests = useCallback(async () => {
@@ -180,8 +243,14 @@ export default function CommunityDashboardPage() {
         params: { page: requestPage, limit: 10, status: requestStatusFilter || undefined },
       });
       const result = data.data || data;
-      setJoinRequests(result.requests || result.data || []);
-      setRequestTotalPages(result.totalPages || 1);
+       const items = result.requests || result.data || [];
+       setJoinRequests(items.map((request: any) => ({
+         ...request,
+         name: request.name || request.user?.name || "Pengguna",
+         username: request.username || request.user?.username || "",
+         avatar: request.avatar || request.user?.avatar || null,
+       })));
+       setRequestTotalPages(result.pagination?.totalPages || result.totalPages || 1);
     } catch {}
   }, [communityId, requestPage, requestStatusFilter]);
 
@@ -199,16 +268,16 @@ export default function CommunityDashboardPage() {
   }, [authLoading, isAuthenticated, communityId, fetchDashboard]);
 
   useEffect(() => {
-    if (activeTab === "anggota") fetchMembers();
-  }, [activeTab, fetchMembers]);
+    if (tab === "anggota") fetchMembers();
+  }, [tab, fetchMembers]);
 
   useEffect(() => {
-    if (activeTab === "permintaan") fetchJoinRequests();
-  }, [activeTab, fetchJoinRequests]);
+    if (tab === "permintaan") fetchJoinRequests();
+  }, [tab, fetchJoinRequests]);
 
   useEffect(() => {
-    if (activeTab === "insight") fetchInsight();
-  }, [activeTab, fetchInsight]);
+    if (tab === "insight") fetchInsight();
+  }, [tab, fetchInsight]);
 
   const handleApproveRequest = async (requestId: string) => {
     try {
@@ -270,7 +339,6 @@ export default function CommunityDashboardPage() {
   if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Header />
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="h-8 w-8 border-4 border-komuna-blue border-t-transparent rounded-full animate-spin" />
         </div>
@@ -283,7 +351,6 @@ export default function CommunityDashboardPage() {
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Header />
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center max-w-md mx-auto px-4">
             <div className="h-16 w-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -308,11 +375,17 @@ export default function CommunityDashboardPage() {
   if (!dashboard) return null;
 
   const { community, pendingRequests, activeEvents, recentActivity } = dashboard;
+  const canonicalTabPath: Record<Tab, string> = {
+    ringkasan: "overview",
+    anggota: "members",
+    permintaan: "requests",
+    pengaturan: "settings",
+    media: "media",
+    insight: "insights",
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
-
       <div className="flex">
         <aside className="hidden lg:block w-64 border-r bg-white min-h-[calc(100vh-4rem)] sticky top-16">
           <nav className="p-4 space-y-1">
@@ -330,27 +403,27 @@ export default function CommunityDashboardPage() {
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Komunitas</p>
             </div>
 
-            {tabs.map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
+            {tabs.map((navTab) => (
+              <Link
+                key={navTab.key}
+                href={`/dashboard/communities/${communityId}/${canonicalTabPath[navTab.key]}`}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left ${
-                  activeTab === tab.key
+                  navTab.key === tab
                     ? "bg-komuna-blue/10 text-komuna-blue"
                     : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                 }`}
               >
-                {tab.key === "ringkasan" && (
+                {navTab.key === "ringkasan" && (
                   <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                   </svg>
                 )}
-                {tab.key === "anggota" && (
+                {navTab.key === "anggota" && (
                   <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                   </svg>
                 )}
-                {tab.key === "permintaan" && (
+                {navTab.key === "permintaan" && (
                   <div className="relative flex-shrink-0">
                     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -362,24 +435,24 @@ export default function CommunityDashboardPage() {
                     )}
                   </div>
                 )}
-                {tab.key === "media" && (
+                {navTab.key === "media" && (
                   <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
                   </svg>
                 )}
-                {tab.key === "pengaturan" && (
+                {navTab.key === "pengaturan" && (
                   <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
                 )}
-                {tab.key === "insight" && (
+                {navTab.key === "insight" && (
                   <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                   </svg>
                 )}
-                {tab.label}
-              </button>
+                {navTab.label}
+              </Link>
             ))}
           </nav>
         </aside>
@@ -402,22 +475,22 @@ export default function CommunityDashboardPage() {
             </div>
 
             <div className="flex lg:hidden overflow-x-auto gap-1 mb-6 border-b border-gray-200 pb-px">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.key}
-                  onClick={() => setActiveTab(tab.key)}
+              {tabs.map((navTab) => (
+                <Link
+                  key={navTab.key}
+                  href={`/dashboard/communities/${communityId}/${canonicalTabPath[navTab.key]}`}
                   className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                    activeTab === tab.key
+                    navTab.key === tab
                       ? "border-komuna-blue text-komuna-blue"
                       : "border-transparent text-gray-500 hover:text-gray-700"
                   }`}
                 >
-                  {tab.label}
-                </button>
+                  {navTab.label}
+                </Link>
               ))}
             </div>
 
-            {activeTab === "ringkasan" && (
+            {tab === "ringkasan" && (
               <RingkasanTab
                 community={community}
                 pendingRequests={pendingRequests}
@@ -426,7 +499,7 @@ export default function CommunityDashboardPage() {
               />
             )}
 
-            {activeTab === "anggota" && (
+            {tab === "anggota" && (
               <AnggotaTab
                 members={members}
                 memberSearch={memberSearch}
@@ -443,7 +516,7 @@ export default function CommunityDashboardPage() {
               />
             )}
 
-            {activeTab === "permintaan" && (
+            {tab === "permintaan" && (
               <PermintaanTab
                 requests={joinRequests}
                 requestStatusFilter={requestStatusFilter}
@@ -456,11 +529,11 @@ export default function CommunityDashboardPage() {
               />
             )}
 
-            {activeTab === "media" && (
+            {tab === "media" && (
               <MediaTab communityId={communityId} isOwner={isOwner} />
             )}
 
-            {activeTab === "pengaturan" && (
+            {tab === "pengaturan" && (
               <PengaturanTab
                 form={settingsForm}
                 setForm={setSettingsForm}
@@ -472,7 +545,7 @@ export default function CommunityDashboardPage() {
               />
             )}
 
-            {activeTab === "insight" && (
+            {tab === "insight" && (
               <InsightTab insight={insight} communityName={community.name} />
             )}
           </div>
@@ -480,6 +553,17 @@ export default function CommunityDashboardPage() {
       </div>
     </div>
   );
+}
+
+export default function CommunityDashboardIndexPage() {
+  const { communityId } = useParams<{ communityId: string }>();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (communityId) router.replace(`/dashboard/communities/${communityId}/overview`);
+  }, [communityId, router]);
+
+  return <div className="flex min-h-48 items-center justify-center text-sm text-slate-500">Membuka dashboard komunitas...</div>;
 }
 
 function RingkasanTab({
@@ -585,7 +669,9 @@ function RingkasanTab({
           <p className="text-gray-400 text-sm">Belum ada aktivitas.</p>
         ) : (
           <div className="space-y-3">
-            {recentActivity.map((activity) => (
+            {recentActivity.map((activity) => {
+              const details = formatActivityDetails(activity.details);
+              return (
               <div key={activity.id} className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors">
                 {activity.userAvatar ? (
                   <img src={activity.userAvatar} alt="" className="h-8 w-8 rounded-full object-cover flex-shrink-0" />
@@ -599,13 +685,14 @@ function RingkasanTab({
                     <span className="font-medium text-komuna-navy">{activity.userName}</span>{" "}
                     {activity.action}
                   </p>
-                  {activity.details && <p className="text-xs text-gray-400 mt-0.5">{activity.details}</p>}
+                  {details && <p className="text-xs text-gray-400 mt-0.5">{details}</p>}
                   <p className="text-xs text-gray-400 mt-0.5">
                     {new Date(activity.createdAt).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })}
                   </p>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -699,7 +786,8 @@ function AnggotaTab({
                     >
                       <option value="MEMBER">Member</option>
                       <option value="ADMIN">Admin</option>
-                      {isOwner && <option value="OWNER">Owner</option>}
+                      <option value="EVENT_MANAGER">Manajer Event</option>
+                      <option value="VOLUNTEER_COORDINATOR">Koordinator Volunteer</option>
                     </select>
                   )}
                   {member.role !== "OWNER" && (
