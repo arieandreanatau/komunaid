@@ -1,7 +1,7 @@
 "use client";
 
-import { CommunityDashboardRoute } from "../page";
+import { CommunityDashboardRoute } from "@/components/community-dashboard-route";
 
-export default function CommunitySettingsPage({ params }: { params: { communityId: string } }) {
-  return <CommunityDashboardRoute tab="pengaturan" communityIdOverride={params.communityId} />;
+export default function CommunitySettingsPage() {
+  return <CommunityDashboardRoute tab="pengaturan" />;
 }

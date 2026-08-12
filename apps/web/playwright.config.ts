@@ -7,7 +7,9 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  // Next dev on Windows shares one RSC manifest across browser projects.
+  // Parallel workers can corrupt that manifest and produce false E2E failures.
+  workers: 1,
   reporter: [
     ["html", { open: "never" }],
     ["list"],

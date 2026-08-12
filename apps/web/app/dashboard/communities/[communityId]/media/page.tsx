@@ -1,7 +1,7 @@
 "use client";
 
-import { CommunityDashboardRoute } from "../page";
+import { CommunityDashboardRoute } from "@/components/community-dashboard-route";
 
-export default function CommunityMediaPage({ params }: { params: { communityId: string } }) {
-  return <CommunityDashboardRoute tab="media" communityIdOverride={params.communityId} />;
+export default function CommunityMediaPage() {
+  return <CommunityDashboardRoute tab="media" />;
 }
