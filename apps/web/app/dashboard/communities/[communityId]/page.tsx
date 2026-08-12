@@ -31,7 +31,7 @@ interface ActivityItem {
   userName: string;
   userAvatar: string | null;
   createdAt: string;
-  details: string | null;
+  details: unknown | null;
 }
 
 interface Member {
@@ -91,6 +91,15 @@ const statusLabel: Record<string, string> = {
   APPROVED: "Disetujui",
   REJECTED: "Ditolak",
 };
+
+function formatActivityDetails(details: unknown): string | null {
+  if (typeof details === "string") return details;
+  if (!details || typeof details !== "object" || Array.isArray(details)) return null;
+
+  const values = Object.values(details as Record<string, unknown>);
+  const text = values.find((value): value is string => typeof value === "string" && value.trim().length > 0);
+  return text || null;
+}
 
 export default function CommunityDashboardPage({
   initialTab = "ringkasan",
@@ -612,7 +621,9 @@ function RingkasanTab({
           <p className="text-gray-400 text-sm">Belum ada aktivitas.</p>
         ) : (
           <div className="space-y-3">
-            {recentActivity.map((activity) => (
+            {recentActivity.map((activity) => {
+              const details = formatActivityDetails(activity.details);
+              return (
               <div key={activity.id} className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors">
                 {activity.userAvatar ? (
                   <img src={activity.userAvatar} alt="" className="h-8 w-8 rounded-full object-cover flex-shrink-0" />
@@ -626,13 +637,14 @@ function RingkasanTab({
                     <span className="font-medium text-komuna-navy">{activity.userName}</span>{" "}
                     {activity.action}
                   </p>
-                  {activity.details && <p className="text-xs text-gray-400 mt-0.5">{activity.details}</p>}
+                  {details && <p className="text-xs text-gray-400 mt-0.5">{details}</p>}
                   <p className="text-xs text-gray-400 mt-0.5">
                     {new Date(activity.createdAt).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })}
                   </p>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
