@@ -89,6 +89,8 @@ const tabs: { key: Tab; label: string }[] = [
 const roleBadge: Record<string, string> = {
   OWNER: "bg-purple-100 text-purple-700",
   ADMIN: "bg-amber-100 text-amber-700",
+  EVENT_MANAGER: "bg-blue-100 text-blue-700",
+  VOLUNTEER_COORDINATOR: "bg-teal-100 text-teal-700",
   MEMBER: "bg-gray-100 text-gray-600",
 };
 
@@ -113,12 +115,12 @@ function formatActivityDetails(details: unknown): string | null {
   return text || null;
 }
 
-export default function CommunityDashboardPage({
-  initialTab = "ringkasan",
+export function CommunityDashboardRoute({
+  tab,
   communityIdOverride,
   communitySlug,
 }: {
-  initialTab?: Tab;
+  tab: Tab;
   communityIdOverride?: string;
   communitySlug?: string;
 }) {
@@ -129,7 +131,6 @@ export default function CommunityDashboardPage({
   const communityId = resolvedCommunityId || (routeSlug ? "" : ((params.idkomunitas || params.communityId) as string));
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [insight, setInsight] = useState<InsightData | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
@@ -242,8 +243,14 @@ export default function CommunityDashboardPage({
         params: { page: requestPage, limit: 10, status: requestStatusFilter || undefined },
       });
       const result = data.data || data;
-      setJoinRequests(result.requests || result.data || []);
-      setRequestTotalPages(result.totalPages || 1);
+       const items = result.requests || result.data || [];
+       setJoinRequests(items.map((request: any) => ({
+         ...request,
+         name: request.name || request.user?.name || "Pengguna",
+         username: request.username || request.user?.username || "",
+         avatar: request.avatar || request.user?.avatar || null,
+       })));
+       setRequestTotalPages(result.pagination?.totalPages || result.totalPages || 1);
     } catch {}
   }, [communityId, requestPage, requestStatusFilter]);
 
@@ -261,16 +268,16 @@ export default function CommunityDashboardPage({
   }, [authLoading, isAuthenticated, communityId, fetchDashboard]);
 
   useEffect(() => {
-    if (activeTab === "anggota") fetchMembers();
-  }, [activeTab, fetchMembers]);
+    if (tab === "anggota") fetchMembers();
+  }, [tab, fetchMembers]);
 
   useEffect(() => {
-    if (activeTab === "permintaan") fetchJoinRequests();
-  }, [activeTab, fetchJoinRequests]);
+    if (tab === "permintaan") fetchJoinRequests();
+  }, [tab, fetchJoinRequests]);
 
   useEffect(() => {
-    if (activeTab === "insight") fetchInsight();
-  }, [activeTab, fetchInsight]);
+    if (tab === "insight") fetchInsight();
+  }, [tab, fetchInsight]);
 
   const handleApproveRequest = async (requestId: string) => {
     try {
@@ -368,6 +375,14 @@ export default function CommunityDashboardPage({
   if (!dashboard) return null;
 
   const { community, pendingRequests, activeEvents, recentActivity } = dashboard;
+  const canonicalTabPath: Record<Tab, string> = {
+    ringkasan: "overview",
+    anggota: "members",
+    permintaan: "requests",
+    pengaturan: "settings",
+    media: "media",
+    insight: "insights",
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -388,27 +403,27 @@ export default function CommunityDashboardPage({
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Komunitas</p>
             </div>
 
-            {tabs.map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
+            {tabs.map((navTab) => (
+              <Link
+                key={navTab.key}
+                href={`/dashboard/communities/${communityId}/${canonicalTabPath[navTab.key]}`}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left ${
-                  activeTab === tab.key
+                  navTab.key === tab
                     ? "bg-komuna-blue/10 text-komuna-blue"
                     : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                 }`}
               >
-                {tab.key === "ringkasan" && (
+                {navTab.key === "ringkasan" && (
                   <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                   </svg>
                 )}
-                {tab.key === "anggota" && (
+                {navTab.key === "anggota" && (
                   <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                   </svg>
                 )}
-                {tab.key === "permintaan" && (
+                {navTab.key === "permintaan" && (
                   <div className="relative flex-shrink-0">
                     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -420,24 +435,24 @@ export default function CommunityDashboardPage({
                     )}
                   </div>
                 )}
-                {tab.key === "media" && (
+                {navTab.key === "media" && (
                   <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
                   </svg>
                 )}
-                {tab.key === "pengaturan" && (
+                {navTab.key === "pengaturan" && (
                   <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
                 )}
-                {tab.key === "insight" && (
+                {navTab.key === "insight" && (
                   <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                   </svg>
                 )}
-                {tab.label}
-              </button>
+                {navTab.label}
+              </Link>
             ))}
           </nav>
         </aside>
@@ -460,22 +475,22 @@ export default function CommunityDashboardPage({
             </div>
 
             <div className="flex lg:hidden overflow-x-auto gap-1 mb-6 border-b border-gray-200 pb-px">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.key}
-                  onClick={() => setActiveTab(tab.key)}
+              {tabs.map((navTab) => (
+                <Link
+                  key={navTab.key}
+                  href={`/dashboard/communities/${communityId}/${canonicalTabPath[navTab.key]}`}
                   className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                    activeTab === tab.key
+                    navTab.key === tab
                       ? "border-komuna-blue text-komuna-blue"
                       : "border-transparent text-gray-500 hover:text-gray-700"
                   }`}
                 >
-                  {tab.label}
-                </button>
+                  {navTab.label}
+                </Link>
               ))}
             </div>
 
-            {activeTab === "ringkasan" && (
+            {tab === "ringkasan" && (
               <RingkasanTab
                 community={community}
                 pendingRequests={pendingRequests}
@@ -484,7 +499,7 @@ export default function CommunityDashboardPage({
               />
             )}
 
-            {activeTab === "anggota" && (
+            {tab === "anggota" && (
               <AnggotaTab
                 members={members}
                 memberSearch={memberSearch}
@@ -501,7 +516,7 @@ export default function CommunityDashboardPage({
               />
             )}
 
-            {activeTab === "permintaan" && (
+            {tab === "permintaan" && (
               <PermintaanTab
                 requests={joinRequests}
                 requestStatusFilter={requestStatusFilter}
@@ -514,11 +529,11 @@ export default function CommunityDashboardPage({
               />
             )}
 
-            {activeTab === "media" && (
+            {tab === "media" && (
               <MediaTab communityId={communityId} isOwner={isOwner} />
             )}
 
-            {activeTab === "pengaturan" && (
+            {tab === "pengaturan" && (
               <PengaturanTab
                 form={settingsForm}
                 setForm={setSettingsForm}
@@ -530,7 +545,7 @@ export default function CommunityDashboardPage({
               />
             )}
 
-            {activeTab === "insight" && (
+            {tab === "insight" && (
               <InsightTab insight={insight} communityName={community.name} />
             )}
           </div>
@@ -538,6 +553,17 @@ export default function CommunityDashboardPage({
       </div>
     </div>
   );
+}
+
+export default function CommunityDashboardIndexPage() {
+  const { communityId } = useParams<{ communityId: string }>();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (communityId) router.replace(`/dashboard/communities/${communityId}/overview`);
+  }, [communityId, router]);
+
+  return <div className="flex min-h-48 items-center justify-center text-sm text-slate-500">Membuka dashboard komunitas...</div>;
 }
 
 function RingkasanTab({
@@ -760,7 +786,8 @@ function AnggotaTab({
                     >
                       <option value="MEMBER">Member</option>
                       <option value="ADMIN">Admin</option>
-                      {isOwner && <option value="OWNER">Owner</option>}
+                      <option value="EVENT_MANAGER">Manajer Event</option>
+                      <option value="VOLUNTEER_COORDINATOR">Koordinator Volunteer</option>
                     </select>
                   )}
                   {member.role !== "OWNER" && (

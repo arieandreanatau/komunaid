@@ -191,7 +191,7 @@ export const updateCommunitySettingsSchema = z.object({
 });
 
 export const changeMemberRoleSchema = z.object({
-  role: z.enum(["ADMIN", "EVENT_MANAGER", "MEMBER"]),
+  role: z.enum(["ADMIN", "EVENT_MANAGER", "VOLUNTEER_COORDINATOR", "MEMBER"]),
 });
 
 export const communityQuerySchema = z.object({
@@ -483,6 +483,57 @@ export const assignVolunteerSchema = z.object({
   shiftStart: z.string().datetime("Format tanggal tidak valid").optional(),
   shiftEnd: z.string().datetime("Format tanggal tidak valid").optional(),
   notes: z.string().max(1000).optional(),
+});
+
+// ==========================================
+// VOLUNTEER PROGRAM SCHEMAS
+// ==========================================
+
+const volunteerProgramFields = z.object({
+  title: z.string().min(3, "Judul minimal 3 karakter").max(200),
+  description: z.string().min(10, "Deskripsi minimal 10 karakter").max(5000),
+  location: z.string().min(2, "Lokasi wajib diisi").max(200),
+  capacity: z.number().int().min(1, "Kuota minimal 1"),
+  registrationDeadline: z.string().datetime("Format tanggal tidak valid").optional(),
+  startDate: z.string().datetime("Format tanggal tidak valid"),
+  endDate: z.string().datetime("Format tanggal tidak valid"),
+});
+
+export const createIndependentVolunteerProgramSchema = volunteerProgramFields;
+
+export const createCommunityVolunteerProgramSchema = volunteerProgramFields.extend({
+  communityId: z.string().min(1, "Komunitas wajib dipilih"),
+});
+
+export const updateVolunteerProgramSchema = volunteerProgramFields.partial();
+
+export const reviewVolunteerProgramSchema = z.object({
+  action: z.enum(["APPROVE", "REJECT", "REQUEST_REVISION"]),
+  note: z.string().max(2000).optional(),
+});
+
+export const transitionVolunteerProgramSchema = z.object({
+  status: z.enum([
+    "SCHEDULED",
+    "REGISTRATION_OPEN",
+    "REGISTRATION_CLOSED",
+    "ONGOING",
+    "COMPLETED",
+    "CANCELLED",
+  ]),
+});
+
+export const applyVolunteerProgramSchema = z.object({
+  motivation: z.string().min(10, "Motivasi minimal 10 karakter").max(2000).optional(),
+});
+
+export const reviewVolunteerProgramApplicationSchema = z.object({
+  action: z.enum(["ACCEPT", "REJECT", "CANCEL"]),
+  note: z.string().max(2000).optional(),
+});
+
+export const recordVolunteerProgramAttendanceSchema = z.object({
+  attendance: z.enum(["ATTENDED", "NO_SHOW"]),
 });
 
 // ==========================================

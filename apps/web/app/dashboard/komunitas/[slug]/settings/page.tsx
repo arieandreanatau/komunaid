@@ -1,9 +1,17 @@
 "use client";
 
-import { useParams } from "next/navigation";
-import CommunityDashboardPage from "@/app/dashboard/communities/[communityId]/page";
+import { useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
+import api from "@/lib/api";
 
 export default function SettingsPage() {
   const params = useParams<{ slug: string }>();
-  return <CommunityDashboardPage initialTab="pengaturan" communitySlug={params.slug} />;
+  const router = useRouter();
+  useEffect(() => {
+    api.get(`/communities/${params.slug}`).then(({ data }) => {
+      const community = data.data || data;
+      router.replace(`/dashboard/communities/${community.id}/settings`);
+    }).catch(() => router.replace("/dashboard/communities"));
+  }, [params.slug, router]);
+  return <div className="flex min-h-48 items-center justify-center text-sm text-slate-500">Membuka pengaturan komunitas...</div>;
 }

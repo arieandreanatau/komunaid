@@ -48,6 +48,7 @@ const ROLE_LABELS: Record<string, string> = {
   OWNER: "Pemilik",
   ADMIN: "Admin",
   EVENT_MANAGER: "Manajer Event",
+  VOLUNTEER_COORDINATOR: "Koordinator Volunteer",
   MEMBER: "Anggota",
 };
 
@@ -536,7 +537,7 @@ function CommunityCard({
         )}
         <div className="min-w-0 flex-1">
           <Link
-             href={tab === "created" ? `/dashboard/komunitas/${community.slug}` : `/communities/${community.slug}`}
+              href={tab === "created" ? `/dashboard/communities/${community.id}/overview` : `/communities/${community.slug}`}
             className="font-semibold text-komuna-navy truncate hover:text-komuna-blue transition-colors block"
           >
             {community.name}
@@ -597,7 +598,7 @@ function CommunityCard({
         {tab === "created" ? (
           <>
             <Link
-              href={`/dashboard/komunitas/${community.slug}`}
+               href={`/dashboard/communities/${community.id}/overview`}
               className="px-3 py-1.5 text-xs font-medium text-komuna-blue bg-komuna-blue/10 rounded-lg hover:bg-komuna-blue/20 transition-colors"
             >
               Kelola
