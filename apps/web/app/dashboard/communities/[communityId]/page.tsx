@@ -44,6 +44,18 @@ interface Member {
   joinedAt: string;
 }
 
+interface MemberResponseItem {
+  id: string;
+  user: {
+    id: string;
+    name: string;
+    username: string;
+    avatar: string | null;
+  };
+  role: string;
+  joinedAt: string;
+}
+
 interface JoinRequest {
   id: string;
   userId: string;
@@ -208,10 +220,20 @@ export default function CommunityDashboardPage({
       const { data } = await api.get(`/communities/${communityId}/members`, {
         params: { page: memberPage, limit: 10, search: memberSearch, role: memberRoleFilter },
       });
-      const result = data.data || data;
-      setMembers(result.members || result.data || []);
-      setMemberTotalPages(result.totalPages || 1);
-    } catch {}
+      const items = (data.data || []) as MemberResponseItem[];
+      setMembers(items.map((member) => ({
+        id: member.id,
+        userId: member.user.id,
+        name: member.user.name,
+        username: member.user.username,
+        avatar: member.user.avatar,
+        role: member.role,
+        joinedAt: member.joinedAt,
+      })));
+      setMemberTotalPages(data.pagination?.totalPages || 1);
+    } catch (err: any) {
+      setError(err?.response?.status === 403 ? "Anda tidak memiliki akses untuk melihat anggota komunitas ini." : "Anggota komunitas tidak dapat dimuat");
+    }
   }, [communityId, memberPage, memberSearch, memberRoleFilter]);
 
   const fetchJoinRequests = useCallback(async () => {
