@@ -23,7 +23,9 @@ import {
   createSlidingWindowRateLimiter,
   createExponentialBackoffLimiter,
   closeRedisConnection,
+  getIP,
 } from "../../../src/services/rate-limiter";
+import { Hono } from "hono";
 
 describe("Rate Limiter Service", () => {
   beforeEach(() => {
@@ -223,6 +225,35 @@ describe("Rate Limiter Service", () => {
   describe("closeRedisConnection", () => {
     it("should not throw when no Redis client", async () => {
       await expect(closeRedisConnection()).resolves.toBeUndefined();
+    });
+  });
+
+  describe("getIP", () => {
+    afterEach(() => {
+      delete process.env.TRUSTED_PROXIES;
+    });
+
+    it("ignores attacker-supplied proxy headers without trusted proxy mode", async () => {
+      const app = new Hono();
+      app.get("/", (c) => c.text(getIP(c)));
+
+      const result = await app.request("/", {
+        headers: { "X-Forwarded-For": "198.51.100.99", "X-Real-IP": "203.0.113.42" },
+      });
+
+      expect(await result.text()).toBe("unknown");
+    });
+
+    it("uses forwarded client IP only with trusted proxy mode", async () => {
+      const app = new Hono();
+      process.env.TRUSTED_PROXIES = "true";
+      app.get("/trusted", (c) => c.text(getIP(c)));
+
+      const result = await app.request("/trusted", {
+        headers: { "X-Forwarded-For": "198.51.100.99, 10.0.0.1" },
+      });
+
+      expect(await result.text()).toBe("198.51.100.99");
     });
   });
 });

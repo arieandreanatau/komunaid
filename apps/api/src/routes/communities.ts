@@ -454,7 +454,7 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
         },
       },
     });
-    if (!membership && community.ownerId !== user.id) {
+    if ((!membership || membership.status !== "ACTIVE" || membership.deletedAt != null) && community.ownerId !== user.id) {
       return c.json({ success: false, message: "Komunitas ini bersifat privat" }, 403);
     }
   }
@@ -2514,9 +2514,16 @@ communityRoutes.get(
         })
       : null;
 
+    const canManageMedia = Boolean(isOwnerOrAdmin) || community.ownerId === user?.id;
+
+    if (!canManageMedia && community.visibility !== "PUBLIC") {
+      return c.json({ success: false, message: "Komunitas tidak ditemukan" }, 404);
+    }
+
     const where: any = { communityId, deletedAt: null };
 
-    if (!isOwnerOrAdmin) {
+    // Public callers can never relax this constraint through query parameters.
+    if (!canManageMedia) {
       where.isPublished = true;
     }
 
@@ -2531,7 +2538,7 @@ communityRoutes.get(
       ];
     }
 
-    if (q.published !== undefined) {
+    if (canManageMedia && q.published !== undefined) {
       where.isPublished = q.published;
     }
 

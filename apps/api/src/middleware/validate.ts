@@ -1,7 +1,11 @@
 import { Context, Next } from "hono";
 import { ZodSchema, ZodError } from "zod";
 
-export function validate(schema: ZodSchema, source: "body" | "query" | "param" = "body") {
+export function validate(
+  schema: ZodSchema,
+  source: "body" | "query" | "param" = "body",
+  invalidStatus: 400 | 422 = 400
+) {
   return async (c: Context, next: Next) => {
     let data: unknown;
 
@@ -40,7 +44,7 @@ export function validate(schema: ZodSchema, source: "body" | "query" | "param" =
               message: e.message,
             })),
           },
-          400
+          invalidStatus
         );
       }
       throw error;

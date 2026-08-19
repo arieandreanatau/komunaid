@@ -487,8 +487,34 @@ eventRoutes.patch("/:eventId", authMiddleware, validate(updateEventSchema), asyn
   const { categoryIds, gallery, ...updateData } = data;
 
   const updateDataAny = updateData as Record<string, unknown>;
-  if (updateDataAny.communityId && updateDataAny.organizationId) {
+  const hasCommunityChange = Object.hasOwn(updateDataAny, "communityId");
+  const hasOrganizationChange = Object.hasOwn(updateDataAny, "organizationId");
+  const targetCommunityId = hasCommunityChange
+    ? updateDataAny.communityId as string | undefined
+    : hasOrganizationChange ? undefined : event.communityId;
+  const targetOrganizationId = hasOrganizationChange
+    ? updateDataAny.organizationId as string | undefined
+    : hasCommunityChange ? undefined : event.organizationId;
+  if ((targetCommunityId ? 1 : 0) + (targetOrganizationId ? 1 : 0) !== 1) {
     return c.json({ success: false, message: "Event hanya boleh dimiliki oleh satu penyelenggara" }, 400);
+  }
+
+  if (hasCommunityChange && targetCommunityId !== event.communityId) {
+    const membership = await prisma.communityMember.findUnique({
+      where: { communityId_userId: { communityId: targetCommunityId!, userId: authUser.id } },
+    });
+    if (!membership || membership.status !== "ACTIVE" || membership.deletedAt !== null || !["OWNER", "ADMIN", "EVENT_MANAGER"].includes(membership.role)) {
+      return c.json({ success: false, message: "Tidak memiliki akses memindahkan event ke komunitas ini" }, 403);
+    }
+  }
+
+  if (hasOrganizationChange && targetOrganizationId !== event.organizationId) {
+    const membership = await prisma.organizationMember.findUnique({
+      where: { organizationId_userId: { organizationId: targetOrganizationId!, userId: authUser.id } },
+    });
+    if (!membership || membership.status !== "ACTIVE" || membership.deletedAt !== null || !["OWNER", "ADMIN"].includes(membership.role)) {
+      return c.json({ success: false, message: "Tidak memiliki akses memindahkan event ke organisasi ini" }, 403);
+    }
   }
 
   const sanitizedUpdateData = {
@@ -505,6 +531,8 @@ eventRoutes.patch("/:eventId", authMiddleware, validate(updateEventSchema), asyn
     where: { id: eventId },
     data: {
       ...sanitizedUpdateData,
+      communityId: hasCommunityChange || hasOrganizationChange ? targetCommunityId ?? null : undefined,
+      organizationId: hasCommunityChange || hasOrganizationChange ? targetOrganizationId ?? null : undefined,
       eventDate: data.eventDate ? new Date(data.eventDate) : undefined,
       endDate: data.endDate ? new Date(data.endDate) : undefined,
       gallery: gallery !== undefined ? JSON.stringify(gallery) : undefined,

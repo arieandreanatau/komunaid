@@ -94,6 +94,10 @@ app.get("/health", (c) => {
   return c.json({ status: "ok" });
 });
 
+app.get("/api/v1/health", (c) => {
+  return c.json({ status: "ok" });
+});
+
 app.get("/ready", async (c) => {
   try {
     const { prisma } = await import("@komunaid/database");

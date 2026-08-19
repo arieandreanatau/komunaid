@@ -9,6 +9,7 @@ import {
   updateOrganizationProfileSchema,
   updateOrganizationBannerSchema,
   updateOrganizationLogoSchema,
+  handleJoinRequestSchema,
 } from "@komunaid/shared";
 import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth";
 import {
@@ -196,7 +197,12 @@ organizationRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
         take: 20,
       },
       events: {
-        where: { status: "PUBLISHED", eventDate: { gte: new Date() } },
+        where: {
+          status: "PUBLISHED",
+          visibility: "PUBLIC",
+          deletedAt: null,
+          eventDate: { gte: new Date() },
+        },
         orderBy: { eventDate: "asc" },
         take: 5,
       },
@@ -234,7 +240,7 @@ organizationRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
         },
       },
     });
-    if (!membershipCheck && organization.ownerId !== user.id) {
+    if ((!membershipCheck || membershipCheck.status !== "ACTIVE" || membershipCheck.deletedAt != null) && organization.ownerId !== user.id) {
       return c.json({ success: false, message: "Organisasi ini bersifat privat" }, 403);
     }
   }
@@ -1454,12 +1460,12 @@ organizationRoutes.put(
   "/:organizationId/join-requests/:requestId",
   authMiddleware,
   requireOrganizationAdmin,
+  validate(handleJoinRequestSchema, "body", 422),
   async (c) => {
     const authUser = c.get("user");
     const organizationId = c.req.param("organizationId") as string;
     const requestId = c.req.param("requestId") as string;
-    const body = await c.req.json();
-    const { action } = body;
+    const { action } = c.get("validated");
 
     const request = await prisma.joinRequest.findUnique({
       where: { id: requestId },

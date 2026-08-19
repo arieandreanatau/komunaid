@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import api from "@/lib/api";
+import api, { unwrapApiData } from "@/lib/api";
 import { Header } from "@/components/header";
 import { useAuth } from "@/components/auth-provider";
 
@@ -107,8 +107,7 @@ export default function CommunitySettingsPage() {
     try {
       setLoading(true);
       setError(null);
-      const { data } = await api.get(`/communities/${slug}`);
-      setCommunity(data.community);
+      setCommunity(unwrapApiData<Community>(await api.get(`/communities/${slug}`)));
     } catch (err: any) {
       setError(err?.response?.data?.message || "Gagal memuat data komunitas.");
     } finally {

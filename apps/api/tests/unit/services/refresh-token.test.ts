@@ -11,9 +11,9 @@ vi.mock("@komunaid/database", () => {
     groupBy: vi.fn(async () => []),
     $transaction: vi.fn(async (fn: any) => {
       if (typeof fn === "function") {
-        const tx = new Proxy(handlers, {
-          get(target: any, prop: string) {
-            return target[prop] || vi.fn();
+        const tx = new Proxy({} as Record<string, typeof handlers>, {
+          get(_, prop: string) {
+            return handlers[prop] || handlers;
           },
         });
         return fn(tx);
@@ -136,13 +136,39 @@ describe("Refresh Token Service", () => {
         isRevoked: false,
         expiresAt: new Date(Date.now() + 86400000),
       });
-      (prisma.$transaction as any).mockResolvedValue([{ id: "updated" }, { id: "created" }]);
+      (prisma.refreshToken.updateMany as any).mockResolvedValue({ count: 1 });
+      (prisma.refreshToken.create as any).mockResolvedValue({ id: "created" });
 
       const result = await rotateRefreshToken(oldHash, "user-1");
 
       expect(result.reused).toBe(false);
       expect(result.newTokenHash).toBeDefined();
       expect(result.familyId).toBe("fam-1");
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+        where: { tokenHash: oldHash, isRevoked: false },
+        data: { isRevoked: true },
+      });
+    });
+
+    it("rejects concurrent consumption after atomic token consume loses", async () => {
+      const oldHash = hashToken("old-token");
+      (prisma.refreshToken.findUnique as any).mockResolvedValue({
+        id: "t1",
+        tokenHash: oldHash,
+        familyId: "fam-1",
+        isRevoked: false,
+        expiresAt: new Date(Date.now() + 86400000),
+      });
+      (prisma.refreshToken.updateMany as any).mockResolvedValueOnce({ count: 0 }).mockResolvedValueOnce({ count: 1 });
+
+      const result = await rotateRefreshToken(oldHash, "user-1");
+
+      expect(result).toMatchObject({ newTokenHash: "", familyId: "fam-1", reused: true });
+      expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+      expect(prisma.refreshToken.updateMany).toHaveBeenLastCalledWith({
+        where: { familyId: "fam-1", isRevoked: false },
+        data: { isRevoked: true },
+      });
     });
 
     it("should detect reuse when token is revoked", async () => {

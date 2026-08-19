@@ -458,16 +458,14 @@ export function createExponentialBackoffLimiter(key: string, baseWindowMs: numbe
 // CONVENIENCE LIMITERS
 // ==========================================
 
-function getIP(c: Context): string {
-  const trusted = process.env.TRUSTED_PROXIES === "true";
-  if (trusted) {
-    return (
-      c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
-      c.req.header("x-real-ip") ||
-      "unknown"
-    );
-  }
-  return c.req.header("x-real-ip") || "unknown";
+export function getIP(c: Context): string {
+  if (process.env.TRUSTED_PROXIES !== "true") return "unknown";
+
+  return (
+    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
+    c.req.header("x-real-ip") ||
+    "unknown"
+  );
 }
 
 /** Per-IP rate limiter. */

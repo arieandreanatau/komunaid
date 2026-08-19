@@ -82,6 +82,13 @@ describe("Community & Organization RBAC Middleware", () => {
       await expect(requireCommunityOwner(mockContext, mockNext)).rejects.toThrow("Forbidden");
     });
 
+    it("should throw Forbidden when membership is deleted", async () => {
+      (prisma.communityMember.findUnique as any).mockResolvedValue({
+        role: "OWNER", status: "ACTIVE", deletedAt: new Date(),
+      });
+      await expect(requireCommunityOwner(mockContext, mockNext)).rejects.toThrow("Forbidden");
+    });
+
     it("should fall back to query param for communityId", async () => {
       mockContext.req.param.mockReturnValue(undefined);
       mockContext.req.query.mockReturnValue("comm-query");
@@ -222,6 +229,13 @@ describe("Community & Organization RBAC Middleware", () => {
       (prisma.organizationMember.findUnique as any).mockResolvedValue({
         role: "ADMIN",
         status: "INACTIVE",
+      });
+      await expect(requireOrganizationAdmin(mockContext, mockNext)).rejects.toThrow("Forbidden");
+    });
+
+    it("should throw Forbidden when membership is deleted", async () => {
+      (prisma.organizationMember.findUnique as any).mockResolvedValue({
+        role: "ADMIN", status: "ACTIVE", deletedAt: new Date(),
       });
       await expect(requireOrganizationAdmin(mockContext, mockNext)).rejects.toThrow("Forbidden");
     });

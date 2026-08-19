@@ -1,4 +1,5 @@
 import axios from "axios";
+import type { AxiosResponse } from "axios";
 
 const API_URL = "";
 
@@ -54,6 +55,11 @@ export const api = axios.create({
     "Content-Type": "application/json",
   },
 });
+
+/** Extract standard API payload, including legacy community response envelopes. */
+export function unwrapApiData<T>(response: AxiosResponse<{ data?: T }>): T {
+  return response.data.data as T;
+}
 
 api.interceptors.request.use(async (config) => {
   if (config.method && config.method !== "get" && config.method !== "head" && config.method !== "options") {

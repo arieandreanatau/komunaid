@@ -116,7 +116,7 @@ userRoutes.get("/profile", authMiddleware, async (c) => {
     slug: membership.community.slug,
     logo: membership.community.logo,
     role: membership.role,
-    status: membership.community.status,
+    status: membership.status,
   });
   const activeMemberships = user.joinedCommunities.filter(
     (membership) => membership.status === "ACTIVE" && membership.deletedAt === null

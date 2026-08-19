@@ -260,6 +260,42 @@ describe("Events Integration Tests", () => {
     });
   });
 
+  describe("PATCH /events/:eventId organizer reassignment", () => {
+    it("requires active membership in target organizer and clears previous organizer", async () => {
+      const token = await generateToken({ sub: "user-1", email: "test@test.com", name: "Test", username: "test", type: "access" });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
+      const event = {
+        id: "event-1", status: "DRAFT", deletedAt: null, createdById: "user-1",
+        communityId: "comm-1", organizationId: null, title: "Test", categories: [],
+      };
+      (prisma.event.findUnique as any).mockResolvedValue(event);
+      (prisma.communityMember.findUnique as any).mockImplementation(({ where }: any) => {
+        const id = where.communityId_userId.communityId;
+        return id === "comm-1"
+          ? { role: "OWNER", status: "ACTIVE", deletedAt: null }
+          : { role: "ADMIN", status: "ACTIVE", deletedAt: new Date() };
+      });
+
+      const denied = await app.request("/api/v1/events/event-1", {
+        method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ communityId: "comm-2" }),
+      });
+      expect(denied.status).toBe(403);
+
+      (prisma.communityMember.findUnique as any).mockImplementation(({ where }: any) =>
+        ({ role: "ADMIN", status: "ACTIVE", deletedAt: null, communityId: where.communityId_userId.communityId })
+      );
+      const allowed = await app.request("/api/v1/events/event-1", {
+        method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ communityId: "comm-2" }),
+      });
+      expect(allowed.status).toBe(200);
+      expect(prisma.event.update).toHaveBeenLastCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ communityId: "comm-2", organizationId: null }),
+      }));
+    });
+  });
+
   describe("POST /events/:eventId/publish", () => {
     it("should return 401 without auth", async () => {
       const res = await app.request("/api/v1/events/event-1/publish", { method: "POST" });

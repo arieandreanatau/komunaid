@@ -180,7 +180,7 @@ describe("User Routes", () => {
       expect(body.data.user.interests).toEqual(["music", "sports"]);
     });
 
-    it("should map community members with role and status", async () => {
+    it("should expose membership status instead of community status", async () => {
       const token = await generateToken({ sub: "u1", email: "a@b.com", name: "A", username: "a", type: "access" });
       mockAuth({
         id: "u1", name: "A", username: "a", email: "a@b.com", phone: null, bio: null,
@@ -198,11 +198,12 @@ describe("User Routes", () => {
       const res = await app.request("/users/profile", {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const body = await res.json();
-      expect(body.data.user.communities).toHaveLength(2);
-      expect(body.data.user.communities[0].role).toBe("OWNER");
-      expect(body.data.user.communities[1].status).toBe("PENDING");
-      expect(body.data.user.createdCommunities).toHaveLength(1);
+       const body = await res.json();
+       expect(body.data.user.communities).toHaveLength(2);
+       expect(body.data.user.communities[0].role).toBe("OWNER");
+       expect(body.data.user.communities[1].status).toBe("ACTIVE");
+       expect(body.data.user.communities[1].status).not.toBe("PENDING");
+       expect(body.data.user.createdCommunities).toHaveLength(1);
       expect(body.data.user.followedCommunities).toHaveLength(1);
       expect(body.data.user.pastCommunities).toHaveLength(0);
     });

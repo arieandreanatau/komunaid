@@ -513,6 +513,17 @@ volunteerRoutes.patch("/:opportunityId", authMiddleware, validate(updateVoluntee
     contactEmail: sanitizeText(updateData.contactEmail),
   };
 
+  const existingPositionIds = positions?.flatMap((pos: { id?: string }) => pos.id ? [pos.id] : []) ?? [];
+  if (existingPositionIds.length > 0) {
+    const scopedPositions = await prisma.volunteerPosition.findMany({
+      where: { id: { in: existingPositionIds }, opportunityId },
+      select: { id: true },
+    });
+    if (scopedPositions.length !== existingPositionIds.length) {
+      return c.json({ success: false, message: "Posisi volunteer tidak ditemukan" }, 404);
+    }
+  }
+
   const updated = await prisma.volunteerOpportunity.update({
     where: { id: opportunityId },
     data: {
@@ -528,8 +539,8 @@ volunteerRoutes.patch("/:opportunityId", authMiddleware, validate(updateVoluntee
   if (positions) {
     for (const pos of positions) {
       if (pos.id) {
-        await prisma.volunteerPosition.update({
-          where: { id: pos.id },
+        const result = await prisma.volunteerPosition.updateMany({
+          where: { id: pos.id, opportunityId },
           data: {
             name: pos.name,
             description: pos.description,
@@ -537,6 +548,7 @@ volunteerRoutes.patch("/:opportunityId", authMiddleware, validate(updateVoluntee
             requirement: pos.requirement,
           },
         });
+        if (result.count !== 1) throw new Error("Posisi volunteer tidak ditemukan");
       } else {
         await prisma.volunteerPosition.create({
           data: {
