@@ -248,14 +248,19 @@ describe("Report Routes", () => {
   });
 
   describe("GET /my", () => {
-    it("should be shadowed by /:reportId route (matches as reportId=my)", async () => {
+    it("should return caller reports instead of matching the dynamic ID route", async () => {
       const token = await generateToken({ sub: "u1", email: "a@b.com", name: "A", username: "a", type: "access" });
       mockAuth(null);
+      (prisma.report.findMany as any).mockResolvedValue([{ id: "r1", reporterId: "u1" }]);
+      (prisma.report.count as any).mockResolvedValue(1);
 
       const res = await app.request("/reports/my", {
         headers: { Authorization: `Bearer ${token}` },
       });
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.data).toEqual([{ id: "r1", reporterId: "u1" }]);
+      expect(prisma.report.findUnique).not.toHaveBeenCalledWith({ where: { id: "my" } });
     });
 
     it("should return 401 without auth", async () => {

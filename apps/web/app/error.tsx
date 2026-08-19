@@ -23,7 +23,7 @@ export default function Error({
           Terjadi Kesalahan
         </h2>
         <p className="text-gray-600 mb-6">
-          {error.message || "Terjadi kesalahan yang tidak terduga."}
+          Terjadi kesalahan tak terduga. Silakan coba lagi.
         </p>
         <button
           onClick={reset}

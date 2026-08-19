@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Header } from "@/components/header";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { sidebarItems, isActiveHref } from "@/components/admin/navigation";
 import { WorkspaceTabs } from "@/components/admin/workspace-tabs";
+import { useDrawerDialog } from "@/components/ui/use-drawer-dialog";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -14,6 +15,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
 
   const isSuperAdmin = user?.roles?.includes("SUPER_ADMIN");
   const isAdmin = user?.roles?.includes("PLATFORM_ADMIN") || isSuperAdmin;
@@ -25,15 +29,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
   }, [isLoading, isAuthenticated, isAdmin, router, isLoginPage]);
 
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setSidebarOpen(false);
-    };
-    if (sidebarOpen) {
-      document.addEventListener("keydown", handleEscape);
-      return () => document.removeEventListener("keydown", handleEscape);
-    }
-  }, [sidebarOpen]);
+  useDrawerDialog(sidebarOpen, sidebarRef, menuButtonRef, () => setSidebarOpen(false), mainRef);
 
   const filteredItems = sidebarItems.filter((item) => {
     if (item.superAdminOnly && !isSuperAdmin) return false;
@@ -125,6 +121,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         <div className="lg:hidden fixed bottom-4 left-4 z-50">
           <button
+            ref={menuButtonRef}
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="p-3 bg-komuna-blue text-white rounded-full shadow-lg hover:bg-komuna-navy transition-colors"
             aria-label={sidebarOpen ? "Tutup menu admin" : "Buka menu admin"}
@@ -144,7 +141,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {sidebarOpen && (
           <div className="lg:hidden fixed inset-0 z-40" id="admin-sidebar-mobile">
             <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} aria-hidden="true" />
-            <aside className="absolute left-0 top-0 bottom-0 w-64 bg-white shadow-xl z-50" role="dialog" aria-label="Navigasi admin" aria-modal="true">
+            <aside ref={sidebarRef} tabIndex={-1} className="absolute left-0 top-0 bottom-0 w-64 bg-white shadow-xl z-50" role="dialog" aria-label="Navigasi admin" aria-modal="true">
               <div className="flex items-center justify-between p-4 border-b">
                 <span className="font-semibold text-komuna-navy">Admin Panel</span>
                 <button onClick={() => setSidebarOpen(false)} className="p-1 hover:bg-gray-100 rounded" aria-label="Tutup sidebar admin">
@@ -160,7 +157,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         )}
 
-        <main className="flex-1 min-h-[calc(100vh-4rem)]">
+        <main ref={mainRef} className="flex-1 min-h-[calc(100vh-4rem)]">
           <WorkspaceTabs />
           <div className="max-w-7xl mx-auto px-4 py-6">
             {children}

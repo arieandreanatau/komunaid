@@ -131,7 +131,7 @@ model Community {
   owner               User                 @relation(fields: [ownerId], references: [id])
   members             CommunityMember[]
   events              Event[]
-  volunteerPrograms   VolunteerProgram[]
+  volunteerPrograms   VolunteerProgram[] @relation("VolunteerProgramCommunity")
   categories          CommunityCategory[]
   joinRequests        JoinRequest[]
   tags                CommunityTag[]
@@ -685,10 +685,10 @@ enum VolunteerOpportunityStatus {
 
 model VolunteerProgram {
   id              String                  @id @default(cuid())
-  title           String
-  slug            String                  @unique
+  title           String                  @db.VarChar(200)
+  slug            String
   description     String?                 @db.Text
-  location        String?
+  location        String?                 @db.VarChar(200)
   capacity        Int
   registrationDeadline DateTime?
   startDate       DateTime
@@ -704,17 +704,18 @@ model VolunteerProgram {
   createdAt       DateTime                @default(now())
   updatedAt       DateTime                @updatedAt
 
-  community       Community?              @relation(fields: [communityId], references: [id], onDelete: SetNull)
-  organizerUser   User                    @relation("VolunteerProgramOrganizer", fields: [organizerUserId], references: [id])
-  reviewedBy      User?                   @relation("ReviewedVolunteerPrograms", fields: [reviewedById], references: [id])
+  community       Community?              @relation("VolunteerProgramCommunity", fields: [communityId], references: [id], onDelete: SetNull, map: "vp_community_fk")
+  organizerUser   User                    @relation("VolunteerProgramOrganizer", fields: [organizerUserId], references: [id], map: "vp_organizer_user_fk")
+  reviewedBy      User?                   @relation("ReviewedVolunteerPrograms", fields: [reviewedById], references: [id], map: "vp_reviewed_by_fk")
   accesses        VolunteerProgramOrganizerAccess[]
   applications    VolunteerProgramApplication[]
 
-  @@index([communityId, status])
-  @@index([organizerUserId, status])
-  @@index([organizerType, status])
-  @@index([status, startDate])
-  @@index([deletedAt])
+  @@unique([slug], map: "vp_slug_uq")
+  @@index([communityId, status], map: "vp_community_status_idx")
+  @@index([organizerUserId, status], map: "vp_organizer_user_status_idx")
+  @@index([organizerType, status], map: "vp_organizer_type_status_idx")
+  @@index([status, startDate], map: "vp_status_start_date_idx")
+  @@index([deletedAt], map: "vp_deleted_at_idx")
   @@map("volunteer_programs")
 }
 
@@ -751,12 +752,12 @@ model VolunteerProgramOrganizerAccess {
   createdAt          DateTime                       @default(now())
   updatedAt          DateTime                       @updatedAt
 
-  volunteerProgram VolunteerProgram @relation(fields: [volunteerProgramId], references: [id], onDelete: Cascade)
-  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  volunteerProgram VolunteerProgram @relation(fields: [volunteerProgramId], references: [id], onDelete: Cascade, map: "vpoa_program_fk")
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade, map: "vpoa_user_fk")
 
-  @@unique([volunteerProgramId, userId])
-  @@index([userId, status, expiresAt])
-  @@index([volunteerProgramId, status])
+  @@unique([volunteerProgramId, userId], map: "vpoa_program_user_uq")
+  @@index([userId, status, expiresAt], map: "vpoa_user_status_expiry_idx")
+  @@index([volunteerProgramId, status], map: "vpoa_program_status_idx")
   @@map("volunteer_program_organizer_accesses")
 }
 
@@ -783,14 +784,14 @@ model VolunteerProgramApplication {
   createdAt          DateTime                          @default(now())
   updatedAt          DateTime                          @updatedAt
 
-  volunteerProgram VolunteerProgram              @relation(fields: [volunteerProgramId], references: [id], onDelete: Cascade)
-  user             User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  reviewedBy       User?                         @relation("ReviewedVolunteerProgramApplications", fields: [reviewedById], references: [id])
+  volunteerProgram VolunteerProgram              @relation(fields: [volunteerProgramId], references: [id], onDelete: Cascade, map: "vpa_program_fk")
+  user             User                          @relation(fields: [userId], references: [id], onDelete: Cascade, map: "vpa_user_fk")
+  reviewedBy       User?                         @relation("ReviewedVolunteerProgramApplications", fields: [reviewedById], references: [id], map: "vpa_reviewer_fk")
   participation    VolunteerProgramParticipation?
 
-  @@unique([volunteerProgramId, userId])
-  @@index([userId, status])
-  @@index([volunteerProgramId, status])
+  @@unique([volunteerProgramId, userId], map: "vpa_program_user_uq")
+  @@index([userId, status], map: "vpa_user_status_idx")
+  @@index([volunteerProgramId, status], map: "vpa_program_status_idx")
   @@map("volunteer_program_applications")
 }
 
@@ -804,7 +805,7 @@ enum VolunteerProgramApplicationStatus {
 
 model VolunteerProgramParticipation {
   id            String                             @id @default(cuid())
-  applicationId String                             @unique
+  applicationId String
   status        VolunteerProgramParticipationStatus @default(UPCOMING)
   attendance    VolunteerProgramAttendanceStatus    @default(NOT_RECORDED)
   attendedAt    DateTime?
@@ -812,10 +813,11 @@ model VolunteerProgramParticipation {
   createdAt     DateTime                           @default(now())
   updatedAt     DateTime                           @updatedAt
 
-  application VolunteerProgramApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  application VolunteerProgramApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade, map: "vpp_application_fk")
 
-  @@index([status])
-  @@index([attendance])
+  @@unique([applicationId], map: "vpp_application_uq")
+  @@index([status], map: "vpp_status_idx")
+  @@index([attendance], map: "vpp_attendance_idx")
   @@map("volunteer_program_participations")
 }
 

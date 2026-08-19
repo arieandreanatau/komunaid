@@ -17,6 +17,7 @@ import { requireSuperAdmin } from "../middleware/rbac";
 import { validate } from "../middleware/validate";
 import { createAuditLog } from "../services/audit";
 import { sanitizeText } from "../lib/xss";
+import { createWithUniqueSlug } from "../lib/slug";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
 
@@ -50,12 +51,6 @@ function datesAreValid(data: { registrationDeadline?: string; startDate?: string
   if (startDate && endDate && endDate <= startDate) return false;
   if (deadline && startDate && deadline >= startDate) return false;
   return true;
-}
-
-async function uniqueSlug(title: string) {
-  const base = slugify(title);
-  const existing = await prisma.volunteerProgram.findUnique({ where: { slug: base } });
-  return existing ? `${base}-${Date.now()}` : base;
 }
 
 async function communityVolunteerPermission(userId: string, communityId: string) {
@@ -210,14 +205,17 @@ volunteerProgramRoutes.post("/independent-proposals", authMiddleware, validate(c
   const user = c.get("user");
   const data = c.get("validated");
   if (!datesAreValid(data)) return c.json({ success: false, message: "Rentang jadwal program tidak valid" }, 400);
-  const program = await prisma.volunteerProgram.create({
-    data: {
-      title: sanitizeText(data.title) ?? data.title, description: sanitizeText(data.description) ?? data.description, location: sanitizeText(data.location) ?? data.location,
-      capacity: data.capacity, registrationDeadline: data.registrationDeadline ? parseDate(data.registrationDeadline) : null,
-      startDate: parseDate(data.startDate), endDate: parseDate(data.endDate), slug: await uniqueSlug(data.title),
-      organizerType: "INDEPENDENT", organizerUserId: user.id, status: "UNDER_REVIEW",
-    },
-  });
+  const program = await createWithUniqueSlug((slug) =>
+    prisma.volunteerProgram.create({
+      data: {
+        title: sanitizeText(data.title) ?? data.title, description: sanitizeText(data.description) ?? data.description, location: sanitizeText(data.location) ?? data.location,
+        capacity: data.capacity, registrationDeadline: data.registrationDeadline ? parseDate(data.registrationDeadline) : null,
+        startDate: parseDate(data.startDate), endDate: parseDate(data.endDate), slug,
+        organizerType: "INDEPENDENT", organizerUserId: user.id, status: "UNDER_REVIEW",
+      },
+    }),
+    data.title
+  );
   await createAuditLog({ userId: user.id, actionType: "VOLUNTEER_PROGRAM_SUBMIT", resourceName: "VolunteerProgram", resourceId: program.id, afterData: { organizerType: "INDEPENDENT", status: program.status } });
   return c.json({ success: true, message: "Proposal volunteer dikirim untuk ditinjau", data: program }, 201);
 });
@@ -231,14 +229,17 @@ volunteerProgramRoutes.post("/communities/:communityId", authMiddleware, validat
   if (!datesAreValid(data)) return c.json({ success: false, message: "Rentang jadwal program tidak valid" }, 400);
   const community = await prisma.community.findFirst({ where: { id: communityId, status: "APPROVED", deletedAt: null } });
   if (!community) return c.json({ success: false, message: "Komunitas tidak aktif" }, 404);
-  const program = await prisma.volunteerProgram.create({
-    data: {
-      title: sanitizeText(data.title) ?? data.title, description: sanitizeText(data.description) ?? data.description, location: sanitizeText(data.location) ?? data.location,
-      capacity: data.capacity, registrationDeadline: data.registrationDeadline ? parseDate(data.registrationDeadline) : null,
-      startDate: parseDate(data.startDate), endDate: parseDate(data.endDate), slug: await uniqueSlug(data.title),
-      organizerType: "COMMUNITY", communityId, organizerUserId: user.id, status: "DRAFT",
-    },
-  });
+  const program = await createWithUniqueSlug((slug) =>
+    prisma.volunteerProgram.create({
+      data: {
+        title: sanitizeText(data.title) ?? data.title, description: sanitizeText(data.description) ?? data.description, location: sanitizeText(data.location) ?? data.location,
+        capacity: data.capacity, registrationDeadline: data.registrationDeadline ? parseDate(data.registrationDeadline) : null,
+        startDate: parseDate(data.startDate), endDate: parseDate(data.endDate), slug,
+        organizerType: "COMMUNITY", communityId, organizerUserId: user.id, status: "DRAFT",
+      },
+    }),
+    data.title
+  );
   await createAuditLog({ userId: user.id, actionType: "VOLUNTEER_PROGRAM_CREATE", resourceName: "VolunteerProgram", resourceId: program.id, afterData: { organizerType: "COMMUNITY", communityId } });
   return c.json({ success: true, message: "Program volunteer komunitas dibuat", data: program }, 201);
 });

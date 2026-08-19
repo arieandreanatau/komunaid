@@ -97,7 +97,7 @@ export async function requireCommunityOwner(c: Context, next: Next) {
     },
   });
 
-  if (!membership || membership.role !== "OWNER" || membership.status !== "ACTIVE") {
+  if (!membership || membership.role !== "OWNER" || membership.status !== "ACTIVE" || membership.deletedAt != null) {
     throw new Error("Forbidden");
   }
 
@@ -121,7 +121,7 @@ export async function requireCommunityAdmin(c: Context, next: Next) {
     },
   });
 
-  if (!membership || !["OWNER", "ADMIN"].includes(membership.role) || membership.status !== "ACTIVE") {
+  if (!membership || !["OWNER", "ADMIN"].includes(membership.role) || membership.status !== "ACTIVE" || membership.deletedAt != null) {
     throw new Error("Forbidden");
   }
 
@@ -145,7 +145,7 @@ export async function requireOrganizationOwner(c: Context, next: Next) {
     },
   });
 
-  if (!membership || membership.role !== "OWNER" || membership.status !== "ACTIVE") {
+  if (!membership || membership.role !== "OWNER" || membership.status !== "ACTIVE" || membership.deletedAt != null) {
     throw new Error("Forbidden");
   }
 
@@ -169,7 +169,7 @@ export async function requireOrganizationAdmin(c: Context, next: Next) {
     },
   });
 
-  if (!membership || !["OWNER", "ADMIN"].includes(membership.role) || membership.status !== "ACTIVE") {
+  if (!membership || !["OWNER", "ADMIN"].includes(membership.role) || membership.status !== "ACTIVE" || membership.deletedAt != null) {
     throw new Error("Forbidden");
   }
 

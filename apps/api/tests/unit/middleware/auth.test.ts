@@ -324,6 +324,48 @@ describe("Auth Middleware", () => {
 
       await expect(authMiddleware(mockContext, mockNext)).rejects.toThrow("Unauthorized");
     });
+
+    it("should throw Unauthorized for soft-deleted user (deletedAt set)", async () => {
+      const { prisma } = await import("@komunaid/database");
+      (prisma.user.findUnique as any).mockResolvedValue({
+        tokenVersion: 0,
+        status: "ACTIVE",
+        deletedAt: new Date("2026-01-01T00:00:00Z"),
+      });
+
+      const token = await generateAccessToken(
+        { id: "user-1", email: "test@test.com", name: "Test", username: "testuser" },
+        0
+      );
+      mockContext.req.header.mockImplementation((name: string) => {
+        if (name === "Authorization") return `Bearer ${token}`;
+        return undefined;
+      });
+
+      await expect(authMiddleware(mockContext, mockNext)).rejects.toThrow("Unauthorized");
+      expect(mockNext).not.toHaveBeenCalled();
+    });
+
+    it("should throw Forbidden for suspended user", async () => {
+      const { prisma } = await import("@komunaid/database");
+      (prisma.user.findUnique as any).mockResolvedValue({
+        tokenVersion: 0,
+        status: "SUSPENDED",
+        deletedAt: null,
+      });
+
+      const token = await generateAccessToken(
+        { id: "user-1", email: "test@test.com", name: "Test", username: "testuser" },
+        0
+      );
+      mockContext.req.header.mockImplementation((name: string) => {
+        if (name === "Authorization") return `Bearer ${token}`;
+        return undefined;
+      });
+
+      await expect(authMiddleware(mockContext, mockNext)).rejects.toThrow("Forbidden");
+      expect(mockNext).not.toHaveBeenCalled();
+    });
   });
 
   describe("optionalAuthMiddleware", () => {
@@ -356,6 +398,28 @@ describe("Auth Middleware", () => {
     it("should continue without user when token is invalid", async () => {
       mockContext.req.header.mockImplementation((name: string) => {
         if (name === "Authorization") return "Bearer bad.token.here";
+        return undefined;
+      });
+
+      await optionalAuthMiddleware(mockContext, mockNext);
+      expect(mockNext).toHaveBeenCalled();
+      expect(mockContext.set).not.toHaveBeenCalled();
+    });
+
+    it("should continue without user for soft-deleted user (deletedAt set)", async () => {
+      const { prisma } = await import("@komunaid/database");
+      (prisma.user.findUnique as any).mockResolvedValue({
+        tokenVersion: 0,
+        status: "ACTIVE",
+        deletedAt: new Date("2026-01-01T00:00:00Z"),
+      });
+
+      const token = await generateAccessToken(
+        { id: "user-1", email: "test@test.com", name: "Test", username: "testuser" },
+        0
+      );
+      mockContext.req.header.mockImplementation((name: string) => {
+        if (name === "Authorization") return `Bearer ${token}`;
         return undefined;
       });
 

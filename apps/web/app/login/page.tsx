@@ -8,20 +8,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { loginSchema, type LoginInput } from "@komunaid/shared";
 import api from "@/lib/api";
 import { useAuth } from "@/components/auth-provider";
-
-const INTERNAL_PATHS = ["/dashboard", "/communities", "/events", "/organizations", "/volunteer", "/admin", "/settings"];
-
-function isSafeRedirect(path: string | null): boolean {
-  if (!path) return false;
-  if (path.startsWith("/")) return INTERNAL_PATHS.some((p) => path === p || path.startsWith(p + "/"));
-  return false;
-}
+import { safeRedirect } from "@/lib/redirect";
 
 export default function LoginPage() {
   const router = useRouter();
   const { user, isAuthenticated, isLoading, setUser } = useAuth();
   const searchParams = useSearchParams();
-  const redirectTo = isSafeRedirect(searchParams.get("redirect")) ? searchParams.get("redirect")! : "/dashboard";
+  const redirectTo = safeRedirect(searchParams.get("redirect"), "/dashboard");
   const [error, setError] = useState("");
 
   useEffect(() => {

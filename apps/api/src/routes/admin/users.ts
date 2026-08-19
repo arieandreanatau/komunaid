@@ -20,6 +20,14 @@ function pagination(url: string) {
   return { page, limit, search, sortBy, sortOrder, skip: (page - 1) * limit };
 }
 
+async function canMutateTarget(callerId: string, targetId: string): Promise<boolean> {
+  const callerRoles = await prisma.userRole.findMany({ where: { userId: callerId }, select: { role: true } });
+  if (callerRoles.some((role) => role.role === "SUPER_ADMIN")) return true;
+
+  const targetRoles = await prisma.userRole.findMany({ where: { userId: targetId }, select: { role: true } });
+  return !targetRoles.some((role) => ["SUPER_ADMIN", "PLATFORM_ADMIN"].includes(role.role));
+}
+
 usersRoutes.get("/users", async (c) => {
   const { page, limit, search, sortBy, sortOrder, skip } = pagination(c.req.url);
   const url = new URL(c.req.url);
@@ -180,13 +188,8 @@ usersRoutes.put("/users/:userId/suspend", async (c) => {
     return c.json({ success: false, message: "User sudah ditangguhkan" }, 400);
   }
 
-  const callerRoles = await prisma.userRole.findMany({ where: { userId: authUser.id }, select: { role: true } });
-  const isSuperAdmin = callerRoles.some((r) => r.role === "SUPER_ADMIN");
-  if (!isSuperAdmin) {
-    const targetRoles = await prisma.userRole.findMany({ where: { userId }, select: { role: true } });
-    if (targetRoles.some((r) => ["SUPER_ADMIN", "PLATFORM_ADMIN"].includes(r.role))) {
-      return c.json({ success: false, message: "Tidak dapat menangguhkan user dengan hak akses lebih tinggi" }, 403);
-    }
+  if (!await canMutateTarget(authUser.id, userId)) {
+    return c.json({ success: false, message: "Tidak dapat mengubah user dengan hak akses lebih tinggi" }, 403);
   }
 
   const before = { status: user.status };
@@ -230,6 +233,10 @@ usersRoutes.put("/users/:userId/activate", async (c) => {
     return c.json({ success: false, message: "User sudah aktif" }, 400);
   }
 
+  if (!await canMutateTarget(authUser.id, userId)) {
+    return c.json({ success: false, message: "Tidak dapat mengubah user dengan hak akses lebih tinggi" }, 403);
+  }
+
   const before = { status: user.status };
 
   await prisma.user.update({
@@ -271,6 +278,10 @@ usersRoutes.put("/users/:userId/archive", async (c) => {
     return c.json({ success: false, message: "User sudah diarsipkan" }, 400);
   }
 
+  if (!await canMutateTarget(authUser.id, userId)) {
+    return c.json({ success: false, message: "Tidak dapat mengubah user dengan hak akses lebih tinggi" }, 403);
+  }
+
   const before = { status: user.status, deletedAt: user.deletedAt };
 
   await prisma.user.update({
@@ -297,6 +308,10 @@ usersRoutes.put("/users/:userId/restore", async (c) => {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) {
     return c.json({ success: false, message: "User tidak ditemukan" }, 404);
+  }
+
+  if (!await canMutateTarget(authUser.id, userId)) {
+    return c.json({ success: false, message: "Tidak dapat mengubah user dengan hak akses lebih tinggi" }, 403);
   }
 
   const before = { status: user.status, deletedAt: user.deletedAt };

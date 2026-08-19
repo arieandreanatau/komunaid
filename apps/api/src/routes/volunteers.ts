@@ -12,6 +12,7 @@ import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import { createAuditLog, AuditActions } from "../services/audit";
 import { xssSanitize, sanitizeText } from "../lib/xss";
+import { createWithUniqueSlug } from "../lib/slug";
 import { slugify } from "@komunaid/utils";
 import type { AuthUser } from "../middleware/auth";
 
@@ -418,10 +419,6 @@ volunteerRoutes.post("/", authMiddleware, validate(createVolunteerOpportunitySch
     return c.json({ success: false, message: "Tidak memiliki akses membuat volunteer opportunity" }, 403);
   }
 
-  let slug = slugify(data.title);
-  const existingSlug = await prisma.volunteerOpportunity.findUnique({ where: { slug } });
-  if (existingSlug) slug = `${slug}-${Date.now()}`;
-
   const { positions, ...opportunityData } = data;
 
   const sanitizedOpportunityData = {
@@ -431,29 +428,33 @@ volunteerRoutes.post("/", authMiddleware, validate(createVolunteerOpportunitySch
     contactEmail: sanitizeText(opportunityData.contactEmail),
   };
 
-  const opportunity = await prisma.volunteerOpportunity.create({
-    data: {
-      ...sanitizedOpportunityData,
-      slug,
-      createdById: authUser.id,
-      registrationDeadline: data.registrationDeadline ? new Date(data.registrationDeadline) : null,
-      briefingDate: data.briefingDate ? new Date(data.briefingDate) : null,
-      activityStartDate: data.activityStartDate ? new Date(data.activityStartDate) : null,
-      activityEndDate: data.activityEndDate ? new Date(data.activityEndDate) : null,
-      positions: {
-        create: positions.map((p: any) => ({
-          name: p.name,
-          description: p.description,
-          requiredQty: p.requiredQty,
-          requirement: p.requirement,
-        })),
+  const opportunity = await createWithUniqueSlug(
+    (slug) =>
+      prisma.volunteerOpportunity.create({
+      data: {
+        ...sanitizedOpportunityData,
+        slug,
+        createdById: authUser.id,
+        registrationDeadline: data.registrationDeadline ? new Date(data.registrationDeadline) : null,
+        briefingDate: data.briefingDate ? new Date(data.briefingDate) : null,
+        activityStartDate: data.activityStartDate ? new Date(data.activityStartDate) : null,
+        activityEndDate: data.activityEndDate ? new Date(data.activityEndDate) : null,
+        positions: {
+          create: positions.map((p: any) => ({
+            name: p.name,
+            description: p.description,
+            requiredQty: p.requiredQty,
+            requirement: p.requirement,
+          })),
+        },
       },
-    },
-    include: {
-      positions: true,
-      event: { select: { id: true, title: true, slug: true } },
-    },
-  });
+      include: {
+        positions: true,
+        event: { select: { id: true, title: true, slug: true } },
+      },
+    }),
+    data.title
+  );
 
   await createAuditLog({
     userId: authUser.id,
@@ -513,6 +514,17 @@ volunteerRoutes.patch("/:opportunityId", authMiddleware, validate(updateVoluntee
     contactEmail: sanitizeText(updateData.contactEmail),
   };
 
+  const existingPositionIds = positions?.flatMap((pos: { id?: string }) => pos.id ? [pos.id] : []) ?? [];
+  if (existingPositionIds.length > 0) {
+    const scopedPositions = await prisma.volunteerPosition.findMany({
+      where: { id: { in: existingPositionIds }, opportunityId },
+      select: { id: true },
+    });
+    if (scopedPositions.length !== existingPositionIds.length) {
+      return c.json({ success: false, message: "Posisi volunteer tidak ditemukan" }, 404);
+    }
+  }
+
   const updated = await prisma.volunteerOpportunity.update({
     where: { id: opportunityId },
     data: {
@@ -528,8 +540,8 @@ volunteerRoutes.patch("/:opportunityId", authMiddleware, validate(updateVoluntee
   if (positions) {
     for (const pos of positions) {
       if (pos.id) {
-        await prisma.volunteerPosition.update({
-          where: { id: pos.id },
+        const result = await prisma.volunteerPosition.updateMany({
+          where: { id: pos.id, opportunityId },
           data: {
             name: pos.name,
             description: pos.description,
@@ -537,6 +549,7 @@ volunteerRoutes.patch("/:opportunityId", authMiddleware, validate(updateVoluntee
             requirement: pos.requirement,
           },
         });
+        if (result.count !== 1) throw new Error("Posisi volunteer tidak ditemukan");
       } else {
         await prisma.volunteerPosition.create({
           data: {
@@ -707,6 +720,34 @@ volunteerRoutes.post("/:opportunityId/close", authMiddleware, async (c) => {
     data: { status: "CLOSED" },
   });
 
+  // Reject outstanding pending applications (APPLIED/REVIEWED).
+  // ACCEPTED volunteers are preserved — they already have a confirmed slot.
+  const pendingApplications = await prisma.volunteerApplication.findMany({
+    where: { opportunityId, status: { in: ["APPLIED", "REVIEWED"] } },
+  });
+
+  if (pendingApplications.length > 0) {
+    await prisma.volunteerApplication.updateMany({
+      where: { opportunityId, status: { in: ["APPLIED", "REVIEWED"] } },
+      data: {
+        status: "REJECTED",
+        reviewNote: "Volunteer opportunity ditutup oleh penyelenggara.",
+        reviewedAt: new Date(),
+        reviewedById: authUser.id,
+      },
+    });
+
+    await prisma.notification.createMany({
+      data: pendingApplications.map((a) => ({
+        userId: a.userId,
+        title: "Kesempatan Volunteer Ditutup",
+        message: `Kesempatan volunteer "${opportunity.title}" telah ditutup. Pendaftaran Anda dibatalkan.`,
+        type: "EVENT" as const,
+        link: `/volunteer/${opportunity.slug}`,
+      })),
+    });
+  }
+
   await createAuditLog({
     userId: authUser.id,
     actionType: AuditActions.VOLUNTEER_OPPORTUNITY_CLOSE,
@@ -796,51 +837,69 @@ volunteerRoutes.post("/:opportunityId/apply", authMiddleware, validate(applyVolu
     return c.json({ success: false, message: "Batas pendaftaran sudah lewat" }, 400);
   }
 
-  const position = await prisma.volunteerPosition.findUnique({
-    where: { id: data.positionId },
-    include: {
-      _count: {
-        select: {
-          applications: { where: { status: { in: ["APPLIED", "ACCEPTED"] } } },
+  const result = await prisma.$transaction(async (tx) => {
+    const lockedPosition = await tx.$queryRaw<{ id: string; requiredQty: number }[]>`
+      SELECT \`id\`, \`requiredQty\` FROM \`volunteer_positions\` WHERE \`id\` = ${data.positionId} FOR UPDATE
+    `;
+
+    if (!lockedPosition[0]) {
+      return { status: 404, error: "Posisi tidak ditemukan" } as const;
+    }
+
+    const position = await tx.volunteerPosition.findUnique({
+      where: { id: data.positionId },
+      include: {
+        _count: {
+          select: {
+            applications: { where: { status: { in: ["APPLIED", "ACCEPTED"] } } },
+          },
         },
       },
-    },
+    });
+
+    if (!position || position.opportunityId !== opportunityId) {
+      return { status: 404, error: "Posisi tidak ditemukan" } as const;
+    }
+
+    if (position._count.applications >= position.requiredQty) {
+      return { status: 400, error: "Kuota posisi ini sudah penuh" } as const;
+    }
+
+    const existingApplication = await tx.volunteerApplication.findUnique({
+      where: { opportunityId_userId: { opportunityId, userId: authUser.id } },
+    });
+
+    if (existingApplication && ["APPLIED", "ACCEPTED"].includes(existingApplication.status)) {
+      return { status: 409, error: "Sudah mendaftar di opportunity ini" } as const;
+    }
+
+    if (existingApplication) {
+      await tx.volunteerApplication.delete({ where: { id: existingApplication.id } });
+    }
+
+    const application = await tx.volunteerApplication.create({
+      data: {
+        opportunityId,
+        positionId: data.positionId,
+        userId: authUser.id,
+        motivation: data.motivation,
+        experience: data.experience,
+        availability: data.availability,
+        agreement: data.agreement,
+      },
+      include: {
+        position: { select: { id: true, name: true } },
+      },
+    });
+
+    return { status: 201, application, position } as const;
   });
 
-  if (!position || position.opportunityId !== opportunityId) {
-    return c.json({ success: false, message: "Posisi tidak ditemukan" }, 404);
+  if ("error" in result) {
+    return c.json({ success: false, message: result.error }, result.status);
   }
 
-  if (position._count.applications >= position.requiredQty) {
-    return c.json({ success: false, message: "Kuota posisi ini sudah penuh" }, 400);
-  }
-
-  const existingApplication = await prisma.volunteerApplication.findUnique({
-    where: { opportunityId_userId: { opportunityId, userId: authUser.id } },
-  });
-
-  if (existingApplication && ["APPLIED", "ACCEPTED"].includes(existingApplication.status)) {
-    return c.json({ success: false, message: "Sudah mendaftar di opportunity ini" }, 409);
-  }
-
-  if (existingApplication) {
-    await prisma.volunteerApplication.delete({ where: { id: existingApplication.id } });
-  }
-
-  const application = await prisma.volunteerApplication.create({
-    data: {
-      opportunityId,
-      positionId: data.positionId,
-      userId: authUser.id,
-      motivation: data.motivation,
-      experience: data.experience,
-      availability: data.availability,
-      agreement: data.agreement,
-    },
-    include: {
-      position: { select: { id: true, name: true } },
-    },
-  });
+  const { application, position } = result;
 
   await prisma.notification.create({
     data: {
@@ -1024,30 +1083,38 @@ volunteerRoutes.patch("/applications/:applicationId/accept", authMiddleware, val
     return c.json({ success: false, message: "Hanya pendaftaran dengan status APPLIED yang dapat diterima" }, 400);
   }
 
-  const positionSlot = await prisma.volunteerPosition.findUnique({
-    where: { id: application.positionId },
-    include: {
-      _count: {
-        select: {
-          applications: { where: { status: { in: ["APPLIED", "ACCEPTED"] } } },
-        },
+  const acceptResult = await prisma.$transaction(async (tx) => {
+    const lockedPosition = await tx.$queryRaw<{ id: string; requiredQty: number }[]>`
+      SELECT \`id\`, \`requiredQty\` FROM \`volunteer_positions\` WHERE \`id\` = ${application.positionId} FOR UPDATE
+    `;
+
+    if (lockedPosition[0]) {
+      const acceptedCount = await tx.volunteerApplication.count({
+        where: { positionId: application.positionId, status: "ACCEPTED" },
+      });
+
+      if (acceptedCount >= lockedPosition[0].requiredQty) {
+        return { full: true as const };
+      }
+    }
+
+    const updated = await tx.volunteerApplication.update({
+      where: { id: applicationId },
+      data: {
+        status: "ACCEPTED",
+        reviewedAt: new Date(),
+        reviewedById: authUser.id,
+        reviewNote: data.reviewNote,
       },
-    },
+    });
+
+    return { full: false as const, updated };
   });
 
-  if (positionSlot && positionSlot._count.applications >= positionSlot.requiredQty) {
+  if (acceptResult.full) {
     return c.json({ success: false, message: "Kuota posisi sudah penuh" }, 400);
   }
-
-  const updated = await prisma.volunteerApplication.update({
-    where: { id: applicationId },
-    data: {
-      status: "ACCEPTED",
-      reviewedAt: new Date(),
-      reviewedById: authUser.id,
-      reviewNote: data.reviewNote,
-    },
-  });
+  const updated = acceptResult.updated;
 
   await prisma.notification.create({
     data: {

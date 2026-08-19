@@ -6,6 +6,7 @@ import { requirePlatformAdmin } from "../middleware/rbac";
 import { validate } from "../middleware/validate";
 import { adminCreateCategorySchema, adminUpdateCategorySchema } from "@komunaid/shared";
 import { createAuditLog, AuditActions } from "../services/audit";
+import { isUniqueConstraintError } from "../lib/slug";
 import type { AuthUser } from "../middleware/auth";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
@@ -45,30 +46,36 @@ categoryRoutes.post("/", authMiddleware, requirePlatformAdmin(), validate(adminC
     .replace(/(^-|-$)/g, "");
 
   const existing = await prisma.category.findUnique({ where: { slug } });
-
   if (existing) {
     return c.json({ success: false, message: "Kategori sudah ada" }, 409);
   }
 
-  const category = await prisma.category.create({
-    data: {
-      name,
-      slug,
-      description,
-      icon,
-      type: (type as any) || CATEGORY_TYPES.COMMUNITY,
-    },
-  });
+  try {
+    const category = await prisma.category.create({
+      data: {
+        name,
+        slug,
+        description,
+        icon,
+        type: (type as any) || CATEGORY_TYPES.COMMUNITY,
+      },
+    });
 
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.SETTINGS_UPDATE,
-    resourceName: "Category",
-    resourceId: category.id,
-    afterData: { name: category.name, slug: category.slug, type: category.type },
-  });
+    await createAuditLog({
+      userId: authUser.id,
+      actionType: AuditActions.SETTINGS_UPDATE,
+      resourceName: "Category",
+      resourceId: category.id,
+      afterData: { name: category.name, slug: category.slug, type: category.type },
+    });
 
-  return c.json({ success: true, data: category }, 201);
+    return c.json({ success: true, data: category }, 201);
+  } catch (err) {
+    if (isUniqueConstraintError(err)) {
+      return c.json({ success: false, message: "Kategori sudah ada" }, 409);
+    }
+    throw err;
+  }
 });
 
 // ==========================================

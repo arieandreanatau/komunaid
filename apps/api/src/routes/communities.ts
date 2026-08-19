@@ -27,6 +27,7 @@ import {
 import { validate } from "../middleware/validate";
 import { createAuditLog, AuditActions } from "../services/audit";
 import { xssSanitize, sanitizeText } from "../lib/xss";
+import { createWithUniqueSlug, isUniqueConstraintError } from "../lib/slug";
 import { slugify } from "@komunaid/utils";
 import type { AuthUser } from "../middleware/auth";
 
@@ -454,7 +455,7 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
         },
       },
     });
-    if (!membership && community.ownerId !== user.id) {
+    if ((!membership || membership.status !== "ACTIVE" || membership.deletedAt != null) && community.ownerId !== user.id) {
       return c.json({ success: false, message: "Komunitas ini bersifat privat" }, 403);
     }
   }
@@ -547,11 +548,6 @@ communityRoutes.post("/", authMiddleware, validate(createCommunitySchema), async
   const authUser = c.get("user");
   const data = c.get("validated");
 
-  const slug = slugify(data.name);
-
-  const existingSlug = await prisma.community.findUnique({ where: { slug } });
-  const finalSlug = existingSlug ? `${slug}-${Date.now()}` : slug;
-
   const { categoryIds, tags, customCategory, ...communityData } = data;
 
   const sanitizedData = {
@@ -568,65 +564,84 @@ communityRoutes.post("/", authMiddleware, validate(createCommunitySchema), async
     contactPhone: sanitizeText(communityData.contactPhone),
   };
 
-  const community = await prisma.community.create({
-    data: {
-      ...sanitizedData,
-      slug: finalSlug,
-      ownerId: authUser.id,
-      status: "DRAFT",
-      members: {
-        create: {
-          userId: authUser.id,
-          role: "OWNER",
-          status: "ACTIVE",
+  const community = await createWithUniqueSlug(
+    (slug) =>
+      prisma.community.create({
+      data: {
+        ...sanitizedData,
+        slug,
+        ownerId: authUser.id,
+        status: "DRAFT",
+        members: {
+          create: {
+            userId: authUser.id,
+            role: "OWNER",
+            status: "ACTIVE",
+          },
         },
-      },
-      settings: {
-        create: {
-          allowMemberPost: true,
-          requireApproval: false,
-          showMemberList: true,
-          showEventList: true,
+        settings: {
+          create: {
+            allowMemberPost: true,
+            requireApproval: false,
+            showMemberList: true,
+            showEventList: true,
+          },
         },
+        ...(categoryIds && categoryIds.length > 0
+          ? {
+              categories: {
+                create: categoryIds.map((categoryId: string) => ({ categoryId })),
+              },
+            }
+          : {}),
+        ...(tags && tags.length > 0
+          ? {
+              tags: {
+                create: tags.map((tag: string) => ({ tag })),
+              },
+            }
+          : {}),
       },
-      ...(categoryIds && categoryIds.length > 0
-        ? {
-            categories: {
-              create: categoryIds.map((categoryId: string) => ({ categoryId })),
-            },
-          }
-        : {}),
-      ...(tags && tags.length > 0
-        ? {
-            tags: {
-              create: tags.map((tag: string) => ({ tag })),
-            },
-          }
-        : {}),
-    },
-    include: {
-      _count: { select: { members: true, events: true } },
-      categories: { include: { category: true } },
-      tags: true,
-    },
-  });
+      include: {
+        _count: { select: { members: true, events: true } },
+        categories: { include: { category: true } },
+        tags: true,
+      },
+    }),
+    data.name
+  );
 
   if (customCategory && customCategory.trim()) {
     const trimmedName = customCategory.trim();
-    const catSlug = slugify(trimmedName);
-    let category = await prisma.category.findUnique({ where: { slug: catSlug } });
+
+    let category = await prisma.category.findUnique({ where: { slug: slugify(trimmedName) } });
     if (!category) {
-      category = await prisma.category.create({
-        data: {
-          name: trimmedName,
-          slug: catSlug,
-          type: "COMMUNITY",
-        },
+      try {
+        category = await createWithUniqueSlug(
+          (slug) =>
+            prisma.category.create({
+              data: {
+                name: trimmedName,
+                slug,
+                type: "COMMUNITY",
+              },
+            }),
+          trimmedName
+        );
+      } catch (err) {
+        if (isUniqueConstraintError(err)) {
+          category = await prisma.category.findUnique({ where: { slug: slugify(trimmedName) } });
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    if (category) {
+      await prisma.communityCategory.create({
+        data: { communityId: community.id, categoryId: category.id },
       });
     }
-    await prisma.communityCategory.create({
-      data: { communityId: community.id, categoryId: category.id },
-    });
   }
 
   await createAuditLog({
@@ -1795,8 +1810,15 @@ communityRoutes.put(
     });
 
     if (data.action === "approve") {
-      await prisma.communityMember.create({
-        data: {
+      await prisma.communityMember.upsert({
+        where: { communityId_userId: { communityId, userId: request.userId } },
+        update: {
+          role: "MEMBER",
+          status: "ACTIVE",
+          deletedAt: null,
+          joinedAt: new Date(),
+        },
+        create: {
           communityId,
           userId: request.userId,
           role: "MEMBER",
@@ -2514,9 +2536,16 @@ communityRoutes.get(
         })
       : null;
 
+    const canManageMedia = Boolean(isOwnerOrAdmin) || community.ownerId === user?.id;
+
+    if (!canManageMedia && community.visibility !== "PUBLIC") {
+      return c.json({ success: false, message: "Komunitas tidak ditemukan" }, 404);
+    }
+
     const where: any = { communityId, deletedAt: null };
 
-    if (!isOwnerOrAdmin) {
+    // Public callers can never relax this constraint through query parameters.
+    if (!canManageMedia) {
       where.isPublished = true;
     }
 
@@ -2531,7 +2560,7 @@ communityRoutes.get(
       ];
     }
 
-    if (q.published !== undefined) {
+    if (canManageMedia && q.published !== undefined) {
       where.isPublished = q.published;
     }
 

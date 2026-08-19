@@ -3,66 +3,79 @@ import { prisma } from "@komunaid/database";
 
 export const masterDataRoutes = new Hono();
 
+async function getSetting(key: string) {
+  const setting = await prisma.setting.findUnique({ where: { key } });
+  return setting ? setting.value : undefined;
+}
+
+async function readRecord(firstKey: string, fallbackKey?: string): Promise<unknown> {
+  const value = await getSetting(firstKey);
+  if (value !== undefined) return value;
+  if (fallbackKey && fallbackKey !== firstKey) return getSetting(fallbackKey);
+  return {};
+}
+
+function filterByKey(raw: unknown, key?: string): unknown {
+  if (!key || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  return (raw as Record<string, string[]>)[key] || [];
+}
+
 masterDataRoutes.get("/countries", async (c) => {
-  const setting = await prisma.setting.findUnique({ where: { key: "master_countries" } });
-  const countries = setting ? (setting.value as string[]) : [];
-  return c.json({ success: true, data: countries });
+  const countries = (await getSetting("master_countries")) as string[] | undefined;
+  return c.json({ success: true, data: countries || [] });
 });
 
 masterDataRoutes.get("/provinces", async (c) => {
-  const setting = await prisma.setting.findUnique({ where: { key: "master_provinces" } });
-  const raw = setting ? setting.value : {};
+  const raw = await readRecord("master_provinces");
   const country = c.req.query("country");
-  if (country && typeof raw === "object" && !Array.isArray(raw)) {
-    return c.json({ success: true, data: (raw as Record<string, string[]>)[country] || [] });
-  }
-  if (Array.isArray(raw)) {
-    return c.json({ success: true, data: raw });
-  }
-  const allProvinces = Object.values(raw as Record<string, string[]>).flat();
-  return c.json({ success: true, data: allProvinces });
+  const data = country ? filterByKey(raw, country) : raw;
+  return c.json({
+    success: true,
+    data: Array.isArray(data) ? data : Object.values((data as Record<string, string[]>) || {}).flat(),
+  });
 });
 
 masterDataRoutes.get("/cities", async (c) => {
-  const setting = await prisma.setting.findUnique({ where: { key: "master_cities" } });
-  const raw = setting ? setting.value : {};
+  const raw = await readRecord("master_cities");
   const province = c.req.query("province");
-  if (province && typeof raw === "object" && !Array.isArray(raw)) {
-    return c.json({ success: true, data: (raw as Record<string, string[]>)[province] || [] });
-  }
-  if (Array.isArray(raw)) {
-    return c.json({ success: true, data: raw });
-  }
-  const allCities = Object.values(raw as Record<string, string[]>).flat();
-  return c.json({ success: true, data: allCities });
+  const data = province ? filterByKey(raw, province) : raw;
+  return c.json({
+    success: true,
+    data: Array.isArray(data) ? data : Object.values((data as Record<string, string[]>) || {}).flat(),
+  });
 });
 
 masterDataRoutes.get("/districts", async (c) => {
-  const setting = await prisma.setting.findUnique({ where: { key: "master_districts" } });
-  const raw = setting ? setting.value : {};
+  const raw = await readRecord("master_districts");
   const city = c.req.query("city");
-  if (city && typeof raw === "object" && !Array.isArray(raw)) {
-    return c.json({ success: true, data: (raw as Record<string, string[]>)[city] || [] });
-  }
-  if (Array.isArray(raw)) {
-    return c.json({ success: true, data: raw });
-  }
-  const allDistricts = Object.values(raw as Record<string, string[]>).flat();
-  return c.json({ success: true, data: allDistricts });
+  const data = city ? filterByKey(raw, city) : raw;
+  return c.json({
+    success: true,
+    data: Array.isArray(data) ? data : Object.values((data as Record<string, string[]>) || {}).flat(),
+  });
 });
 
+const readVillages = async () => readRecord("master_kelurahan", "master_villages");
+
 masterDataRoutes.get("/villages", async (c) => {
-  const setting = await prisma.setting.findUnique({ where: { key: "master_villages" } });
-  const raw = setting ? setting.value : {};
+  const raw = await readVillages();
   const district = c.req.query("district");
-  if (district && typeof raw === "object" && !Array.isArray(raw)) {
-    return c.json({ success: true, data: (raw as Record<string, string[]>)[district] || [] });
-  }
-  if (Array.isArray(raw)) {
-    return c.json({ success: true, data: raw });
-  }
-  const allVillages = Object.values(raw as Record<string, string[]>).flat();
-  return c.json({ success: true, data: allVillages });
+  const data = district ? filterByKey(raw, district) : raw;
+  return c.json({
+    success: true,
+    data: Array.isArray(data) ? data : Object.values((data as Record<string, string[]>) || {}).flat(),
+  });
+});
+
+// Alias for frontend pages that use the "kelurahan" naming.
+masterDataRoutes.get("/kelurahan", async (c) => {
+  const raw = await readVillages();
+  const district = c.req.query("district");
+  const data = district ? filterByKey(raw, district) : raw;
+  return c.json({
+    success: true,
+    data: Array.isArray(data) ? data : Object.values((data as Record<string, string[]>) || {}).flat(),
+  });
 });
 
 masterDataRoutes.get("/postal-codes", async (c) => {

@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { api } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
+import { useDrawerDialog } from "@/components/ui/use-drawer-dialog";
 
 interface Community {
   id: string;
@@ -59,6 +60,7 @@ export default function DashboardLayout({
   const router = useRouter();
   const sidebarRef = useRef<HTMLElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
   const { data: unreadCount = 0 } = useQuery<number>({
     queryKey: ["notifications", "unread-count"],
     enabled: isAuthenticated,
@@ -115,22 +117,7 @@ export default function DashboardLayout({
     setSidebarOpen(false);
   }, [pathname]);
 
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setSidebarOpen(false);
-    };
-    if (sidebarOpen) {
-      const menuButton = menuButtonRef.current;
-      document.body.style.overflow = "hidden";
-      document.addEventListener("keydown", handleEscape);
-      window.requestAnimationFrame(() => sidebarRef.current?.focus());
-      return () => {
-        document.body.style.overflow = "";
-        document.removeEventListener("keydown", handleEscape);
-        menuButton?.focus();
-      };
-    }
-  }, [sidebarOpen]);
+  useDrawerDialog(sidebarOpen, sidebarRef, menuButtonRef, () => setSidebarOpen(false), mainRef);
 
   const communityItems: SidebarItem[] = [
     { href: "/dashboard/communities", label: "Komunitas Saya", icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 0 014 0z" },
@@ -423,7 +410,7 @@ export default function DashboardLayout({
         )}
 
         {/* Main Content */}
-        <main className="flex-1 min-h-[calc(100vh-4rem)]">
+        <main ref={mainRef} className="flex-1 min-h-[calc(100vh-4rem)]">
           <div className="max-w-6xl mx-auto px-4 py-6">
             {children}
           </div>

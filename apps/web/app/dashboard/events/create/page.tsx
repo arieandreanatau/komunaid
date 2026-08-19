@@ -6,9 +6,10 @@ import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { useAuth } from "@/components/auth-provider";
+import { eventOrganizers, type Organizer } from "@/lib/event-organizers";
 
 const eventSchema = z.object({
   title: z.string().min(3, "Judul minimal 3 karakter").max(200, "Judul maksimal 200 karakter"),
@@ -38,19 +39,6 @@ interface Category {
   id: string;
   name: string;
   icon: string;
-}
-
-interface ProfileMembership {
-  id: string;
-  name: string;
-  role: string;
-  status: string;
-}
-
-interface Organizer {
-  id: string;
-  name: string;
-  type: "community" | "organization";
 }
 
 const TIMEZONE_OFFSETS: Record<string, number> = {
@@ -163,7 +151,7 @@ export default function CreateEventPage() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      router.push("/login");
+      router.push(`/login?redirect=${encodeURIComponent("/dashboard/events/create")}`);
     }
   }, [isAuthenticated, authLoading, router]);
 
@@ -176,27 +164,7 @@ export default function CreateEventPage() {
         ]);
         setCategories(catRes.data.data || []);
         const profile = profileRes.data.data?.user || profileRes.data.user;
-        const communities = (profile?.communities || [])
-          .filter(
-            (membership: ProfileMembership) =>
-              membership.status === "APPROVED" && ["OWNER", "ADMIN", "EVENT_MANAGER"].includes(membership.role)
-          )
-          .map((membership: ProfileMembership) => ({
-            id: membership.id,
-            name: membership.name,
-            type: "community" as const,
-          }));
-        const organizations = (profile?.organizations || [])
-          .filter(
-            (membership: ProfileMembership) =>
-              membership.status === "APPROVED" && ["OWNER", "ADMIN"].includes(membership.role)
-          )
-          .map((membership: ProfileMembership) => ({
-            id: membership.id,
-            name: membership.name,
-            type: "organization" as const,
-          }));
-        setOrganizers([...communities, ...organizations]);
+        setOrganizers(eventOrganizers(profile));
       } catch {
         console.error("Gagal memuat data");
       }
@@ -276,14 +244,18 @@ export default function CreateEventPage() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         <h1 className="text-2xl font-bold text-komuna-navy mb-6">Buat Event Baru</h1>
 
-        {/* Step Indicator */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="sr-only" aria-live="polite">Langkah {step} dari {TOTAL_STEPS}: {STEP_LABELS[step - 1]}</div>
+        <div className="mb-8" aria-label={`Progres pembuatan event: langkah ${step} dari ${TOTAL_STEPS}`}>
+          <div className="mb-3 h-2 overflow-hidden rounded-full bg-gray-200" role="progressbar" aria-valuemin={1} aria-valuemax={TOTAL_STEPS} aria-valuenow={step} aria-valuetext={`Langkah ${step} dari ${TOTAL_STEPS}: ${STEP_LABELS[step - 1]}`}>
+            <div className="h-full bg-komuna-blue transition-[width]" style={{ width: `${(step / TOTAL_STEPS) * 100}%` }} />
+          </div>
+          <ol className="flex items-center justify-between">
           {Array.from({ length: TOTAL_STEPS }).map((_, i) => {
             const num = i + 1;
             const isActive = num === step;
             const isCompleted = num < step;
             return (
-              <div key={num} className="flex items-center">
+              <li key={num} className="flex items-center" aria-current={isActive ? "step" : undefined}>
                 <div className="flex flex-col items-center">
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
@@ -302,7 +274,7 @@ export default function CreateEventPage() {
                       num
                     )}
                   </div>
-                  <span className="text-xs mt-1 text-gray-500 hidden sm:block">{STEP_LABELS[i]}</span>
+                  <span className={`text-xs mt-1 hidden sm:block ${isActive ? "font-semibold text-komuna-blue" : "text-gray-500"}`}>{STEP_LABELS[i]}</span>
                 </div>
                 {i < TOTAL_STEPS - 1 && (
                   <div
@@ -311,9 +283,10 @@ export default function CreateEventPage() {
                     }`}
                   />
                 )}
-              </div>
+              </li>
             );
           })}
+          </ol>
         </div>
 
         {/* Error Display */}

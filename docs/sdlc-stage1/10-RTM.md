@@ -1,5 +1,7 @@
 # 10 — REQUIREMENT TRACEABILITY MATRIX
 
+> Historical / Superseded for release evidence. Current remediation traceability lives in `docs/qa/REQUIREMENT_TRACEABILITY_MATRIX.md`.
+
 **Date:** 2026-07-09
 **Version:** 1.0.0
 

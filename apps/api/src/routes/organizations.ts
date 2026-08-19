@@ -9,6 +9,7 @@ import {
   updateOrganizationProfileSchema,
   updateOrganizationBannerSchema,
   updateOrganizationLogoSchema,
+  handleJoinRequestSchema,
 } from "@komunaid/shared";
 import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth";
 import {
@@ -18,6 +19,7 @@ import {
 import { validate } from "../middleware/validate";
 import { createAuditLog, AuditActions } from "../services/audit";
 import { xssSanitize, sanitizeText } from "../lib/xss";
+import { createWithUniqueSlug } from "../lib/slug";
 import { slugify } from "@komunaid/utils";
 import type { AuthUser } from "../middleware/auth";
 
@@ -196,7 +198,12 @@ organizationRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
         take: 20,
       },
       events: {
-        where: { status: "PUBLISHED", eventDate: { gte: new Date() } },
+        where: {
+          status: "PUBLISHED",
+          visibility: "PUBLIC",
+          deletedAt: null,
+          eventDate: { gte: new Date() },
+        },
         orderBy: { eventDate: "asc" },
         take: 5,
       },
@@ -234,7 +241,7 @@ organizationRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
         },
       },
     });
-    if (!membershipCheck && organization.ownerId !== user.id) {
+    if ((!membershipCheck || membershipCheck.status !== "ACTIVE" || membershipCheck.deletedAt != null) && organization.ownerId !== user.id) {
       return c.json({ success: false, message: "Organisasi ini bersifat privat" }, 403);
     }
   }
@@ -308,11 +315,6 @@ organizationRoutes.post("/", authMiddleware, validate(createOrganizationSchema),
   const authUser = c.get("user");
   const data = c.get("validated");
 
-  const slug = slugify(data.name);
-
-  const existingSlug = await prisma.organization.findUnique({ where: { slug } });
-  const finalSlug = existingSlug ? `${slug}-${Date.now()}` : slug;
-
   const { categoryIds, tags, ...orgData } = data;
 
   const sanitizedOrgData = {
@@ -328,12 +330,14 @@ organizationRoutes.post("/", authMiddleware, validate(createOrganizationSchema),
     contactPhone: sanitizeText(orgData.contactPhone),
   };
 
-  const organization = await prisma.organization.create({
-    data: {
-      ...sanitizedOrgData,
-      slug: finalSlug,
-      ownerId: authUser.id,
-      status: "DRAFT",
+const organization = await createWithUniqueSlug(
+    (slug) =>
+      prisma.organization.create({
+      data: {
+        ...sanitizedOrgData,
+        slug,
+        ownerId: authUser.id,
+        status: "DRAFT",
       members: {
         create: {
           userId: authUser.id,
@@ -369,7 +373,9 @@ organizationRoutes.post("/", authMiddleware, validate(createOrganizationSchema),
       categories: { include: { category: true } },
       tags: true,
     },
-  });
+    }),
+    data.name
+  );
 
   await createAuditLog({
     userId: authUser.id,
@@ -1454,12 +1460,12 @@ organizationRoutes.put(
   "/:organizationId/join-requests/:requestId",
   authMiddleware,
   requireOrganizationAdmin,
+  validate(handleJoinRequestSchema, "body", 422),
   async (c) => {
     const authUser = c.get("user");
     const organizationId = c.req.param("organizationId") as string;
     const requestId = c.req.param("requestId") as string;
-    const body = await c.req.json();
-    const { action } = body;
+    const { action } = c.get("validated");
 
     const request = await prisma.joinRequest.findUnique({
       where: { id: requestId },

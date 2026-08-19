@@ -98,7 +98,7 @@ Optional: Redis, Resend API key, SMTP fallback, S3 storage — see `.env.example
 
 ```bash
 pnpm db:generate    # Generate Prisma client
-pnpm db:push        # Push schema to database
+pnpm db:push        # Disposable development database only
 pnpm db:seed        # Seed initial data
 ```
 
@@ -301,6 +301,8 @@ fly deploy
 ```bash
 pnpm db:migrate:prod
 ```
+
+Do not use `pnpm db:push` for staging or production. See `docs/architecture/SCHEMA_SOURCE_OF_TRUTH.md` for migration policy.
 
 ### Environment Variables (Production)
 

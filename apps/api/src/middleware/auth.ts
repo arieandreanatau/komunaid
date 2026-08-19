@@ -13,13 +13,11 @@ function getCookieDomain(): string | undefined {
   return undefined;
 }
 
-function assertProductionSecrets() {
+function assertSecrets() {
   if (!process.env.JWT_SECRET) {
-    if (IS_PRODUCTION) {
-      throw new Error("[SECURITY FATAL] JWT_SECRET must be set in production. Application cannot start.");
-    }
-    console.warn("[SECURITY] JWT_SECRET not set — using insecure development fallback. DO NOT use in production.");
-  } else if (IS_PRODUCTION && process.env.JWT_SECRET.length < 32) {
+    throw new Error("[SECURITY FATAL] JWT_SECRET must be set. Application cannot start.");
+  }
+  if (IS_PRODUCTION && process.env.JWT_SECRET.length < 32) {
     throw new Error("[SECURITY FATAL] JWT_SECRET must be at least 32 characters in production.");
   }
 }
@@ -28,13 +26,13 @@ let secretsAsserted = false;
 export function ensureSecrets() {
   if (!secretsAsserted) {
     secretsAsserted = true;
-    assertProductionSecrets();
+    assertSecrets();
   }
 }
 
-const JWT_SECRET_RAW = process.env.JWT_SECRET || (IS_PRODUCTION ? "" : "dev-secret-change-this-in-production");
-if (!JWT_SECRET_RAW && IS_PRODUCTION) {
-  throw new Error("[SECURITY FATAL] JWT_SECRET is required in production.");
+const JWT_SECRET_RAW = process.env.JWT_SECRET || "";
+if (!JWT_SECRET_RAW) {
+  throw new Error("[SECURITY FATAL] JWT_SECRET must be set. Application cannot start.");
 }
 const JWT_SECRET = new TextEncoder().encode(JWT_SECRET_RAW);
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "15m";
@@ -218,10 +216,10 @@ export async function authMiddleware(c: Context, next: Next) {
 
   const userRecord = await prisma.user.findUnique({
     where: { id: payload.sub },
-    select: { tokenVersion: true, status: true },
+    select: { tokenVersion: true, status: true, deletedAt: true },
   });
 
-  if (!userRecord) {
+  if (!userRecord || userRecord.deletedAt) {
     throw new Error("Unauthorized");
   }
 

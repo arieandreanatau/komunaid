@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
-import api from "@/lib/api";
+import api, { unwrapApiData } from "@/lib/api";
 import { Header } from "@/components/header";
 import { useAuth } from "@/components/auth-provider";
 
@@ -133,7 +133,7 @@ export default function EditCommunityPage() {
           api.get("/master-data/kelurahan"),
         ]);
 
-        const comm = communityRes.data.community;
+        const comm = unwrapApiData<CommunityDetail>(communityRes);
         setCommunity(comm);
         setCategories(categoriesRes.data.data || []);
         setCountries(countryRes.data.data || []);

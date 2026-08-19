@@ -127,12 +127,16 @@ export async function rotateRefreshToken(
   const newTokenHash = hashToken(rawToken);
   const expiresAt = getExpiryDate();
 
-  await prisma.$transaction([
-    prisma.refreshToken.update({
-      where: { tokenHash: oldTokenHash },
+  const consumed = await prisma.$transaction(async (tx) => {
+    // Consume once in DB. A stale concurrent reader must not mint another successor.
+    const result = await tx.refreshToken.updateMany({
+      where: { tokenHash: oldTokenHash, isRevoked: false },
       data: { isRevoked: true },
-    }),
-    prisma.refreshToken.create({
+    });
+
+    if (result.count !== 1) return false;
+
+    await tx.refreshToken.create({
       data: {
         userId,
         tokenHash: newTokenHash,
@@ -142,8 +146,15 @@ export async function rotateRefreshToken(
         userAgent,
         expiresAt,
       },
-    }),
-  ]);
+    });
+
+    return true;
+  });
+
+  if (!consumed) {
+    await revokeTokenFamily(oldToken.familyId);
+    return { newTokenHash: "", familyId: oldToken.familyId, reused: true };
+  }
 
   return { newTokenHash: rawToken, familyId: oldToken.familyId, reused: false };
 }

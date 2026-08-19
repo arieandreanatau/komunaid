@@ -1,7 +1,7 @@
 "use client";
 
-import { CommunityDashboardRoute } from "../page";
+import { CommunityDashboardRoute } from "@/components/community-dashboard-route";
 
-export default function CommunityRequestsPage({ params }: { params: { communityId: string } }) {
-  return <CommunityDashboardRoute tab="permintaan" communityIdOverride={params.communityId} />;
+export default function CommunityRequestsPage() {
+  return <CommunityDashboardRoute tab="permintaan" />;
 }

@@ -10,6 +10,7 @@ import {
 } from "@komunaid/shared";
 import { createAuditLog, AuditActions } from "../../services/audit";
 import { sanitizeText } from "../../lib/xss";
+import { isUniqueConstraintError } from "../../lib/slug";
 import type { AuthUser } from "../../middleware/auth";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
@@ -103,10 +104,11 @@ cmsRoutes.post("/cms/pages", requireSuperAdmin(), validate(adminCreateCmsPageSch
     return c.json({ success: false, message: "Slug sudah digunakan" }, 409);
   }
 
-  const page = await prisma.cmsPage.create({
-    data: {
-      slug: data.slug,
-      title: data.title,
+  try {
+    const page = await prisma.cmsPage.create({
+      data: {
+        slug: data.slug,
+        title: data.title,
       content: data.content,
       metaTitle: data.metaTitle,
       metaDesc: data.metaDesc,
@@ -124,6 +126,12 @@ cmsRoutes.post("/cms/pages", requireSuperAdmin(), validate(adminCreateCmsPageSch
   });
 
   return c.json({ success: true, data: page }, 201);
+  } catch (err) {
+    if (isUniqueConstraintError(err)) {
+      return c.json({ success: false, message: "Slug sudah digunakan" }, 409);
+    }
+    throw err;
+  }
 });
 
 cmsRoutes.put("/cms/pages/:id", requireSuperAdmin(), validate(adminUpdateCmsPageSchema), async (c) => {

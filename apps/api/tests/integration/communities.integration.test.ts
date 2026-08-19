@@ -66,6 +66,7 @@ vi.mock("@komunaid/database", () => {
       update: vi.fn(),
     },
     communitySettings: { findUnique: vi.fn(async () => null), upsert: vi.fn(async ({ create }: any) => create) },
+    communityMedia: { findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
     communityCategory: { deleteMany: vi.fn(async () => ({ count: 0 })), createMany: vi.fn(async () => ({ count: 0 })), create: vi.fn(async () => ({})) },
     communityTag: { deleteMany: vi.fn(async () => ({ count: 0 })), createMany: vi.fn(async () => ({ count: 0 })) },
     joinRequest: {
@@ -215,6 +216,18 @@ describe("Communities Integration Tests", () => {
       const res = await app.request("/api/v1/communities/test");
       expect(res.status).toBe(200);
     });
+
+    it("should hide private community from suspended or deleted members", async () => {
+      const token = await generateToken({ sub: "user-2", email: "u2@test.com", name: "U2", username: "u2", type: "access" });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
+      (prisma.community.findUnique as any).mockResolvedValue({
+        id: "comm-1", ownerId: "user-1", status: "APPROVED", visibility: "PRIVATE", deletedAt: null,
+      });
+      (prisma.communityMember.findUnique as any).mockResolvedValue({ role: "MEMBER", status: "SUSPENDED", deletedAt: null });
+
+      const res = await app.request("/api/v1/communities/private", { headers: { Authorization: `Bearer ${token}` } });
+      expect(res.status).toBe(403);
+    });
   });
 
   describe("GET /communities/:communityId/members", () => {
@@ -266,6 +279,32 @@ describe("Communities Integration Tests", () => {
       const res = await app.request("/api/v1/communities/comm-1/members");
 
       expect(res.status).toBe(403);
+    });
+  });
+
+  describe("GET /communities/:communityId/media", () => {
+    it("hides private community media from anonymous callers", async () => {
+      (prisma.community.findUnique as any).mockResolvedValue({
+        id: "comm-private", ownerId: "user-1", status: "APPROVED", visibility: "PRIVATE", deletedAt: null,
+      });
+
+      const res = await app.request("/api/v1/communities/comm-private/media");
+
+      expect(res.status).toBe(404);
+      expect(prisma.communityMedia.findMany).not.toHaveBeenCalled();
+    });
+
+    it("does not let anonymous published=false expose drafts", async () => {
+      (prisma.community.findUnique as any).mockResolvedValue({
+        id: "comm-public", ownerId: "user-1", status: "APPROVED", visibility: "PUBLIC", deletedAt: null,
+      });
+
+      const res = await app.request("/api/v1/communities/comm-public/media?published=false");
+
+      expect(res.status).toBe(200);
+      expect(prisma.communityMedia.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({ communityId: "comm-public", deletedAt: null, isPublished: true }),
+      }));
     });
   });
 

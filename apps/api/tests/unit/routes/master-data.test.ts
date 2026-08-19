@@ -224,6 +224,50 @@ describe("Master Data Routes", () => {
   });
 
   // ==========================================
+  // GET /kelurahan (alias)
+  // ==========================================
+  describe("GET /kelurahan", () => {
+    it("should return kelurahan filtered by district from master_kelurahan key", async () => {
+      (prisma.setting.findUnique as any).mockResolvedValue({
+        key: "master_kelurahan",
+        value: {
+          Menteng: ["Menteng Dalam", "Kebon Sirih"],
+          Coblong: ["Lebakgede"],
+        },
+      });
+
+      const res = await app.request("/master-data/kelurahan?district=Menteng");
+      const body = await res.json();
+      expect(res.status).toBe(200);
+      expect(body.success).toBe(true);
+      expect(body.data).toEqual(["Menteng Dalam", "Kebon Sirih"]);
+    });
+
+    it("should fall back to master_villages key when master_kelurahan missing", async () => {
+      (prisma.setting.findUnique as any).mockResolvedValue({
+        key: "master_villages",
+        value: {
+          Menteng: ["Menteng Dalam"],
+        },
+      });
+
+      const res = await app.request("/master-data/kelurahan");
+      const body = await res.json();
+      expect(body.success).toBe(true);
+      expect(body.data).toEqual(["Menteng Dalam"]);
+    });
+
+    it("should return empty array when no data", async () => {
+      (prisma.setting.findUnique as any).mockResolvedValue(null);
+
+      const res = await app.request("/master-data/kelurahan?district=X");
+      const body = await res.json();
+      expect(body.success).toBe(true);
+      expect(body.data).toEqual([]);
+    });
+  });
+
+  // ==========================================
   // GET /postal-codes
   // ==========================================
   describe("GET /postal-codes", () => {

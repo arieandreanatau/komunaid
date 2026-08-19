@@ -290,6 +290,118 @@ async function main() {
 
   console.log("Settings seeded");
 
+  // ==========================================
+  // MASTER DATA WILAYAH (Indonesia)
+  // ==========================================
+  // Structure:
+  //   master_countries  : string[]
+  //   master_provinces  : { country: string[] }
+  //   master_cities     : { province: string[] }
+  //   master_districts  : { city: string[] }
+  //   master_kelurahan  : { district: string[] }
+
+  const masterCountries = ["Indonesia"];
+
+  const masterProvinces: Record<string, string[]> = {
+    Indonesia: [
+      "Aceh", "Sumatera Utara", "Sumatera Barat", "Riau", "Kepulauan Riau", "Jambi",
+      "Bengkulu", "Sumatera Selatan", "Bangka Belitung", "Lampung",
+      "DKI Jakarta", "Jawa Barat", "Banten", "Jawa Tengah", "DI Yogyakarta", "Jawa Timur",
+      "Bali", "Nusa Tenggara Barat", "Nusa Tenggara Timur",
+      "Kalimantan Barat", "Kalimantan Tengah", "Kalimantan Selatan", "Kalimantan Timur", "Kalimantan Utara",
+      "Sulawesi Utara", "Gorontalo", "Sulawesi Tengah", "Sulawesi Barat", "Sulawesi Selatan", "Sulawesi Tenggara",
+      "Maluku", "Maluku Utara", "Papua", "Papua Barat", "Papua Barat Daya", "Papua Tengah", "Papua Pegunungan", "Papua Selatan",
+    ],
+  };
+
+  const masterCities: Record<string, string[]> = {
+    "DKI Jakarta": ["Jakarta Pusat", "Jakarta Utara", "Jakarta Barat", "Jakarta Selatan", "Jakarta Timur", "Kepulauan Seribu"],
+    "Jawa Barat": ["Kota Bandung", "Kota Bogor", "Kota Bekasi", "Kota Depok", "Kota Cimahi", "Kota Tasikmalaya", "Kabupaten Bandung", "Kabupaten Bogor"],
+    "Banten": ["Kota Tangerang", "Kota Tangerang Selatan", "Kota Serang", "Kota Cilegon", "Kabupaten Tangerang"],
+    "Jawa Tengah": ["Kota Semarang", "Kota Surakarta", "Kota Magelang", "Kabupaten Semarang", "Kabupaten Banyumas"],
+    "DI Yogyakarta": ["Kota Yogyakarta", "Kabupaten Sleman", "Kabupaten Bantul", "Kabupaten Kulon Progo", "Kabupaten Gunung Kidul"],
+    "Jawa Timur": ["Kota Surabaya", "Kota Malang", "Kota Kediri", "Kabupaten Malang", "Kabupaten Sidoarjo"],
+    "Bali": ["Kota Denpasar", "Kabupaten Badung", "Kabupaten Gianyar", "Kabupaten Buleleng"],
+    "Sumatera Utara": ["Kota Medan", "Kota Binjai", "Kabupaten Deli Serdang", "Kabupaten Karo"],
+    "Sumatera Selatan": ["Kota Palembang", "Kota Prabumulih", "Kabupaten Banyuasin"],
+    "Kalimantan Timur": ["Kota Samarinda", "Kota Balikpapan", "Kabupaten Kutai Kartanegara"],
+    "Sulawesi Selatan": ["Kota Makassar", "Kota Parepare", "Kabupaten Gowa"],
+    "Lampung": ["Kota Bandar Lampung", "Kota Metro", "Kabupaten Lampung Selatan"],
+    "Riau": ["Kota Pekanbaru", "Kota Dumai", "Kabupaten Siak"],
+    "Papua": ["Kota Jayapura", "Kabupaten Jayapura"],
+  };
+
+  const masterDistricts: Record<string, string[]> = {
+    "Jakarta Pusat": ["Gambir", "Tanah Abang", "Senen", "Cempaka Putih", "Menteng"],
+    "Jakarta Selatan": ["Kebayoran Baru", "Setiabudi", "Tebet", "Pancoran", "Mampang Prapatan"],
+    "Kota Bandung": ["Coblong", "Bandung Wetan", "Cibeunying Kaler", "Sukajadi", "Sumur Bandung"],
+    "Kota Bekasi": ["Bekasi Timur", "Bekasi Barat", "Bekasi Selatan", "Bekasi Utara", "Medan Satria"],
+    "Kota Depok": ["Beji", "Pancoran Mas", "Cimanggis", "Sukmajaya", "Sawangan"],
+    "Kota Tangerang": ["Ciledug", "Cipondoh", "Jatiuwung", "Karawaci", "Benda"],
+    "Kota Tangerang Selatan": ["Ciputat", "Ciputat Timur", "Pamulang", "Serpong", "Setu"],
+    "Kota Semarang": ["Semarang Tengah", "Semarang Utara", "Semarang Selatan", "Semarang Timur", "Gajahmungkur"],
+    "Kota Surabaya": ["Sukolilo", "Gubeng", "Tegalsari", "Genteng", "Wonokromo"],
+    "Kota Yogyakarta": ["Danurejan", "Gedongtengen", "Gondokusuman", "Kotagede", "Umbulharjo"],
+    "Kota Denpasar": ["Denpasar Barat", "Denpasar Timur", "Denpasar Selatan", "Denpasar Utara"],
+    "Kota Medan": ["Medan Baru", "Medan Polonia", "Medan Petisah", "Medan Timur", "Medan Deli"],
+    "Kota Palembang": ["Ilir Barat", "Ilir Timur", "Seberang Ulu", "Alang-Alang Lebar"],
+    "Kota Samarinda": ["Samarinda Ulu", "Samarinda Ilir", "Samarinda Utara", "Sungai Kunjang"],
+    "Kota Balikpapan": ["Balikpapan Selatan", "Balikpapan Timur", "Balikpapan Utara", "Balikpapan Barat"],
+    "Kota Makassar": ["Tallo", "Biringkanaya", "Tamalate", "Rappocini", "Panakkukang"],
+    "Kota Bandar Lampung": ["Tanjung Karang Pusat", "Tanjung Karang Timur", "Bumi Waras", "Enggal"],
+    "Kota Pekanbaru": ["Senapelan", "Lima Puluh", "Tampan", "Payung Sekaki"],
+    "Kota Jayapura": ["Abepura", "Heram", "Jayapura Selatan", "Jayapura Utara"],
+  };
+
+  const masterKelurahan: Record<string, string[]> = {
+    Gambir: ["Gambir", "Kebon Kelapa", "Petojo Selatan", "Petojo Utara", "Cideng"],
+    Menteng: ["Menteng", "Pegangsaan", "Cikini", "Gondangdia", "Kebon Sirih"],
+    Coblong: ["Dago", "Lebak Siliwangi", "Cipaganti", "Sadang Serang", "Sekeloa"],
+    "Bekasi Timur": ["Bekasi Jaya", "Margahayu", "Duren Jaya", "Aren Jaya"],
+    Beji: ["Beji", "Beji Timur", "Kemiri Muka", "Pondok Cina"],
+    Ciputat: ["Ciputat", "Cipayung", "Sawah Baru", "Jombang"],
+    "Semarang Tengah": ["Pendrikan Kidul", "Pendrikan Lor", "Sekayu", "Jagalan", "Kranggan"],
+    Sukolilo: ["Menur Pumpungan", "Keputih", "Semolowaru", "Medokan Semampir"],
+    Danurejan: ["Bausasran", "Suryatmajan", "Tegal Panggung"],
+    "Denpasar Barat": ["Dauh Puri", "Padang Sambian", "Pemecutan"],
+    "Medan Baru": ["Merdeka", "Petisah Hulu", "Petisah Tengah", "Titi Rantai"],
+    "Ilir Barat": ["Kertapati", "Bukit Lama", "Demang Lebar Daun"],
+    "Samarinda Ulu": ["Teluk Lerong", "Air Hitam", "Sungai Dama"],
+    "Balikpapan Selatan": ["Sepinggan", "Damai Baru", "Gunung Bahagia"],
+    Tallo: ["Tallo", "Rappojawa", "Wala-Walaya"],
+    "Tanjung Karang Pusat": ["Tanjung Karang", "Pasir Gintung", "Kalibalau"],
+    Senapelan: ["Senapelan", "Kampung Bandar", "Padang Terubuk"],
+    Abepura: ["Abepura", "Awiyo", "Waena"],
+  };
+
+  await prisma.setting.upsert({
+    where: { key: "master_countries" },
+    update: { value: masterCountries },
+    create: { key: "master_countries", value: masterCountries },
+  });
+  await prisma.setting.upsert({
+    where: { key: "master_provinces" },
+    update: { value: masterProvinces },
+    create: { key: "master_provinces", value: masterProvinces },
+  });
+  await prisma.setting.upsert({
+    where: { key: "master_cities" },
+    update: { value: masterCities },
+    create: { key: "master_cities", value: masterCities },
+  });
+  await prisma.setting.upsert({
+    where: { key: "master_districts" },
+    update: { value: masterDistricts },
+    create: { key: "master_districts", value: masterDistricts },
+  });
+  await prisma.setting.upsert({
+    where: { key: "master_kelurahan" },
+    update: { value: masterKelurahan },
+    create: { key: "master_kelurahan", value: masterKelurahan },
+  });
+
+  console.log("Master data wilayah seeded");
+
   console.log("\nSeeding completed!");
   console.log("\nAccounts (see .env.example for default passwords):");
   console.log("  Super Admin:    admin@komuna.id");

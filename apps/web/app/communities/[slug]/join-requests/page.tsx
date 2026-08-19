@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import api from "@/lib/api";
+import api, { unwrapApiData } from "@/lib/api";
 import { Header } from "@/components/header";
 import { useAuth } from "@/components/auth-provider";
 
@@ -83,8 +83,7 @@ export default function JoinRequestsPage() {
     try {
       setLoading(true);
       setError(null);
-      const { data } = await api.get(`/communities/${slug}`);
-      setCommunity(data.community);
+      setCommunity(unwrapApiData<Community>(await api.get(`/communities/${slug}`)));
     } catch (err: any) {
       setError(err?.response?.data?.message || "Gagal memuat data komunitas.");
       setLoading(false);
@@ -98,13 +97,11 @@ export default function JoinRequestsPage() {
       const params: Record<string, string | number> = {
         page,
         limit: 20,
+        status: activeTab === "ALL" ? "all" : activeTab,
       };
-      if (activeTab !== "ALL") {
-        params.status = activeTab;
-      }
-      const { data } = await api.get(`/communities/${community!.id}/join-requests`, { params });
-      setRequests(data.requests || []);
-      setTotalPages(data.totalPages || 1);
+      const response = await api.get(`/communities/${community!.id}/join-requests`, { params });
+      setRequests(unwrapApiData<JoinRequest[]>(response) || []);
+      setTotalPages(response.data.pagination?.totalPages || 1);
     } catch (err: any) {
       setError(err?.response?.data?.message || "Gagal memuat permintaan bergabung.");
     } finally {

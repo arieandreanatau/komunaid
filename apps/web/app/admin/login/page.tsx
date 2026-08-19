@@ -8,12 +8,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { loginSchema, type LoginInput } from "@komunaid/shared";
 import api from "@/lib/api";
 import { useAuth } from "@/components/auth-provider";
+import { safeRedirect } from "@/lib/redirect";
 
 export default function AdminLoginPage() {
   const router = useRouter();
   const { user, setUser, logout, isAuthenticated, isLoading } = useAuth();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirect") || "/admin";
+  const redirectTo = safeRedirect(searchParams.get("redirect"), "/admin");
   const [error, setError] = useState("");
   const [checkingRole, setCheckingRole] = useState(false);
 

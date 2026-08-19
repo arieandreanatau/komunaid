@@ -62,6 +62,27 @@ reportRoutes.post("/", authMiddleware, validate(createReportSchema), async (c) =
 });
 
 // ==========================================
+// GET MY REPORTS
+// ==========================================
+
+reportRoutes.get("/my", authMiddleware, async (c) => {
+  const authUser = c.get("user");
+  const { page, limit } = parsePagination(c.req.url);
+
+  const [reports, total] = await Promise.all([
+    prisma.report.findMany({
+      where: { reporterId: authUser.id },
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.report.count({ where: { reporterId: authUser.id } }),
+  ]);
+
+  return c.json(paginatedResponse(reports, total, page, limit));
+});
+
+// ==========================================
 // GET REPORT BY ID
 // ==========================================
 
@@ -95,25 +116,4 @@ reportRoutes.get("/:reportId", authMiddleware, async (c) => {
       createdAt: report.createdAt,
     },
   });
-});
-
-// ==========================================
-// GET MY REPORTS
-// ==========================================
-
-reportRoutes.get("/my", authMiddleware, async (c) => {
-  const authUser = c.get("user");
-  const { page, limit } = parsePagination(c.req.url);
-
-  const [reports, total] = await Promise.all([
-    prisma.report.findMany({
-      where: { reporterId: authUser.id },
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * limit,
-      take: limit,
-    }),
-    prisma.report.count({ where: { reporterId: authUser.id } }),
-  ]);
-
-  return c.json(paginatedResponse(reports, total, page, limit));
 });
