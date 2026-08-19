@@ -147,7 +147,8 @@ describe("RBAC Integration Tests", () => {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       });
-      expect([401, 403]).toContain(res.status);
+      // Valid token provided; non-member of the community → 403 Forbidden.
+      expect(res.status).toBe(403);
     });
 
     it("should reject admin-only actions from non-admin", async () => {
@@ -160,7 +161,8 @@ describe("RBAC Integration Tests", () => {
       const res = await app.request("/api/v1/communities/comm-1/dashboard", {
         headers: { Authorization: `Bearer ${token}` },
       });
-      expect([401, 403]).toContain(res.status);
+      // Valid token provided; role MEMBER is not admin → 403 Forbidden.
+      expect(res.status).toBe(403);
     });
 
     it("should allow owner to access owner routes", async () => {

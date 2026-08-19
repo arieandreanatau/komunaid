@@ -81,7 +81,7 @@ describe("Admin Integration Tests", () => {
   });
 
   describe("Dashboard", () => {
-    it("should return dashboard data for admin", async () => {
+    it("should return dashboard data for admin with correct stats", async () => {
       const token = await generateToken({ sub: "admin-1", email: "admin@test.com", name: "Admin", username: "admin", type: "access" });
       (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
       (prisma.userRole.findMany as any).mockResolvedValue([{ role: "PLATFORM_ADMIN" }]);
@@ -89,12 +89,23 @@ describe("Admin Integration Tests", () => {
       (prisma.community.count as any).mockResolvedValue(25);
       (prisma.organization.count as any).mockResolvedValue(10);
       (prisma.event.count as any).mockResolvedValue(50);
+      (prisma.report.count as any).mockResolvedValue(3);
       (prisma.$queryRaw as any).mockResolvedValue([{ count: 5 }]);
 
       const res = await app.request("/api/v1/admin/dashboard", {
         headers: { Authorization: `Bearer ${token}` },
       });
       expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.stats.totalUsers).toBe(100);
+      expect(body.data.stats.totalCommunities).toBe(25);
+      expect(body.data.stats.totalOrganizations).toBe(10);
+      expect(body.data.stats.totalEvents).toBe(50);
+      expect(body.data.stats.pendingReports).toBe(3);
+      expect(Array.isArray(body.data.recentActivity)).toBe(true);
+      expect(Array.isArray(body.data.recentAudit)).toBe(true);
+      expect(Array.isArray(body.data.recentReports)).toBe(true);
     });
   });
 
@@ -103,13 +114,27 @@ describe("Admin Integration Tests", () => {
       const token = await generateToken({ sub: "admin-1", email: "admin@test.com", name: "Admin", username: "admin", type: "access" });
       (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
       (prisma.userRole.findMany as any).mockResolvedValue([{ role: "PLATFORM_ADMIN" }]);
-      (prisma.user.findMany as any).mockResolvedValue([]);
-      (prisma.user.count as any).mockResolvedValue(0);
+      (prisma.user.findMany as any).mockResolvedValue([
+        {
+          id: "u1", name: "A", username: "a", email: "a@x.com", avatar: null, status: "ACTIVE",
+          createdAt: new Date(), roles: [{ role: "MEMBER" }],
+          _count: { joinedCommunities: 2, registeredEvents: 3, createdCommunities: 1, createdOrganizations: 0 },
+        },
+      ]);
+      (prisma.user.count as any).mockResolvedValue(1);
 
       const res = await app.request("/api/v1/admin/users", {
         headers: { Authorization: `Bearer ${token}` },
       });
       expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.success).toBe(true);
+      expect(Array.isArray(body.data)).toBe(true);
+      expect(body.data).toHaveLength(1);
+      expect(body.data[0].email).toBe("a@x.com");
+      expect(body.data[0].communityCount).toBe(2);
+      expect(body.data[0].roles).toEqual(["MEMBER"]);
+      expect(body.pagination.total).toBe(1);
     });
   });
 

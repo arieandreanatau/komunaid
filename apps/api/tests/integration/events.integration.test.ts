@@ -93,6 +93,8 @@ vi.mock("@komunaid/database", () => {
     auditLog: { create: vi.fn(async () => ({})) },
     activityHistory: { create: vi.fn(async () => ({})) },
     notification: { create: vi.fn(async () => ({})), createMany: vi.fn(async () => ({ count: 0 })) },
+    volunteerOpportunity: { findMany: vi.fn(async () => []), updateMany: vi.fn(async () => ({ count: 0 })) },
+    volunteerApplication: { findMany: vi.fn(async () => []), updateMany: vi.fn(async () => ({ count: 0 })) },
     eventCategory: { deleteMany: vi.fn(async () => ({ count: 0 })), createMany: vi.fn(async () => ({ count: 0 })) },
     user: { findUnique: vi.fn(async () => null) },
     $transaction: vi.fn(async (fn: any) => { if (typeof fn === "function") return fn(prisma); return Promise.all(fn); }),
@@ -181,9 +183,9 @@ describe("Events Integration Tests", () => {
       const res = await app.request("/api/v1/events", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ title: "Test Event", eventDate: "2025-12-01T10:00:00Z", communityId: "comm-1" }),
+        body: JSON.stringify({ title: "Test Event", eventDate: "2025-12-01T10:00:00Z", communityId: "comm-1", quota: 100 }),
       });
-      expect([400, 403]).toContain(res.status);
+      expect(res.status).toBe(403);
     });
 
     it("should create event with valid community role", async () => {
@@ -240,7 +242,9 @@ describe("Events Integration Tests", () => {
       const res = await app.request("/api/v1/events/event-1/cancel", {
         method: "POST", headers: { Authorization: `Bearer ${token}` },
       });
-      expect([200, 403]).toContain(res.status);
+      // Membership is null in this mock, so role resolves to null and
+      // canManageEvent() returns false → 403 Forbidden.
+      expect(res.status).toBe(403);
     });
 
     it("should return 403 when not authorized", async () => {
@@ -258,6 +262,43 @@ describe("Events Integration Tests", () => {
       });
       expect(res.status).toBe(403);
     });
+
+    it("cascades cancellation to volunteer opportunities and notifies applicants", async () => {
+      const token = await generateToken({ sub: "user-1", email: "test@test.com", name: "Test", username: "test", type: "access" });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
+      (prisma.event.findUnique as any).mockResolvedValue({
+        id: "event-1", status: "PUBLISHED", deletedAt: null, createdById: "user-2",
+        title: "Test", slug: "test", communityId: "comm-1", organizationId: null,
+      });
+      // Creator is an OWNER of the community → can manage the event.
+      (prisma.communityMember.findUnique as any).mockResolvedValue({ role: "OWNER", status: "ACTIVE", deletedAt: null });
+      (prisma.organizationMember.findUnique as any).mockResolvedValue(null);
+      (prisma.eventRegistration.findMany as any).mockResolvedValue([]);
+      (prisma.event.update as any).mockResolvedValue({ id: "event-1", status: "CANCELLED" });
+      // There is one volunteer opportunity with one applicant.
+      (prisma.volunteerOpportunity.findMany as any).mockResolvedValue([{ id: "opp-1" }]);
+      (prisma.volunteerApplication.findMany as any).mockResolvedValue([{ id: "va-1", userId: "member-9" }]);
+
+      const res = await app.request("/api/v1/events/event-1/cancel", {
+        method: "POST", headers: { Authorization: `Bearer ${token}` },
+      });
+
+      expect(res.status).toBe(200);
+      // Volunteer opportunity must be closed and its applications rejected.
+      const oppCall = (prisma.volunteerOpportunity.updateMany as any).mock.calls[0][0];
+      expect(oppCall.data.status).toBe("CLOSED");
+      expect(oppCall.where.id.in).toEqual(["opp-1"]);
+
+      const appCall = (prisma.volunteerApplication.updateMany as any).mock.calls[0][0];
+      expect(appCall.data.status).toBe("REJECTED");
+      expect(appCall.where.opportunityId.in).toEqual(["opp-1"]);
+
+      // Applicants must be notified about the cancellation.
+      const notifData = (prisma.notification.createMany as any).mock.calls[0][0].data;
+      expect(notifData).toEqual(
+        expect.arrayContaining([expect.objectContaining({ userId: "member-9", title: "Event Dibatalkan" })])
+      );
+    });
   });
 
   describe("PATCH /events/:eventId organizer reassignment", () => {
@@ -269,6 +310,13 @@ describe("Events Integration Tests", () => {
         communityId: "comm-1", organizationId: null, title: "Test", categories: [],
       };
       (prisma.event.findUnique as any).mockResolvedValue(event);
+      (prisma.event.update as any).mockResolvedValue({
+        ...event,
+        communityId: "comm-2",
+        organizationId: null,
+        community: { id: "comm-2", name: "C2", slug: "c2" },
+        organization: null,
+      });
       (prisma.communityMember.findUnique as any).mockImplementation(({ where }: any) => {
         const id = where.communityId_userId.communityId;
         return id === "comm-1"

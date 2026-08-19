@@ -11,9 +11,13 @@ vi.mock("@komunaid/database", () => {
     communityMember: { findUnique: vi.fn() },
     organizationMember: { findUnique: vi.fn() },
     volunteerOpportunity: { findUnique: vi.fn(), update: vi.fn() },
-    volunteerPosition: { updateMany: vi.fn(), create: vi.fn(), findMany: vi.fn() },
+    volunteerPosition: { updateMany: vi.fn(), create: vi.fn(), findMany: vi.fn(), findUnique: vi.fn() },
+    volunteerApplication: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), updateMany: vi.fn(), delete: vi.fn(), count: vi.fn() },
+    notification: { create: vi.fn(), createMany: vi.fn() },
     auditLog: { create: vi.fn() },
     activityHistory: { create: vi.fn() },
+    $queryRaw: vi.fn(),
+    $transaction: vi.fn(),
   };
   return { prisma };
 });
@@ -60,5 +64,71 @@ describe("Volunteer opportunity position isolation", () => {
     });
     expect(prisma.volunteerOpportunity.update).not.toHaveBeenCalled();
     expect(prisma.volunteerPosition.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("applies capacity check inside a FOR UPDATE locked transaction (concurrency-safe)", async () => {
+    // Opportunity is OPEN and registrable.
+    (prisma.volunteerOpportunity.findUnique as any).mockResolvedValue({
+      id: "opportunity-1", title: "Opportunity", status: "OPEN", deletedAt: null,
+      registrationDeadline: null,
+      event: { id: "event-1", communityId: "community-1", organizationId: null, createdById: "user-2" },
+    });
+    (prisma.communityMember.findUnique as any).mockResolvedValue({ role: "OWNER", status: "ACTIVE", deletedAt: null });
+
+    // Simulate the DB: $transaction wrapper passes a tx proxy; $queryRaw locks the position row.
+    let lockSql = "";
+    (prisma.$transaction as any).mockImplementation(async (fn: any) =>
+      fn({
+        $queryRaw: async (sql: string[]) => {
+          lockSql = sql.join("");
+          return [{ id: "position-1", requiredQty: 1 }];
+        },
+        volunteerPosition: { findUnique: async () => ({ id: "position-1", opportunityId: "opportunity-1", requiredQty: 1, _count: { applications: 0 } }) },
+        volunteerApplication: {
+          findUnique: async () => null,
+          create: async (args: any) => ({ id: "app-1", status: "APPLIED", ...args.data }),
+        },
+      })
+    );
+
+    const app = new Hono();
+    app.route("/api/v1/volunteer", volunteerRoutes);
+    const response = await app.request("/api/v1/volunteer/opportunity-1/apply", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${await token()}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ positionId: "position-1", agreement: true, motivation: "saya sangat ingin membantu kegiatan ini" }),
+    });
+
+    expect(response.status).toBe(201);
+    // The capacity check must serialize writes via a SELECT ... FOR UPDATE row lock.
+    expect(lockSql).toContain("FOR UPDATE");
+    expect(lockSql).toMatch(/volunteer_positions/i);
+  });
+
+  it("rejects application when position quota is already full", async () => {
+    (prisma.volunteerOpportunity.findUnique as any).mockResolvedValue({
+      id: "opportunity-1", title: "Opportunity", status: "OPEN", deletedAt: null,
+      registrationDeadline: null,
+      event: { id: "event-1", communityId: "community-1", organizationId: null, createdById: "user-2" },
+    });
+    (prisma.communityMember.findUnique as any).mockResolvedValue({ role: "OWNER", status: "ACTIVE", deletedAt: null });
+
+    (prisma.$transaction as any).mockImplementation(async (fn: any) =>
+      fn({
+        $queryRaw: async () => [{ id: "position-1", requiredQty: 1 }],
+        volunteerPosition: { findUnique: async () => ({ id: "position-1", opportunityId: "opportunity-1", requiredQty: 1, _count: { applications: 1 } }) },
+        volunteerApplication: { findUnique: async () => null },
+      })
+    );
+
+    const app = new Hono();
+    app.route("/api/v1/volunteer", volunteerRoutes);
+    const response = await app.request("/api/v1/volunteer/opportunity-1/apply", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${await token()}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ positionId: "position-1", agreement: true, motivation: "saya sangat ingin menjadi relawan di sini" }),
+    });
+
+    expect(response.status).toBe(400);
   });
 });

@@ -3,6 +3,7 @@ import { prisma } from "@komunaid/database";
 import { validate } from "../../middleware/validate";
 import { adminCreateCategorySchema, adminUpdateCategorySchema } from "@komunaid/shared";
 import { createAuditLog, AuditActions } from "../../services/audit";
+import { isUniqueConstraintError } from "../../lib/slug";
 import type { AuthUser } from "../../middleware/auth";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
@@ -64,25 +65,32 @@ categoriesRoutes.post("/categories", validate(adminCreateCategorySchema), async 
     return c.json({ success: false, message: "Kategori sudah ada" }, 409);
   }
 
-  const category = await prisma.category.create({
-    data: {
-      name,
-      slug,
-      description,
-      icon,
-      type: (type as any) || "COMMUNITY",
-    },
-  });
+  try {
+    const category = await prisma.category.create({
+      data: {
+        name,
+        slug,
+        description,
+        icon,
+        type: (type as any) || "COMMUNITY",
+      },
+    });
 
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.SETTINGS_UPDATE,
-    resourceName: "Category",
-    resourceId: category.id,
-    afterData: { name, slug, type: category.type },
-  });
+    await createAuditLog({
+      userId: authUser.id,
+      actionType: AuditActions.SETTINGS_UPDATE,
+      resourceName: "Category",
+      resourceId: category.id,
+      afterData: { name, slug, type: category.type },
+    });
 
-  return c.json({ success: true, data: category }, 201);
+    return c.json({ success: true, data: category }, 201);
+  } catch (err) {
+    if (isUniqueConstraintError(err)) {
+      return c.json({ success: false, message: "Kategori sudah ada" }, 409);
+    }
+    throw err;
+  }
 });
 
 categoriesRoutes.put("/categories/:categoryId", validate(adminUpdateCategorySchema), async (c) => {

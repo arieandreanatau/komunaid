@@ -6,6 +6,7 @@ import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import { createAuditLog, AuditActions } from "../services/audit";
 import { xssSanitize, sanitizeText } from "../lib/xss";
+import { createWithUniqueSlug } from "../lib/slug";
 import { slugify } from "@komunaid/utils";
 import type { AuthUser } from "../middleware/auth";
 
@@ -403,10 +404,6 @@ eventRoutes.post("/", authMiddleware, validate(createEventSchema), async (c) => 
     }
   }
 
-  let slug = slugify(data.title);
-  const existingSlug = await prisma.event.findUnique({ where: { slug } });
-  if (existingSlug) slug = `${slug}-${Date.now()}`;
-
   const { categoryIds, gallery, ...eventData } = data;
 
   const sanitizedEventData = {
@@ -419,24 +416,28 @@ eventRoutes.post("/", authMiddleware, validate(createEventSchema), async (c) => 
     contactPhone: sanitizeText(eventData.contactPhone),
   };
 
-  const event = await prisma.event.create({
-    data: {
-      ...sanitizedEventData,
-      slug,
-      createdById: authUser.id,
-      eventDate: new Date(data.eventDate),
-      endDate: data.endDate ? new Date(data.endDate) : null,
-      gallery: gallery ? JSON.stringify(gallery) : null,
-      categories: categoryIds
-        ? { create: categoryIds.map((categoryId: string) => ({ categoryId })) }
-        : undefined,
-    },
-    include: {
+  const event = await createWithUniqueSlug(
+    (slug) =>
+      prisma.event.create({
+      data: {
+        ...sanitizedEventData,
+        slug,
+        createdById: authUser.id,
+        eventDate: new Date(data.eventDate),
+        endDate: data.endDate ? new Date(data.endDate) : null,
+        gallery: gallery ? JSON.stringify(gallery) : null,
+        categories: categoryIds
+          ? { create: categoryIds.map((categoryId: string) => ({ categoryId })) }
+          : undefined,
+      },
+      include: {
       community: { select: { id: true, name: true, slug: true } },
       organization: { select: { id: true, name: true, slug: true } },
       categories: { include: { category: true } },
     },
-  });
+    }),
+    data.title
+  );
 
   await createAuditLog({
     userId: authUser.id,
@@ -877,6 +878,46 @@ eventRoutes.post("/:eventId/cancel", authMiddleware, async (c) => {
     });
   }
 
+  // Cascade: cancel volunteer opportunities tied to this event and
+  // reject pending/accepted volunteer applications (audit trail preserved).
+  const opportunities = await prisma.volunteerOpportunity.findMany({
+    where: { eventId, deletedAt: null },
+  });
+  if (opportunities.length > 0) {
+    const opportunityIds = opportunities.map((o) => o.id);
+
+    await prisma.volunteerOpportunity.updateMany({
+      where: { id: { in: opportunityIds } },
+      data: { status: "CLOSED" },
+    });
+
+    const pendingApps = await prisma.volunteerApplication.findMany({
+      where: { opportunityId: { in: opportunityIds }, status: { in: ["APPLIED", "REVIEWED", "ACCEPTED"] } },
+    });
+
+    if (pendingApps.length > 0) {
+      await prisma.volunteerApplication.updateMany({
+        where: { opportunityId: { in: opportunityIds }, status: { in: ["APPLIED", "REVIEWED", "ACCEPTED"] } },
+        data: {
+          status: "REJECTED",
+          reviewNote: "Event dibatalkan oleh penyelenggara.",
+          reviewedAt: new Date(),
+          reviewedById: authUser.id,
+        },
+      });
+
+      await prisma.notification.createMany({
+        data: pendingApps.map((a) => ({
+          userId: a.userId,
+          title: "Event Dibatalkan",
+          message: `Event "${event.title}" telah dibatalkan. Pendaftaran volunteer Anda dibatalkan.`,
+          type: "EVENT" as const,
+          link: `/events/${event.slug}`,
+        })),
+      });
+    }
+  }
+
   await createAuditLog({
     userId: authUser.id,
     actionType: AuditActions.EVENT_CANCEL,
@@ -958,25 +999,23 @@ eventRoutes.post("/:eventId/duplicate", authMiddleware, async (c) => {
     return c.json({ success: false, message: "Tidak memiliki akses menduplikasi event ini" }, 403);
   }
 
-  let slug = slugify(`${event.title} copy`);
-  const existingSlug = await prisma.event.findUnique({ where: { slug } });
-  if (existingSlug) slug = `${slug}-${Date.now()}`;
-
-  const newEvent = await prisma.event.create({
-    data: {
-      title: `${event.title} (Salinan)`,
-      slug,
-      description: event.description,
-      coverImage: event.coverImage,
-      thumbnail: event.thumbnail,
-      location: event.location,
-      locationType: event.locationType,
-      isOnline: event.isOnline,
-      onlineUrl: event.onlineUrl,
-      meetingUrl: event.meetingUrl,
-      eventDate: event.eventDate,
-      endDate: event.endDate,
-      timezone: event.timezone,
+  const newEvent = await createWithUniqueSlug(
+    (slug) =>
+      prisma.event.create({
+        data: {
+          title: `${event.title} (Salinan)`,
+          slug,
+          description: event.description,
+          coverImage: event.coverImage,
+          thumbnail: event.thumbnail,
+          location: event.location,
+          locationType: event.locationType,
+          isOnline: event.isOnline,
+          onlineUrl: event.onlineUrl,
+          meetingUrl: event.meetingUrl,
+          eventDate: event.eventDate,
+          endDate: event.endDate,
+          timezone: event.timezone,
       quota: event.quota,
       allowWaitlist: event.allowWaitlist,
       status: "DRAFT",
@@ -995,7 +1034,9 @@ eventRoutes.post("/:eventId/duplicate", authMiddleware, async (c) => {
     include: {
       categories: { include: { category: true } },
     },
-  });
+    }),
+    `${event.title} copy`
+  );
 
   await createAuditLog({
     userId: authUser.id,
@@ -1034,7 +1075,7 @@ eventRoutes.post("/:eventId/register", authMiddleware, async (c) => {
     return c.json({ success: false, message: "Event tidak ditemukan" }, 404);
   }
 
-  if (event.status !== "REGISTRATION_OPEN" && event.status !== "PUBLISHED") {
+  if (event.status !== "REGISTRATION_OPEN") {
     return c.json({ success: false, message: "Registrasi event belum dibuka" }, 400);
   }
 
@@ -1422,16 +1463,51 @@ eventRoutes.patch("/:eventId/participants/:participantId/approve", authMiddlewar
     return c.json({ success: false, message: "Hanya peserta dengan status PENDING yang dapat disetujui" }, 400);
   }
 
-  const updated = await prisma.eventRegistration.update({
-    where: { id: participantId },
-    data: { status: "CONFIRMED" },
+  const approveResult = await prisma.$transaction(async (tx) => {
+    const lockedRows = await tx.$queryRaw<{ quota: number }[]>`
+      SELECT \`quota\` FROM \`events\` WHERE \`id\` = ${eventId} FOR UPDATE
+    `;
+
+    const lockedEvent = lockedRows[0];
+    if (!lockedEvent) {
+      return { notFound: true as const };
+    }
+
+    const confirmedCount = await tx.eventRegistration.count({
+      where: { eventId, status: "CONFIRMED" },
+    });
+
+    const isFull = confirmedCount >= lockedEvent.quota;
+
+    if (isFull && !event.allowWaitlist) {
+      return { full: true as const };
+    }
+
+    const targetStatus = isFull ? "WAITLISTED" : "CONFIRMED";
+
+    const updated = await tx.eventRegistration.update({
+      where: { id: participantId },
+      data: { status: targetStatus },
+    });
+
+    return { full: false as const, updated, waitlisted: isFull };
   });
+
+  if (approveResult.notFound) {
+    return c.json({ success: false, message: "Event tidak ditemukan" }, 404);
+  }
+  if (approveResult.full) {
+    return c.json({ success: false, message: "Kuota event sudah penuh" }, 400);
+  }
+  const updated = approveResult.updated;
 
   await prisma.notification.create({
     data: {
       userId: registration.userId,
-      title: "Pendaftaran Disetujui",
-      message: `Pendaftaran Anda pada event "${event.title}" telah disetujui.`,
+      title: approveResult.waitlisted ? "Pendaftaran Masuk Daftar Tunggu" : "Pendaftaran Disetujui",
+      message: approveResult.waitlisted
+        ? `Kuota event "${event.title}" penuh. Pendaftaran Anda masuk daftar tunggu.`
+        : `Pendaftaran Anda pada event "${event.title}" telah disetujui.`,
       type: "EVENT",
       link: `/events/${event.slug}`,
     },

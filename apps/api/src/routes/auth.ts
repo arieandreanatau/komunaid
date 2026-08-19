@@ -30,6 +30,7 @@ import {
   forgotPasswordRateLimiter,
   resetPasswordRateLimiter,
   refreshTokenRateLimiter,
+  getIP,
 } from "../services/rate-limiter";
 import { createChildLogger } from "../lib/logger";
 
@@ -45,7 +46,7 @@ export const authRoutes = new Hono<Env>();
 
 authRoutes.post("/register", validate(registerSchema), async (c) => {
   const data = c.get("validated");
-  const ipAddress = c.req.header("X-Forwarded-For")?.split(",")[0]?.trim() || c.req.header("X-Real-IP") || "unknown";
+  const ipAddress = getIP(c);
 
   const rateLimitResult = await registrationRateLimiter(ipAddress);
   if (!rateLimitResult.allowed) {
@@ -166,7 +167,7 @@ authRoutes.post("/register", validate(registerSchema), async (c) => {
 authRoutes.post("/login", validate(loginSchema), async (c) => {
   const data = c.get("validated");
   const userAgent = c.req.header("User-Agent") || "";
-  const ipAddress = c.req.header("X-Forwarded-For")?.split(",")[0]?.trim() || c.req.header("X-Real-IP") || "unknown";
+  const ipAddress = getIP(c);
 
   const rateLimitKey = `${ipAddress}:${data.identifier}`;
   const rateLimitResult = await loginRateLimiter(rateLimitKey);
@@ -312,7 +313,7 @@ authRoutes.post("/refresh", async (c) => {
   }
 
   const tokenHash = hashToken(rawRefreshToken);
-  const ipAddress = c.req.header("X-Forwarded-For")?.split(",")[0]?.trim() || c.req.header("X-Real-IP") || "unknown";
+  const ipAddress = getIP(c);
   const userAgent = c.req.header("User-Agent") || "";
   const fingerprint = c.req.header("X-Device-Fingerprint") || undefined;
 
