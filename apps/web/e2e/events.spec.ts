@@ -104,7 +104,7 @@ test.describe("Events Listing", () => {
     await page.goto("/events");
     const upcomingTab = page.getByRole("button", { name: "Mendatang" });
     await upcomingTab.click();
-    await expect(upcomingTab).toHaveClass(/bg-komuna-blue/);
+    await expect(upcomingTab).toHaveClass(/bg-komuna-forest/);
   });
 });
 
