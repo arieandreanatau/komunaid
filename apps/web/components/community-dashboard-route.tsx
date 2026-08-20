@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import api from "@/lib/api";
 import { useAuth } from "@/components/auth-provider";
+import { CommunityEventTab } from "@/components/community-event-tab";
 
 interface DashboardData {
   community: {
@@ -75,10 +76,11 @@ interface InsightData {
   topMembers: { role: string; count: number }[];
 }
 
-type Tab = "ringkasan" | "anggota" | "permintaan" | "media" | "pengaturan" | "insight";
+type Tab = "ringkasan" | "anggota" | "permintaan" | "media" | "pengaturan" | "insight" | "event";
 
 const tabs: { key: Tab; label: string }[] = [
   { key: "ringkasan", label: "Ringkasan" },
+  { key: "event", label: "Event" },
   { key: "anggota", label: "Anggota" },
   { key: "permintaan", label: "Permintaan" },
   { key: "media", label: "Media" },
@@ -377,6 +379,7 @@ export function CommunityDashboardRoute({
   const { community, pendingRequests, activeEvents, recentActivity } = dashboard;
   const canonicalTabPath: Record<Tab, string> = {
     ringkasan: "overview",
+    event: "events",
     anggota: "members",
     permintaan: "requests",
     pengaturan: "settings",
@@ -416,6 +419,11 @@ export function CommunityDashboardRoute({
                 {navTab.key === "ringkasan" && (
                   <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                  </svg>
+                )}
+                {navTab.key === "event" && (
+                  <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                 )}
                 {navTab.key === "anggota" && (
@@ -497,6 +505,10 @@ export function CommunityDashboardRoute({
                 activeEvents={activeEvents}
                 recentActivity={recentActivity}
               />
+            )}
+
+            {tab === "event" && (
+              <CommunityEventTab communityId={communityId} communityName={community.name} />
             )}
 
             {tab === "anggota" && (

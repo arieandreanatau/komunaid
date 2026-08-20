@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -84,10 +84,17 @@ const TIMEZONES = [
 
 export default function CreateEventPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const presetCommunityId = searchParams.get("communityId") || "";
   const [step, setStep] = useState(1);
   const [categories, setCategories] = useState<Category[]>([]);
   const [organizers, setOrganizers] = useState<Organizer[]>([]);
+  const [lockedCommunity, setLockedCommunity] = useState<{
+    id: string;
+    name: string;
+    authorized: boolean;
+  } | null>(null);
 
   const {
     register,
@@ -151,9 +158,12 @@ export default function CreateEventPage() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      router.push(`/login?redirect=${encodeURIComponent("/dashboard/events/create")}`);
+      const redirect = presetCommunityId
+        ? `/dashboard/events/create?communityId=${encodeURIComponent(presetCommunityId)}`
+        : "/dashboard/events/create";
+      router.push(`/login?redirect=${encodeURIComponent(redirect)}`);
     }
-  }, [isAuthenticated, authLoading, router]);
+  }, [isAuthenticated, authLoading, router, presetCommunityId]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -164,13 +174,31 @@ export default function CreateEventPage() {
         ]);
         setCategories(catRes.data.data || []);
         const profile = profileRes.data.data?.user || profileRes.data.user;
-        setOrganizers(eventOrganizers(profile));
+        const organizersList = eventOrganizers(profile);
+        setOrganizers(organizersList);
+
+        if (presetCommunityId) {
+          const community = organizersList.find((o) => o.type === "community" && o.id === presetCommunityId);
+          if (community) {
+            setLockedCommunity({ id: community.id, name: community.name, authorized: true });
+            setValue("communityId", community.id, { shouldValidate: true });
+            setValue("organizationId", null, { shouldValidate: true });
+          } else {
+            const profileCommunities = profile?.communities || [];
+            const known = profileCommunities.find((c: { id: string }) => c.id === presetCommunityId);
+            setLockedCommunity({
+              id: presetCommunityId,
+              name: known?.name || "Komunitas ini",
+              authorized: false,
+            });
+          }
+        }
       } catch {
         console.error("Gagal memuat data");
       }
     };
     if (isAuthenticated) fetchData();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, presetCommunityId, setValue]);
 
   const toggleCategory = (id: string) => {
     const current = formValues.categoryIds;
@@ -206,6 +234,7 @@ export default function CreateEventPage() {
   };
 
   const onSubmit = (data: EventFormData) => {
+    if (lockedCommunity && !lockedCommunity.authorized) return;
     createMutation.mutate(data);
   };
 
@@ -231,13 +260,13 @@ export default function CreateEventPage() {
     <div className="max-w-2xl mx-auto">
       <div className="mb-6">
         <Link
-          href="/dashboard/events"
+          href={presetCommunityId ? `/dashboard/communities/${presetCommunityId}/events` : "/dashboard/events"}
           className="text-sm text-komuna-blue hover:underline flex items-center gap-1"
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
-          Kembali ke Event Saya
+          {presetCommunityId ? "Kembali ke Event Komunitas" : "Kembali ke Event Saya"}
         </Link>
       </div>
 
@@ -360,30 +389,52 @@ export default function CreateEventPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Selenggarakan oleh <span className="text-red-500">*</span>
                 </label>
-                <select
-                  value={
-                    formValues.communityId
-                      ? `community:${formValues.communityId}`
-                      : formValues.organizationId
-                        ? `organization:${formValues.organizationId}`
-                        : ""
-                  }
-                  onChange={(e) => {
-                    const [type, id] = e.target.value.split(":");
-                    setValue("communityId", type === "community" ? id : null, { shouldValidate: true });
-                    setValue("organizationId", type === "organization" ? id : null, { shouldValidate: true });
-                  }}
-                  disabled={organizers.length === 0}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm disabled:bg-gray-100"
-                >
-                  <option value="">Pilih penyelenggara</option>
-                  {organizers.map((organizer) => (
-                    <option key={`${organizer.type}:${organizer.id}`} value={`${organizer.type}:${organizer.id}`}>
-                      {organizer.name} ({organizer.type === "community" ? "Komunitas" : "Organisasi"})
-                    </option>
-                  ))}
-                </select>
-                {organizers.length === 0 && (
+                {lockedCommunity ? (
+                  <div className="flex items-center justify-between px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm">
+                    <span className="font-medium text-gray-800">
+                      {lockedCommunity.name} (Komunitas)
+                    </span>
+                    {lockedCommunity.authorized ? (
+                      <span className="text-xs text-green-600 font-medium bg-green-50 px-2 py-1 rounded-full">
+                        Terpilih
+                      </span>
+                    ) : (
+                      <span className="text-xs text-red-600 font-medium bg-red-50 px-2 py-1 rounded-full">
+                        Tanpa izin
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <select
+                    value={
+                      formValues.communityId
+                        ? `community:${formValues.communityId}`
+                        : formValues.organizationId
+                          ? `organization:${formValues.organizationId}`
+                          : ""
+                    }
+                    onChange={(e) => {
+                      const [type, id] = e.target.value.split(":");
+                      setValue("communityId", type === "community" ? id : null, { shouldValidate: true });
+                      setValue("organizationId", type === "organization" ? id : null, { shouldValidate: true });
+                    }}
+                    disabled={organizers.length === 0}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm disabled:bg-gray-100"
+                  >
+                    <option value="">Pilih penyelenggara</option>
+                    {organizers.map((organizer) => (
+                      <option key={`${organizer.type}:${organizer.id}`} value={`${organizer.type}:${organizer.id}`}>
+                        {organizer.name} ({organizer.type === "community" ? "Komunitas" : "Organisasi"})
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {lockedCommunity && !lockedCommunity.authorized && (
+                  <p className="mt-1 text-xs text-red-500">
+                    Anda tidak memiliki izin untuk membuat event di komunitas ini.
+                  </p>
+                )}
+                {!lockedCommunity && organizers.length === 0 && (
                   <p className="mt-1 text-xs text-gray-500">
                     Event hanya dapat dibuat oleh pemilik komunitas atau pengelola organisasi yang disetujui.
                   </p>
@@ -691,7 +742,7 @@ export default function CreateEventPage() {
               </button>
             ) : (
               <Link
-                href="/dashboard/events"
+                href={presetCommunityId ? `/dashboard/communities/${presetCommunityId}/events` : "/dashboard/events"}
                 className="px-4 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Batal
