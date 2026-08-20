@@ -166,7 +166,6 @@ export function CommunityDashboardRoute({
     description: "",
     visibility: "PUBLIC",
     membershipType: "OPEN",
-    status: "ACTIVE",
   });
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsSuccess, setSettingsSuccess] = useState("");
@@ -201,7 +200,6 @@ export function CommunityDashboardRoute({
         description: comm.description || "",
         visibility: comm.visibility,
         membershipType: comm.membershipType,
-        status: comm.status,
       });
     } catch (err: any) {
       if (err?.response?.status === 401) {
@@ -963,7 +961,7 @@ function PengaturanTab({
   error,
   isOwner,
 }: {
-  form: { name: string; description: string; visibility: string; membershipType: string; status: string };
+  form: { name: string; description: string; visibility: string; membershipType: string };
   setForm: (v: typeof form) => void;
   onSave: () => void;
   saving: boolean;
@@ -1016,7 +1014,7 @@ function PengaturanTab({
           />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Visibilitas</label>
             <select
@@ -1039,18 +1037,6 @@ function PengaturanTab({
             >
               <option value="OPEN">Terbuka</option>
               <option value="RESTRICTED">Terbatas</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-            <select
-              value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value })}
-              disabled={!isOwner}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue outline-none disabled:bg-gray-50"
-            >
-              <option value="ACTIVE">Aktif</option>
-              <option value="INACTIVE">Nonaktif</option>
             </select>
           </div>
         </div>
