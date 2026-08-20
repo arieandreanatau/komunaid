@@ -8,6 +8,7 @@ process.env.JWT_SECRET = "test-integration-secret";
 vi.mock("@komunaid/database", () => {
   const prisma: any = {
     user: { findUnique: vi.fn() },
+    userRole: { findMany: vi.fn(async () => []) },
     communityMember: { findUnique: vi.fn() },
     organizationMember: { findUnique: vi.fn() },
     volunteerOpportunity: { findUnique: vi.fn(), update: vi.fn() },

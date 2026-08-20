@@ -41,7 +41,7 @@ export const sidebarItems: SidebarItem[] = [
   { href: "/admin/cms", label: "CMS", icon: ICONS.cms },
   { href: "/admin/moderation", label: "Moderation", icon: ICONS.moderation },
   { href: "/admin/master-data", label: "Master Data", icon: ICONS.masterData, superAdminOnly: true },
-  { href: "/admin/settings", label: "Settings", icon: ICONS.settings },
+  { href: "/admin/settings", label: "Settings", icon: ICONS.settings, superAdminOnly: true },
 ];
 
 export const workspaces: Record<string, WorkspaceConfig> = {
@@ -86,12 +86,12 @@ export const workspaces: Record<string, WorkspaceConfig> = {
     label: "Volunteer",
     icon: ICONS.volunteer,
     tabs: [
-      { href: "/admin/volunteer", label: "Overview" },
+      { href: "/admin/volunteer", label: "Overview", superAdminOnly: true },
       { href: "/admin/volunteer/review-queue", label: "Review Queue", superAdminOnly: true },
-      { href: "/admin/volunteer/programs", label: "Programs" },
-      { href: "/admin/volunteer/applications", label: "Applications" },
-      { href: "/admin/volunteer/attendance", label: "Attendance" },
-      { href: "/admin/volunteer/reports", label: "Reports" },
+      { href: "/admin/volunteer/programs", label: "Programs", superAdminOnly: true },
+      { href: "/admin/volunteer/applications", label: "Applications", superAdminOnly: true },
+      { href: "/admin/volunteer/attendance", label: "Attendance", superAdminOnly: true },
+      { href: "/admin/volunteer/reports", label: "Reports", superAdminOnly: true },
     ],
   },
   cms: {
@@ -111,7 +111,7 @@ export const workspaces: Record<string, WorkspaceConfig> = {
     icon: ICONS.moderation,
     tabs: [
       { href: "/admin/moderation/reports", label: "Reports" },
-      { href: "/admin/moderation/audit-log", label: "Audit Log" },
+      { href: "/admin/moderation/audit-log", label: "Audit Log", superAdminOnly: true },
       { href: "/admin/moderation/violations", label: "Violations" },
     ],
   },

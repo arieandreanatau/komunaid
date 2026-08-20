@@ -1564,7 +1564,37 @@ organizationRoutes.get(
   "/:organizationId/members",
   authMiddleware,
   async (c) => {
+    const authUser = c.get("user") as AuthUser;
     const organizationId = c.req.param("organizationId") as string;
+
+    const organization = await prisma.organization.findUnique({
+      where: { id: organizationId },
+      include: { settings: true },
+    });
+    if (!organization || organization.deletedAt) {
+      return c.json({ success: false, message: "Organisasi tidak ditemukan" }, 404);
+    }
+
+    const isMember = await prisma.organizationMember.findFirst({
+      where: {
+        organizationId,
+        userId: authUser.id,
+        status: "ACTIVE",
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+
+    const canViewPrivateMembers = Boolean(isMember || organization.ownerId === authUser.id);
+
+    if (organization.visibility === "PRIVATE" && !canViewPrivateMembers) {
+      return c.json({ success: false, message: "Organisasi ini bersifat privat" }, 403);
+    }
+
+    if (organization.settings?.showMemberList === false && !canViewPrivateMembers) {
+      return c.json({ success: false, message: "Daftar anggota tidak tersedia" }, 403);
+    }
+
     const url = new URL(c.req.url);
     const page = Math.max(1, parseInt(url.searchParams.get("page") || "1") || 1);
     const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") || "20") || 20));

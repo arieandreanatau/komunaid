@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+﻿import { Hono } from "hono";
 import { prisma } from "@komunaid/database";
 import {
   createVolunteerOpportunitySchema,
@@ -36,7 +36,13 @@ async function getEventOrganizerRole(userId: string, event: any): Promise<string
   return null;
 }
 
-function canManageEvent(role: string | null, userId: string, event: any): boolean {
+async function isSuperAdmin(userId: string): Promise<boolean> {
+  const roles = await prisma.userRole.findMany({ where: { userId }, select: { role: true } });
+  return roles.some((r) => r.role === "SUPER_ADMIN");
+}
+
+async function canManageEvent(role: string | null, userId: string, event: any): Promise<boolean> {
+  if (await isSuperAdmin(userId)) return true;
   if (!role) return false;
   if (event.createdById === userId) return true;
   if (["OWNER", "ADMIN", "EVENT_MANAGER"].includes(role)) return true;
@@ -226,7 +232,7 @@ volunteerRoutes.get("/dashboard/:eventId", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
   }
 
@@ -334,7 +340,7 @@ volunteerRoutes.get("/detail/:slug", optionalAuthMiddleware, async (c) => {
   }
 
   const organizerRole = user ? await getEventOrganizerRole(user.id, opportunity.event) : null;
-  const isOrganizer = user ? canManageEvent(organizerRole, user.id, opportunity.event) : false;
+  const isOrganizer = user ? await canManageEvent(organizerRole, user.id, opportunity.event) : false;
   const isPublicOpportunity =
     !["DRAFT", "ARCHIVED"].includes(opportunity.status) &&
     opportunity.event.visibility === "PUBLIC" &&
@@ -415,7 +421,7 @@ volunteerRoutes.post("/", authMiddleware, validate(createVolunteerOpportunitySch
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses membuat volunteer opportunity" }, 403);
   }
 
@@ -497,7 +503,7 @@ volunteerRoutes.patch("/:opportunityId", authMiddleware, validate(updateVoluntee
   }
 
   const role = await getEventOrganizerRole(authUser.id, opportunity.event);
-  if (!canManageEvent(role, authUser.id, opportunity.event)) {
+  if (!await canManageEvent(role, authUser.id, opportunity.event)) {
     return c.json({ success: false, message: "Tidak memiliki akses mengubah opportunity ini" }, 403);
   }
 
@@ -621,7 +627,7 @@ volunteerRoutes.delete("/:opportunityId", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, opportunity.event);
-  if (!canManageEvent(role, authUser.id, opportunity.event)) {
+  if (!await canManageEvent(role, authUser.id, opportunity.event)) {
     return c.json({ success: false, message: "Tidak memiliki akses menghapus opportunity ini" }, 403);
   }
 
@@ -659,7 +665,7 @@ volunteerRoutes.post("/:opportunityId/publish", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, opportunity.event);
-  if (!canManageEvent(role, authUser.id, opportunity.event)) {
+  if (!await canManageEvent(role, authUser.id, opportunity.event)) {
     return c.json({ success: false, message: "Tidak memiliki akses mempublikasikan opportunity ini" }, 403);
   }
 
@@ -707,7 +713,7 @@ volunteerRoutes.post("/:opportunityId/close", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, opportunity.event);
-  if (!canManageEvent(role, authUser.id, opportunity.event)) {
+  if (!await canManageEvent(role, authUser.id, opportunity.event)) {
     return c.json({ success: false, message: "Tidak memiliki akses menutup opportunity ini" }, 403);
   }
 
@@ -721,7 +727,7 @@ volunteerRoutes.post("/:opportunityId/close", authMiddleware, async (c) => {
   });
 
   // Reject outstanding pending applications (APPLIED/REVIEWED).
-  // ACCEPTED volunteers are preserved — they already have a confirmed slot.
+  // ACCEPTED volunteers are preserved â€” they already have a confirmed slot.
   const pendingApplications = await prisma.volunteerApplication.findMany({
     where: { opportunityId, status: { in: ["APPLIED", "REVIEWED"] } },
   });
@@ -782,7 +788,7 @@ volunteerRoutes.post("/:opportunityId/archive", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, opportunity.event);
-  if (!canManageEvent(role, authUser.id, opportunity.event)) {
+  if (!await canManageEvent(role, authUser.id, opportunity.event)) {
     return c.json({ success: false, message: "Tidak memiliki akses mengarsipkan opportunity ini" }, 403);
   }
 
@@ -999,7 +1005,7 @@ volunteerRoutes.get("/:opportunityId/applications", authMiddleware, async (c) =>
   }
 
   const role = await getEventOrganizerRole(authUser.id, opportunity.event);
-  if (!canManageEvent(role, authUser.id, opportunity.event)) {
+  if (!await canManageEvent(role, authUser.id, opportunity.event)) {
     return c.json({ success: false, message: "Tidak memiliki akses melihat pendaftar" }, 403);
   }
 
@@ -1075,7 +1081,7 @@ volunteerRoutes.patch("/applications/:applicationId/accept", authMiddleware, val
   }
 
   const role = await getEventOrganizerRole(authUser.id, application.opportunity.event);
-  if (!canManageEvent(role, authUser.id, application.opportunity.event)) {
+  if (!await canManageEvent(role, authUser.id, application.opportunity.event)) {
     return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
   }
 
@@ -1169,7 +1175,7 @@ volunteerRoutes.patch("/applications/:applicationId/reject", authMiddleware, val
   }
 
   const role = await getEventOrganizerRole(authUser.id, application.opportunity.event);
-  if (!canManageEvent(role, authUser.id, application.opportunity.event)) {
+  if (!await canManageEvent(role, authUser.id, application.opportunity.event)) {
     return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
   }
 
@@ -1237,7 +1243,7 @@ volunteerRoutes.patch("/applications/:applicationId/assign", authMiddleware, val
   }
 
   const role = await getEventOrganizerRole(authUser.id, application.opportunity.event);
-  if (!canManageEvent(role, authUser.id, application.opportunity.event)) {
+  if (!await canManageEvent(role, authUser.id, application.opportunity.event)) {
     return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
   }
 
@@ -1339,7 +1345,7 @@ volunteerRoutes.patch("/attendance/:assignmentId/check-in", authMiddleware, asyn
   }
 
   const role = await getEventOrganizerRole(authUser.id, assignment.application.opportunity.event);
-  if (!canManageEvent(role, authUser.id, assignment.application.opportunity.event)) {
+  if (!await canManageEvent(role, authUser.id, assignment.application.opportunity.event)) {
     return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
   }
 
@@ -1402,7 +1408,7 @@ volunteerRoutes.patch("/attendance/:assignmentId/check-out", authMiddleware, asy
   }
 
   const role = await getEventOrganizerRole(authUser.id, assignment.application.opportunity.event);
-  if (!canManageEvent(role, authUser.id, assignment.application.opportunity.event)) {
+  if (!await canManageEvent(role, authUser.id, assignment.application.opportunity.event)) {
     return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
   }
 

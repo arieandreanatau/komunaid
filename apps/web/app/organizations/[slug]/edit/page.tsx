@@ -157,7 +157,7 @@ export default function EditOrganizationPage() {
         }
 
         if (user && org.owner.id !== user.id) {
-          const hasAdminRole = user.roles?.includes("admin") || user.roles?.includes("SUPER_ADMIN");
+          const hasAdminRole = user.roles?.includes("PLATFORM_ADMIN") || user.roles?.includes("SUPER_ADMIN");
           if (!hasAdminRole) {
             setNotAuthorized(true);
             return;

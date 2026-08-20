@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+﻿import { Hono } from "hono";
 import { prisma } from "@komunaid/database";
 import type { Prisma } from "@prisma/client";
 import { createEventSchema, updateEventSchema, eventQuerySchema } from "@komunaid/shared";
@@ -30,7 +30,13 @@ async function getEventOrganizerRole(userId: string, event: any): Promise<string
   return null;
 }
 
-function canManageEvent(role: string | null, userId: string, event: any): boolean {
+async function isSuperAdmin(userId: string): Promise<boolean> {
+  const roles = await prisma.userRole.findMany({ where: { userId }, select: { role: true } });
+  return roles.some((r) => r.role === "SUPER_ADMIN");
+}
+
+async function canManageEvent(role: string | null, userId: string, event: any): Promise<boolean> {
+  if (await isSuperAdmin(userId)) return true;
   if (!role) return false;
   if (event.createdById === userId) return true;
   if (["OWNER", "ADMIN", "EVENT_MANAGER"].includes(role)) return true;
@@ -281,7 +287,7 @@ eventRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
   }
 
   const role = user ? await getEventOrganizerRole(user.id, event) : null;
-  const isOrganizer = user ? canManageEvent(role, user.id, event) : false;
+  const isOrganizer = user ? await canManageEvent(role, user.id, event) : false;
   const isPublicEvent = event.visibility === "PUBLIC" && !["DRAFT", "CANCELLED", "ARCHIVED"].includes(event.status);
   if (!isPublicEvent && !isOrganizer) {
     return c.json({ success: false, message: "Event tidak ditemukan" }, 404);
@@ -390,7 +396,8 @@ eventRoutes.post("/", authMiddleware, validate(createEventSchema), async (c) => 
     const membership = await prisma.communityMember.findUnique({
       where: { communityId_userId: { communityId: data.communityId, userId: authUser.id } },
     });
-    if (!membership || membership.status !== "ACTIVE" || membership.deletedAt !== null || !["OWNER", "ADMIN", "EVENT_MANAGER"].includes(membership.role)) {
+    const isSA = await isSuperAdmin(authUser.id);
+    if (!isSA && (!membership || membership.status !== "ACTIVE" || membership.deletedAt !== null || !["OWNER", "ADMIN", "EVENT_MANAGER"].includes(membership.role))) {
       return c.json({ success: false, message: "Tidak memiliki akses membuat event di komunitas ini" }, 403);
     }
   }
@@ -399,7 +406,8 @@ eventRoutes.post("/", authMiddleware, validate(createEventSchema), async (c) => 
     const membership = await prisma.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId: data.organizationId, userId: authUser.id } },
     });
-    if (!membership || membership.status !== "ACTIVE" || membership.deletedAt !== null || !["OWNER", "ADMIN"].includes(membership.role)) {
+    const isSA = await isSuperAdmin(authUser.id);
+    if (!isSA && (!membership || membership.status !== "ACTIVE" || membership.deletedAt !== null || !["OWNER", "ADMIN"].includes(membership.role))) {
       return c.json({ success: false, message: "Tidak memiliki akses membuat event di organisasi ini" }, 403);
     }
   }
@@ -477,7 +485,7 @@ eventRoutes.patch("/:eventId", authMiddleware, validate(updateEventSchema), asyn
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses mengubah event ini" }, 403);
   }
 
@@ -504,7 +512,8 @@ eventRoutes.patch("/:eventId", authMiddleware, validate(updateEventSchema), asyn
     const membership = await prisma.communityMember.findUnique({
       where: { communityId_userId: { communityId: targetCommunityId!, userId: authUser.id } },
     });
-    if (!membership || membership.status !== "ACTIVE" || membership.deletedAt !== null || !["OWNER", "ADMIN", "EVENT_MANAGER"].includes(membership.role)) {
+    const isSA = await isSuperAdmin(authUser.id);
+    if (!isSA && (!membership || membership.status !== "ACTIVE" || membership.deletedAt !== null || !["OWNER", "ADMIN", "EVENT_MANAGER"].includes(membership.role))) {
       return c.json({ success: false, message: "Tidak memiliki akses memindahkan event ke komunitas ini" }, 403);
     }
   }
@@ -513,7 +522,8 @@ eventRoutes.patch("/:eventId", authMiddleware, validate(updateEventSchema), asyn
     const membership = await prisma.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId: targetOrganizationId!, userId: authUser.id } },
     });
-    if (!membership || membership.status !== "ACTIVE" || membership.deletedAt !== null || !["OWNER", "ADMIN"].includes(membership.role)) {
+    const isSA = await isSuperAdmin(authUser.id);
+    if (!isSA && (!membership || membership.status !== "ACTIVE" || membership.deletedAt !== null || !["OWNER", "ADMIN"].includes(membership.role))) {
       return c.json({ success: false, message: "Tidak memiliki akses memindahkan event ke organisasi ini" }, 403);
     }
   }
@@ -590,7 +600,7 @@ eventRoutes.delete("/:eventId", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses menghapus event ini" }, 403);
   }
 
@@ -628,7 +638,7 @@ eventRoutes.post("/:eventId/publish", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses mempublikasikan event ini" }, 403);
   }
 
@@ -672,7 +682,7 @@ eventRoutes.post("/:eventId/open-registration", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
   }
 
@@ -715,7 +725,7 @@ eventRoutes.post("/:eventId/close-registration", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
   }
 
@@ -758,7 +768,7 @@ eventRoutes.post("/:eventId/start", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
   }
 
@@ -801,7 +811,7 @@ eventRoutes.post("/:eventId/complete", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
   }
 
@@ -844,7 +854,7 @@ eventRoutes.post("/:eventId/cancel", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses membatalkan event ini" }, 403);
   }
 
@@ -948,7 +958,7 @@ eventRoutes.post("/:eventId/archive", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses mengarsipkan event ini" }, 403);
   }
 
@@ -995,7 +1005,7 @@ eventRoutes.post("/:eventId/duplicate", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses menduplikasi event ini" }, 403);
   }
 
@@ -1270,7 +1280,7 @@ eventRoutes.get("/:eventId/participants", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses melihat peserta" }, 403);
   }
 
@@ -1342,7 +1352,7 @@ eventRoutes.post("/:eventId/participants/:participantId/check-in", authMiddlewar
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
   }
 
@@ -1394,7 +1404,7 @@ eventRoutes.post("/:eventId/participants/:participantId/check-out", authMiddlewa
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
   }
 
@@ -1446,7 +1456,7 @@ eventRoutes.patch("/:eventId/participants/:participantId/approve", authMiddlewar
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
   }
 
@@ -1543,7 +1553,7 @@ eventRoutes.patch("/:eventId/participants/:participantId/reject", authMiddleware
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
   }
 
@@ -1604,7 +1614,7 @@ eventRoutes.get("/:eventId/participants/export", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
   }
 
@@ -1644,7 +1654,7 @@ eventRoutes.get("/:eventId/dashboard", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
   }
 

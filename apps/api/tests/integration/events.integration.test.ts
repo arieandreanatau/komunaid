@@ -247,6 +247,33 @@ describe("Events Integration Tests", () => {
       expect(res.status).toBe(403);
     });
 
+    it("allows SUPER_ADMIN to cancel an event they do not own", async () => {
+      const token = await generateToken({ sub: "user-2", email: "u2@test.com", name: "U2", username: "u2", type: "access" });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
+      (prisma.event.findUnique as any).mockResolvedValue({
+        id: "event-1", status: "PUBLISHED", deletedAt: null, createdById: "user-1",
+        title: "Test", slug: "test", communityId: "comm-1", organizationId: null,
+      });
+      (prisma.communityMember.findUnique as any).mockResolvedValue(null);
+      (prisma.organizationMember.findUnique as any).mockResolvedValue(null);
+      // SUPER_ADMIN platform role → canManageEvent bypass applies.
+      (prisma.userRole.findMany as any).mockResolvedValue([{ role: "SUPER_ADMIN" }]);
+      (prisma.eventRegistration.findMany as any).mockResolvedValue([]);
+      (prisma.event.update as any).mockResolvedValue({ id: "event-1", status: "CANCELLED" });
+      (prisma.volunteerOpportunity.findMany as any).mockResolvedValue([]);
+      (prisma.volunteerApplication.findMany as any).mockResolvedValue([]);
+      (prisma.volunteerOpportunity.updateMany as any).mockResolvedValue({ count: 0 });
+      (prisma.volunteerApplication.updateMany as any).mockResolvedValue({ count: 0 });
+
+      const res = await app.request("/api/v1/events/event-1/cancel", {
+        method: "POST", headers: { Authorization: `Bearer ${token}` },
+      });
+
+      expect(res.status).toBe(200);
+      // Restore default (non-superadmin) role lookup so later tests are unaffected.
+      (prisma.userRole.findMany as any).mockResolvedValue([]);
+    });
+
     it("should return 403 when not authorized", async () => {
       const token = await generateToken({ sub: "user-2", email: "u2@test.com", name: "U2", username: "u2", type: "access" });
       (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
