@@ -11,7 +11,9 @@ export function Header() {
   const { user, isAuthenticated, isLoading, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [kegiatanOpen, setKegiatanOpen] = useState(false);
   const [tentangOpen, setTentangOpen] = useState(false);
+  const kegiatanRef = useRef<HTMLDivElement>(null);
   const tentangRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -27,6 +29,9 @@ export function Header() {
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
+      if (kegiatanRef.current && !kegiatanRef.current.contains(e.target as Node)) {
+        setKegiatanOpen(false);
+      }
       if (tentangRef.current && !tentangRef.current.contains(e.target as Node)) {
         setTentangOpen(false);
       }
@@ -44,9 +49,17 @@ export function Header() {
     router.push("/");
   };
 
+  const kegiatanItems = [
+    { href: "/events", label: "Event" },
+    { href: "/volunteer", label: "Volunteer" },
+  ];
+
   const tentangItems = [
     { href: "/about", label: "Tentang Kami" },
+    { href: "/organization-structure", label: "Struktur Organisasi" },
     { href: "/contact", label: "Kontak" },
+    { href: "/saran", label: "Saran" },
+    { href: "/faq", label: "FAQ" },
   ];
 
   return (
@@ -65,19 +78,45 @@ export function Header() {
           <Link href="/communities" className="text-komuna-dark/70 hover:text-komuna-forest transition-colors">
             Komunitas
           </Link>
-          <Link href="/events" className="text-komuna-dark/70 hover:text-komuna-forest transition-colors">
-            Event
-          </Link>
-          <Link href="/volunteer" className="text-komuna-dark/70 hover:text-komuna-forest transition-colors">
-            Volunteer
-          </Link>
-          <Link href="/categories" className="text-komuna-dark/70 hover:text-komuna-forest transition-colors">
-            Kategori
-          </Link>
+          <div className="relative" ref={kegiatanRef}>
+            <button
+              onClick={() => setKegiatanOpen(!kegiatanOpen)}
+              className="flex items-center gap-1 text-komuna-dark/70 hover:text-komuna-forest transition-colors"
+              aria-expanded={kegiatanOpen}
+              aria-haspopup="true"
+            >
+              Kegiatan
+              <svg className={`h-4 w-4 transition-transform ${kegiatanOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {kegiatanOpen && (
+              <div
+                className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50"
+                role="menu"
+                aria-label="Menu Kegiatan"
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") { setKegiatanOpen(false); }
+                }}
+              >
+                {kegiatanItems.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    role="menuitem"
+                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-komuna-blue transition-colors"
+                    onClick={() => setKegiatanOpen(false)}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
           <div className="relative" ref={tentangRef}>
             <button
               onClick={() => setTentangOpen(!tentangOpen)}
-               className="flex items-center gap-1 text-komuna-dark/70 hover:text-komuna-forest transition-colors"
+              className="flex items-center gap-1 text-komuna-dark/70 hover:text-komuna-forest transition-colors"
               aria-expanded={tentangOpen}
               aria-haspopup="true"
             >
@@ -88,7 +127,7 @@ export function Header() {
             </button>
             {tentangOpen && (
               <div
-                className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50"
+                className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50"
                 role="menu"
                 aria-label="Menu Tentang"
                 onKeyDown={(e) => {
@@ -109,7 +148,6 @@ export function Header() {
               </div>
             )}
           </div>
-          <Link href="/faq" className="text-komuna-dark/70 hover:text-komuna-forest transition-colors">FAQ</Link>
         </nav>
 
         <div className="flex items-center gap-2">
@@ -269,6 +307,14 @@ export function Header() {
               >
                 Daftar
               </Link>
+              <Link
+                href="/admin/login"
+                className="hidden md:inline-flex items-center gap-1.5 rounded-xl border border-komuna-blue/30 px-3 py-2 text-sm font-bold text-komuna-blue hover:bg-komuna-blue/5 transition-colors"
+                title="Login Super Admin"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                Admin
+              </Link>
             </>
           )}
 
@@ -299,20 +345,21 @@ export function Header() {
           <Link href="/communities" className="block py-2 text-sm text-gray-600 hover:text-komuna-blue" onClick={() => setMenuOpen(false)}>
             Komunitas
           </Link>
-          <Link href="/events" className="block py-2 text-sm text-gray-600 hover:text-komuna-blue" onClick={() => setMenuOpen(false)}>
-            Event
-          </Link>
-          <Link href="/volunteer" className="block py-2 text-sm text-gray-600 hover:text-komuna-blue" onClick={() => setMenuOpen(false)}>
-            Volunteer
-          </Link>
-          <Link href="/categories" className="block py-2 text-sm text-gray-600 hover:text-komuna-blue" onClick={() => setMenuOpen(false)}>
-            Kategori
-          </Link>
+          <div className="border-t pt-1">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1 px-2">Kegiatan</p>
+            {kegiatanItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="block py-2 text-sm text-gray-600 hover:text-komuna-blue pl-4"
+                onClick={() => setMenuOpen(false)}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </div>
           <Link href="/search" className="block py-2 text-sm text-gray-600 hover:text-komuna-blue" onClick={() => setMenuOpen(false)}>
             Cari
-          </Link>
-          <Link href="/faq" className="block py-2 text-sm text-gray-600 hover:text-komuna-blue" onClick={() => setMenuOpen(false)}>
-            FAQ
           </Link>
           <div className="border-t pt-2 mt-2">
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1 px-2">Tentang</p>
@@ -327,7 +374,7 @@ export function Header() {
               </Link>
             ))}
           </div>
-          {isAuthenticated && user && (
+          {isAuthenticated && user ? (
             <>
               <div className="border-t pt-2 mt-2">
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1 px-2">Dashboard</p>
@@ -350,6 +397,30 @@ export function Header() {
               <button onClick={() => { setMenuOpen(false); handleLogout(); }} className="block py-2 text-sm text-red-600 hover:text-red-700 text-left w-full">
                 Keluar
               </button>
+            </>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="block py-2 text-sm font-semibold text-komuna-forest hover:text-komuna-dark"
+                onClick={() => setMenuOpen(false)}
+              >
+                Masuk
+              </Link>
+              <Link
+                href="/register"
+                className="block py-2 text-sm font-semibold text-komuna-forest hover:text-komuna-dark"
+                onClick={() => setMenuOpen(false)}
+              >
+                Daftar
+              </Link>
+              <Link
+                href="/admin/login"
+                className="block py-2 text-sm text-komuna-blue hover:text-komuna-dark"
+                onClick={() => setMenuOpen(false)}
+              >
+                Login Admin
+              </Link>
             </>
           )}
         </nav>
