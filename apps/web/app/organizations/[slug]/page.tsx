@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
@@ -259,7 +259,7 @@ export default function OrganizationDetailPage() {
 
   if (loading || isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-komuna-cream">
         <Header />
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center">
@@ -273,7 +273,7 @@ export default function OrganizationDetailPage() {
 
   if (!hasOrgAccess) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-komuna-cream">
         <Header />
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center max-w-md mx-auto px-4">
@@ -296,7 +296,7 @@ export default function OrganizationDetailPage() {
 
   if (error || !organization) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-komuna-cream">
         <Header />
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center max-w-md mx-auto px-4">
@@ -323,7 +323,7 @@ export default function OrganizationDetailPage() {
 
   if (!featureFlags.organization) {
     return (
-      <div className="min-h-screen flex flex-col bg-gray-50">
+      <div className="min-h-screen flex flex-col bg-komuna-cream">
         <Header />
         <FeatureDisabledBanner />
         <Footer />
@@ -332,7 +332,7 @@ export default function OrganizationDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-komuna-cream">
       <Header />
 
       {organization.banner ? (
@@ -389,7 +389,7 @@ export default function OrganizationDetailPage() {
 
             <div className="flex-1 min-w-0 pb-1">
               <div className="flex flex-wrap items-center gap-2 mb-1">
-                <h1 className="text-2xl md:text-3xl font-bold text-komuna-navy truncate">
+                <h1 className="font-display text-2xl md:text-3xl font-semibold tracking-[-0.03em] text-komuna-dark truncate">
                   {organization.name}
                 </h1>
                 <span

@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-export default function Forbidden() {
+export default function ForbiddenPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-komuna-cream px-4">
       <div className="text-center max-w-md mx-auto p-8">

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { Header } from "@/components/header";
@@ -44,7 +44,7 @@ export default function SubmitPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-komuna-cream">
       <Header />
       <main className="flex-1 py-12">
         <div className="container mx-auto px-4">

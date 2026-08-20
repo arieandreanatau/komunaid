@@ -10,25 +10,25 @@ export const metadata: Metadata = {
 export default function NotFound() {
   return (
     <div className="min-h-screen flex flex-col">
-      <div className="flex-1 flex items-center justify-center bg-gray-50">
+      <div className="flex-1 flex items-center justify-center bg-komuna-cream px-4">
         <div className="text-center max-w-md mx-auto p-8">
-          <div className="text-7xl font-bold text-komuna-blue mb-4">404</div>
-          <h1 className="text-2xl font-bold text-komuna-navy mb-2">
+          <div className="font-display text-7xl font-semibold text-komuna-forest mb-4">404</div>
+          <h1 className="font-display text-3xl font-semibold tracking-[-0.03em] text-komuna-dark mb-2">
             Halaman Tidak Ditemukan
           </h1>
-          <p className="text-gray-600 mb-8">
+          <p className="text-komuna-dark/65 mb-8">
             Halaman yang Anda cari tidak tersedia atau sudah dipindahkan ke lokasi lain.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center mb-10">
             <Link
               href="/"
-              className="px-6 py-2.5 bg-komuna-blue text-white rounded-lg hover:bg-komuna-navy transition-colors font-medium"
+              className="px-6 py-2.5 bg-komuna-forest text-white rounded-xl hover:bg-komuna-dark transition-colors font-bold"
             >
               Kembali ke Beranda
             </Link>
             <Link
               href="/communities"
-              className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+              className="px-6 py-2.5 border border-komuna-forest/20 text-komuna-forest rounded-xl hover:bg-komuna-forest/5 transition-colors font-bold"
             >
               Jelajahi Komunitas
             </Link>

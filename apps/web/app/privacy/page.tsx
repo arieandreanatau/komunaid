@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 
@@ -9,11 +9,11 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-komuna-cream text-komuna-dark">
       <Header />
       <main className="container mx-auto px-4 py-16 flex-1">
         <div className="max-w-3xl mx-auto">
-          <h1 className="text-4xl font-bold text-komuna-navy mb-3">Kebijakan Privasi</h1>
+          <h1 className="font-display text-4xl font-semibold tracking-[-0.03em] text-komuna-dark mb-3">Kebijakan Privasi</h1>
           <p className="text-gray-500 mb-10">Terakhir diperbarui: Juli 2026</p>
           <div className="space-y-8">
             <section className="bg-white border rounded-xl p-6">

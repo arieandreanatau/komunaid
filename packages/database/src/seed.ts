@@ -402,6 +402,56 @@ async function main() {
 
   console.log("Master data wilayah seeded");
 
+  // ==========================================
+  // DEMO VOLUNTEER OPPORTUNITY
+  // ==========================================
+  // Provide a volunteer opportunity tied to the demo event so the volunteer
+  // discovery journey has seeded data to display.
+
+  const volunteerOpportunity = await prisma.volunteerOpportunity.upsert({
+    where: { slug: "sukarelawan-meetup-juli-2026" },
+    update: {},
+    create: {
+      title: "Sukarelawan Meetup Juli 2026",
+      slug: "sukarelawan-meetup-juli-2026",
+      description: "Bantu kelancaran registrasi dan koordinasi peserta saat meetup komunitas teknologi.",
+      status: "OPEN",
+      registrationDeadline: new Date("2026-07-20T00:00:00+07:00"),
+      activityStartDate: new Date("2026-07-25T18:00:00+07:00"),
+      activityEndDate: new Date("2026-07-25T22:00:00+07:00"),
+      eventId: event.id,
+      createdById: member.id,
+      positions: {
+        create: [
+          { name: "Koordinator Registrasi", description: "Membantu check-in peserta.", requiredQty: 2 },
+          { name: "MC & Moderator", description: "Memandu sesi acara.", requiredQty: 1 },
+        ],
+      },
+    },
+  });
+
+  const demoPositions = await prisma.volunteerPosition.findMany({
+    where: { opportunityId: volunteerOpportunity.id },
+  });
+  if (demoPositions.length > 0) {
+    await prisma.volunteerApplication.upsert({
+      where: {
+        opportunityId_userId: { opportunityId: volunteerOpportunity.id, userId: member.id },
+      },
+      update: {},
+      create: {
+        opportunityId: volunteerOpportunity.id,
+        positionId: demoPositions[0].id,
+        userId: member.id,
+        motivation: "Saya ingin berkontribusi pada acara komunitas.",
+        agreement: true,
+        status: "APPLIED",
+      },
+    });
+  }
+
+  console.log("Demo Volunteer Opportunity seeded:", volunteerOpportunity.title);
+
   console.log("\nSeeding completed!");
   console.log("\nAccounts (see .env.example for default passwords):");
   console.log("  Super Admin:    admin@komuna.id");

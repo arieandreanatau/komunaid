@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
 import { Header } from "@/components/header";
@@ -57,14 +57,15 @@ export default function ContactPage() {
   ].filter((s) => s.url);
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-komuna-cream">
       <Header />
       <main className="flex-1 py-12">
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto">
             <div className="text-center mb-10">
-              <h1 className="text-3xl font-bold text-komuna-navy mb-3">Hubungi Kami</h1>
-              <p className="text-gray-600">
+              <p className="text-sm font-bold uppercase tracking-[0.16em] text-komuna-coral mb-3">Kontak</p>
+              <h1 className="font-display text-4xl font-semibold tracking-[-0.03em] text-komuna-dark">Hubungi Kami</h1>
+              <p className="text-komuna-dark/65 mt-3">
                 Punya pertanyaan atau masukan? Silakan hubungi kami.
               </p>
             </div>

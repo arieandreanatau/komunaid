@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
@@ -90,7 +90,7 @@ export default function OrganizationsPage() {
 
   if (!featureFlags.organization) {
     return (
-      <div className="min-h-screen flex flex-col bg-gray-50">
+      <div className="min-h-screen flex flex-col bg-komuna-cream">
         <Header />
         <FeatureDisabledBanner />
         <Footer />
@@ -100,7 +100,7 @@ export default function OrganizationsPage() {
 
   if (!isLoading && !hasOrgAccess) {
     return (
-      <div className="min-h-screen flex flex-col bg-gray-50">
+      <div className="min-h-screen flex flex-col bg-komuna-cream">
         <Header />
         <main className="container mx-auto px-4 py-12 flex-1 flex items-center justify-center">
           <div className="text-center max-w-md">
@@ -122,13 +122,13 @@ export default function OrganizationsPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-komuna-cream">
       <Header />
       <main className="container mx-auto px-4 py-12 flex-1">
         <div className="mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <div>
-              <h1 className="text-3xl font-bold text-komuna-navy">Direktori Organisasi</h1>
+              <h1 className="font-display text-4xl font-semibold tracking-[-0.03em] text-komuna-dark">Direktori Organisasi</h1>
               <p className="text-gray-500 text-sm mt-1">Temukan organisasi yang sesuai dengan minat Anda.</p>
             </div>
             <Link href="/organizations/create" className="inline-flex items-center gap-2 px-5 py-2.5 bg-komuna-blue text-white rounded-lg font-medium hover:bg-komuna-navy transition-colors text-sm">
