@@ -36,12 +36,14 @@ const STATUS_COLORS: Record<string, string> = {
 export default function VolunteerProgramsPage() {
   const { user, isLoading: authLoading } = useAuth();
   const [statusFilter, setStatusFilter] = useState("");
-  const { data, isLoading, isError, refetch } = useQuery<ProgramRow[]>({
-    queryKey: ["volunteer-programs", "admin", "programs", statusFilter],
+  const [page, setPage] = useState(1);
+  const { data, isLoading, isError, refetch } = useQuery<{ items: ProgramRow[]; pagination: { page: number; totalPages: number; total: number } }>({
+    queryKey: ["volunteer-programs", "admin", "programs", statusFilter, page],
     queryFn: async () => {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({ page: String(page) });
       if (statusFilter) params.set("status", statusFilter);
-      return (await api.get(`/volunteer-programs/admin/programs${params.toString() ? `?${params}` : ""}`)).data.data;
+      const res = await api.get(`/volunteer-programs/admin/programs${params.toString() ? `?${params}` : ""}`);
+      return { items: res.data.data || [], pagination: res.data.pagination };
     },
     enabled: !authLoading && Boolean(user?.roles.includes("SUPER_ADMIN")),
   });
@@ -61,7 +63,7 @@ export default function VolunteerProgramsPage() {
 
       <div className="flex gap-1 bg-white rounded-lg p-1 shadow-sm w-fit flex-wrap">
         {[...filters].map((v) => (
-          <button key={v} onClick={() => setStatusFilter(v)}
+          <button key={v} onClick={() => { setStatusFilter(v); setPage(1); }}
             className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${statusFilter === v ? "bg-komuna-blue text-white" : "text-gray-600 hover:bg-gray-100"}`}>
             {v === "" ? "Semua" : (STATUS_LABELS[v] || v)}
           </button>
@@ -72,7 +74,7 @@ export default function VolunteerProgramsPage() {
         <DashboardLoadingState label="Memuat program volunteer" />
       ) : isError ? (
         <DashboardErrorState onRetry={() => refetch()} />
-      ) : !data?.length ? (
+      ) : !data?.items.length ? (
         <DashboardEmptyState title="Belum ada program volunteer" description="Program relawan akan muncul di sini." />
       ) : (
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
@@ -88,7 +90,7 @@ export default function VolunteerProgramsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {data.map((p) => (
+                {data.items.map((p) => (
                   <tr key={p.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3">
                       <p className="font-medium text-gray-900">{p.title}</p>
@@ -107,6 +109,25 @@ export default function VolunteerProgramsPage() {
               </tbody>
             </table>
           </div>
+          {data.pagination.totalPages > 1 && (
+            <div className="flex items-center justify-center gap-3 border-t border-gray-100 px-4 py-3">
+              <button
+                onClick={() => setPage(Math.max(1, page - 1))}
+                disabled={page <= 1}
+                className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+              >
+                Sebelumnya
+              </button>
+              <span className="text-sm text-gray-500">Halaman {data.pagination.page} dari {data.pagination.totalPages}</span>
+              <button
+                onClick={() => setPage(Math.min(data.pagination.totalPages, page + 1))}
+                disabled={page >= data.pagination.totalPages}
+                className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+              >
+                Selanjutnya
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
