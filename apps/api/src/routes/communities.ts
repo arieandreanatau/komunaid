@@ -2615,7 +2615,6 @@ communityRoutes.get(
 communityRoutes.post(
   "/:communityId/media",
   authMiddleware,
-  requireCommunityAdmin,
   validate(createCommunityMediaSchema),
   async (c) => {
     const authUser = c.get("user");
@@ -2628,6 +2627,27 @@ communityRoutes.post(
 
     if (!community || community.deletedAt) {
       return c.json({ success: false, message: "Komunitas tidak ditemukan" }, 404);
+    }
+
+    const membership = await prisma.communityMember.findUnique({
+      where: {
+        communityId_userId: {
+          communityId,
+          userId: authUser.id,
+        },
+      },
+      select: { role: true, status: true, deletedAt: true },
+    });
+
+    const isMember = Boolean(membership && membership.status === "ACTIVE" && !membership.deletedAt);
+    const isAdmin = isMember && ["OWNER", "ADMIN"].includes(membership!.role);
+
+    if (data.type === "FORUM_POST") {
+      if (!isMember && community.ownerId !== authUser.id) {
+        return c.json({ success: false, message: "Hanya anggota yang dapat membuat thread forum" }, 403);
+      }
+    } else if (!isAdmin && community.ownerId !== authUser.id) {
+      return c.json({ success: false, message: "Anda tidak memiliki akses untuk membuat media" }, 403);
     }
 
     const media = await prisma.communityMedia.create({
