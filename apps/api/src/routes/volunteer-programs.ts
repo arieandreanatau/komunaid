@@ -277,6 +277,125 @@ volunteerProgramRoutes.get("/admin/review-queue", authMiddleware, requireSuperAd
   return c.json({ success: true, data: programs });
 });
 
+// Governance panel. Superadmin-level oversight over the whole volunteer-program
+// system: aggregate stats, program registry, applications and attendance.
+volunteerProgramRoutes.get("/admin/stats", authMiddleware, requireSuperAdmin(), async (c) => {
+  const [totalPrograms, activeVolunteers, pendingApplications, totalApplications, totalAttended, totalRegistrations] = await Promise.all([
+    prisma.volunteerProgram.count({ where: { deletedAt: null } }),
+    prisma.volunteerProgramParticipation.count({ where: { status: { in: ["UPCOMING", "COMPLETED"] } } }),
+    prisma.volunteerProgramApplication.count({ where: { status: "PENDING" } }),
+    prisma.volunteerProgramApplication.count(),
+    prisma.volunteerProgramParticipation.count({ where: { attendance: "ATTENDED" } }),
+    prisma.volunteerProgramParticipation.count(),
+  ]);
+  return c.json({ success: true, data: { totalPrograms, activeVolunteers, pendingApplications, totalApplications, totalAttended, totalRegistrations } });
+});
+
+volunteerProgramRoutes.get("/admin/programs", authMiddleware, requireSuperAdmin(), async (c) => {
+  const url = new URL(c.req.url);
+  const page = Math.max(1, Number(url.searchParams.get("page") || 1));
+  const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") || 20)));
+  const status = url.searchParams.get("status") || "";
+  const search = url.searchParams.get("search")?.trim() || "";
+  const where: Record<string, any> = { deletedAt: null };
+  if (status && status !== "ALL") where.status = status;
+  if (search) where.OR = [{ title: { contains: search } }, { location: { contains: search } }];
+  const [programs, total] = await Promise.all([
+    prisma.volunteerProgram.findMany({
+      where,
+      include: {
+        community: { select: { id: true, name: true } },
+        organizerUser: { select: { id: true, name: true, email: true } },
+        applications: { select: { status: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.volunteerProgram.count({ where }),
+  ]);
+  return c.json({
+    success: true,
+    data: programs.map((program) => ({
+      id: program.id,
+      title: program.title,
+      status: program.status,
+      organizerType: program.organizerType,
+      capacity: program.capacity,
+      startDate: program.startDate,
+      endDate: program.endDate,
+      createdAt: program.createdAt,
+      community: program.community,
+      organizer: program.organizerUser,
+      applicationCount: program.applications.length,
+      volunteers: program.applications.filter((application) => application.status === "ACCEPTED").length,
+    })),
+    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+  });
+});
+
+volunteerProgramRoutes.get("/admin/applications", authMiddleware, requireSuperAdmin(), async (c) => {
+  const url = new URL(c.req.url);
+  const page = Math.max(1, Number(url.searchParams.get("page") || 1));
+  const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") || 20)));
+  const status = url.searchParams.get("status") || "";
+  const where: Record<string, any> = {};
+  if (status && status !== "ALL") where.status = status;
+  const [applications, total] = await Promise.all([
+    prisma.volunteerProgramApplication.findMany({
+      where,
+      include: {
+        user: { select: { id: true, name: true, email: true, avatar: true } },
+        volunteerProgram: { select: { id: true, title: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.volunteerProgramApplication.count({ where }),
+  ]);
+  return c.json({
+    success: true,
+    data: applications.map((application) => ({
+      id: application.id,
+      status: application.status,
+      motivation: application.motivation,
+      reviewedAt: application.reviewedAt,
+      reviewNote: application.reviewNote,
+      appliedAt: application.createdAt,
+      applicant: application.user,
+      program: application.volunteerProgram,
+    })),
+    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+  });
+});
+
+volunteerProgramRoutes.get("/admin/attendance", authMiddleware, requireSuperAdmin(), async (c) => {
+  const participations = await prisma.volunteerProgramParticipation.findMany({
+    where: { attendance: { not: "NOT_RECORDED" } },
+    include: {
+      application: {
+        include: {
+          user: { select: { id: true, name: true, email: true } },
+          volunteerProgram: { select: { id: true, title: true, startDate: true } },
+        },
+      },
+    },
+    orderBy: { attendedAt: "desc" },
+  });
+  return c.json({
+    success: true,
+    data: participations.map((participation) => ({
+      id: participation.id,
+      status: participation.attendance,
+      attendedAt: participation.attendedAt,
+      date: participation.attendedAt || participation.application.volunteerProgram.startDate,
+      volunteer: participation.application.user,
+      program: { id: participation.application.volunteerProgram.id, name: participation.application.volunteerProgram.title },
+    })),
+  });
+});
+
 volunteerProgramRoutes.get("/:programId", optionalAuthMiddleware, async (c) => {
   const user = c.get("user");
   const program = await getProgram(c.req.param("programId") as string);
