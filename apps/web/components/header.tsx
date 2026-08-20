@@ -71,6 +71,9 @@ export function Header() {
           <Link href="/volunteer" className="text-komuna-dark/70 hover:text-komuna-forest transition-colors">
             Volunteer
           </Link>
+          <Link href="/categories" className="text-komuna-dark/70 hover:text-komuna-forest transition-colors">
+            Kategori
+          </Link>
           <div className="relative" ref={tentangRef}>
             <button
               onClick={() => setTentangOpen(!tentangOpen)}
@@ -110,6 +113,16 @@ export function Header() {
         </nav>
 
         <div className="flex items-center gap-2">
+          <Link
+            href="/search"
+            className="hidden sm:inline-flex rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-komuna-blue"
+            title="Cari"
+            aria-label="Cari komunitas, event, volunteer, atau kategori"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35m1.35-5.15a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z" />
+            </svg>
+          </Link>
           {isAuthenticated && (
             <Link
               href="/dashboard/notifications"
@@ -291,6 +304,12 @@ export function Header() {
           </Link>
           <Link href="/volunteer" className="block py-2 text-sm text-gray-600 hover:text-komuna-blue" onClick={() => setMenuOpen(false)}>
             Volunteer
+          </Link>
+          <Link href="/categories" className="block py-2 text-sm text-gray-600 hover:text-komuna-blue" onClick={() => setMenuOpen(false)}>
+            Kategori
+          </Link>
+          <Link href="/search" className="block py-2 text-sm text-gray-600 hover:text-komuna-blue" onClick={() => setMenuOpen(false)}>
+            Cari
           </Link>
           <Link href="/faq" className="block py-2 text-sm text-gray-600 hover:text-komuna-blue" onClick={() => setMenuOpen(false)}>
             FAQ

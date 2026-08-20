@@ -5,6 +5,7 @@ const platformLinks = [
   { href: "/communities", label: "Komunitas" },
   { href: "/events", label: "Event" },
   { href: "/volunteer", label: "Volunteer" },
+  { href: "/categories", label: "Kategori" },
 ];
 
 const helpLinks = [
