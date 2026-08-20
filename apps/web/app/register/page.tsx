@@ -63,7 +63,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-komuna-cream py-12 px-4">
       <div className="max-w-md w-full space-y-8">
         {registrationSuccess ? (
           <div className="rounded-2xl border border-green-200 bg-white p-8 text-center shadow-sm" role="status" aria-live="polite">
@@ -86,9 +86,9 @@ export default function RegisterPage() {
             <div className="text-center">
               <Link href="/" className="flex items-center justify-center gap-3 mb-6">
                 <img src="/icon_komuna.png" alt="KomunaID" className="h-10 w-10" />
-                <span className="font-bold text-2xl text-komuna-navy">KomunaID</span>
+                <span className="font-display text-2xl font-semibold text-komuna-dark">KomunaID</span>
               </Link>
-              <h2 className="text-2xl font-bold text-komuna-navy">Daftar Akun Baru</h2>
+              <h2 className="font-display text-3xl font-semibold tracking-[-0.03em] text-komuna-dark">Daftar Akun Baru</h2>
               <p className="text-sm text-gray-600 mt-2">
                 Sudah punya akun?{" "}
                 <Link href="/login" className="text-komuna-blue hover:underline font-medium">
@@ -97,7 +97,7 @@ export default function RegisterPage() {
               </p>
             </div>
 
-            <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-6">
+            <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-6 rounded-2xl border border-komuna-forest/10 bg-white p-6 shadow-sm sm:p-8">
               {error && (
                 <div className="bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded-lg">
                   {error}
@@ -200,7 +200,7 @@ export default function RegisterPage() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-komuna-blue hover:bg-komuna-navy focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-komuna-blue disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl text-sm font-bold text-white bg-komuna-forest hover:bg-komuna-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-komuna-forest disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {isSubmitting ? "Mendaftar..." : "Daftar"}
               </button>

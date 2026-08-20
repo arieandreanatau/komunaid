@@ -27,10 +27,10 @@ function ResetPasswordForm() {
 
   if (!token) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-komuna-cream py-12 px-4">
         <div className="max-w-md w-full text-center space-y-4">
           <img src="/icon_komuna.png" alt="KomunaID" className="h-12 w-12 mx-auto" />
-          <h2 className="text-2xl font-bold text-komuna-navy">Token Tidak Valid</h2>
+          <h2 className="font-display text-3xl font-semibold tracking-[-0.03em] text-komuna-dark">Token Tidak Valid</h2>
           <p className="text-gray-600">Link reset password tidak valid atau sudah kadaluarsa.</p>
           <Link href="/forgot-password" className="text-komuna-blue hover:underline font-medium">
             Minta link baru
@@ -62,18 +62,18 @@ function ResetPasswordForm() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-komuna-cream py-12 px-4">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <Link href="/" className="flex items-center justify-center gap-3 mb-6">
             <img src="/icon_komuna.png" alt="KomunaID" className="h-10 w-10" />
-            <span className="font-bold text-2xl text-komuna-navy">KomunaID</span>
+            <span className="font-display text-2xl font-semibold text-komuna-dark">KomunaID</span>
           </Link>
-          <h2 className="text-2xl font-bold text-komuna-navy">Reset Password</h2>
+          <h2 className="font-display text-3xl font-semibold tracking-[-0.03em] text-komuna-dark">Reset Password</h2>
           <p className="text-sm text-gray-600 mt-2">Masukkan password baru Anda</p>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-6">
+        <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-6 rounded-2xl border border-komuna-forest/10 bg-white p-6 shadow-sm sm:p-8">
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded-lg">
               {error}
@@ -124,7 +124,7 @@ function ResetPasswordForm() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-komuna-blue hover:bg-komuna-navy focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-komuna-blue disabled:opacity-50 transition-colors"
+            className="w-full flex justify-center py-3 px-4 border border-transparent rounded-xl text-sm font-bold text-white bg-komuna-forest hover:bg-komuna-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-komuna-forest disabled:opacity-50 transition-colors"
           >
             {isSubmitting ? "Mengubah..." : "Ubah Password"}
           </button>

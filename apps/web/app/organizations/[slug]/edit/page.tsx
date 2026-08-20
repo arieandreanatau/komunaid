@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
@@ -265,7 +265,7 @@ export default function EditOrganizationPage() {
 
   if (!featureFlags.organization) {
     return (
-      <div className="min-h-screen flex flex-col bg-gray-50">
+      <div className="min-h-screen flex flex-col bg-komuna-cream">
         <Header />
         <FeatureDisabledBanner />
       </div>
@@ -284,7 +284,7 @@ export default function EditOrganizationPage() {
 
   if (notAuthorized) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-komuna-cream">
         <Header />
         <main className="container mx-auto px-4 py-16">
           <div className="max-w-lg mx-auto text-center">
@@ -323,7 +323,7 @@ export default function EditOrganizationPage() {
 
   if (notEditable) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-komuna-cream">
         <Header />
         <main className="container mx-auto px-4 py-16">
           <div className="max-w-lg mx-auto text-center">
@@ -362,7 +362,7 @@ export default function EditOrganizationPage() {
 
   if (!organization) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-komuna-cream">
         <Header />
         <main className="container mx-auto px-4 py-16">
           <div className="max-w-lg mx-auto text-center">
@@ -382,7 +382,7 @@ export default function EditOrganizationPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-komuna-cream">
       <Header />
 
       <main className="container mx-auto px-4 py-8">

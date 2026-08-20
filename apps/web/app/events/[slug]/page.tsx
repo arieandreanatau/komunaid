@@ -157,10 +157,10 @@ export default function EventDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-komuna-cream">
         <div className="text-center">
-          <div className="h-12 w-12 border-4 border-komuna-blue border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-500">Memuat event...</p>
+          <div className="h-12 w-12 border-4 border-komuna-forest border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-komuna-dark/60">Memuat event...</p>
         </div>
       </div>
     );
@@ -168,7 +168,7 @@ export default function EventDetailPage() {
 
   if (error || !event) {
     return (
-      <div className="min-h-screen flex flex-col bg-gray-50">
+      <div className="min-h-screen flex flex-col bg-komuna-cream">
         <Header />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center max-w-md mx-auto px-4">
@@ -177,9 +177,9 @@ export default function EventDetailPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
-            <h2 className="text-2xl font-bold text-komuna-navy mb-2">Event Tidak Ditemukan</h2>
-            <p className="text-gray-500 mb-6">Event yang kamu cari tidak tersedia atau telah dihapus.</p>
-            <Link href="/events" className="inline-flex items-center gap-2 px-5 py-2.5 bg-komuna-blue text-white rounded-lg font-medium hover:bg-komuna-navy transition-colors">
+            <h2 className="font-display text-3xl font-semibold tracking-[-0.03em] text-komuna-dark mb-2">Event Tidak Ditemukan</h2>
+            <p className="text-komuna-dark/65 mb-6">Event yang kamu cari tidak tersedia atau telah dihapus.</p>
+            <Link href="/events" className="inline-flex items-center gap-2 px-5 py-2.5 bg-komuna-forest text-white rounded-xl font-bold hover:bg-komuna-dark transition-colors">
               Kembali ke Direktori Event
             </Link>
           </div>
@@ -198,7 +198,7 @@ export default function EventDetailPage() {
   const isFull = event.registeredCount >= event.quota;
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-komuna-cream">
       <Header />
 
       <main className="container mx-auto px-4 py-8 flex-1">

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
 import { Header } from "@/components/header";
@@ -98,7 +98,7 @@ export default function OrganizationStructurePage() {
   );
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-komuna-cream">
       <Header />
       <main className="flex-1 py-12">
         <div className="container mx-auto px-4">
@@ -106,7 +106,7 @@ export default function OrganizationStructurePage() {
             <div className="text-center mb-10">
               <h1 className="text-3xl font-bold text-komuna-navy mb-3">Struktur Organisasi</h1>
               <p className="text-gray-600 max-w-xl mx-auto">
-                Kenali tim di balik KomunaID — PT Komuna Digital Indonesia
+                Kenali tim di balik KomunaID â€” PT Komuna Digital Indonesia
               </p>
             </div>
 

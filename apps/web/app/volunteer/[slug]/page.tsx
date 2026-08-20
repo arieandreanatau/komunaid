@@ -189,7 +189,7 @@ export default function VolunteerDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-komuna-cream">
         <div className="h-12 w-12 border-4 border-komuna-blue border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -197,7 +197,7 @@ export default function VolunteerDetailPage() {
 
   if (!opportunity) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-komuna-cream">
         <div className="text-center">
           <h2 className="text-2xl font-bold text-komuna-navy mb-2">Volunteer Tidak Ditemukan</h2>
           <Link href="/volunteer" className="text-komuna-blue hover:underline">Kembali ke Daftar Volunteer</Link>
@@ -210,7 +210,7 @@ export default function VolunteerDetailPage() {
   const canApply = !userApp && ["PUBLISHED", "OPEN"].includes(opportunity.status) && opportunity.event.status !== "COMPLETED";
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-komuna-cream">
       <Header />
 
       <main className="container mx-auto px-4 py-8 flex-1">
@@ -287,7 +287,7 @@ export default function VolunteerDetailPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
                 {opportunity.activityStartDate && (
-                  <div className="bg-gray-50 rounded-lg p-3">
+                  <div className="bg-komuna-cream rounded-lg p-3">
                     <p className="text-xs text-gray-500 mb-1">Tanggal Aktivitas</p>
                     <p className="text-sm font-medium text-gray-900">
                       {formatDate(opportunity.activityStartDate)}
@@ -296,13 +296,13 @@ export default function VolunteerDetailPage() {
                   </div>
                 )}
                 {opportunity.briefingDate && (
-                  <div className="bg-gray-50 rounded-lg p-3">
+                  <div className="bg-komuna-cream rounded-lg p-3">
                     <p className="text-xs text-gray-500 mb-1">Briefing Volunteer</p>
                     <p className="text-sm font-medium text-gray-900">{formatDate(opportunity.briefingDate)}</p>
                   </div>
                 )}
                 {opportunity.registrationDeadline && (
-                  <div className="bg-gray-50 rounded-lg p-3">
+                  <div className="bg-komuna-cream rounded-lg p-3">
                     <p className="text-xs text-gray-500 mb-1">Batas Pendaftaran</p>
                     <p className="text-sm font-medium text-gray-900">{formatDate(opportunity.registrationDeadline)}</p>
                   </div>
@@ -534,7 +534,7 @@ export default function VolunteerDetailPage() {
                 <div className="flex gap-3 pt-2">
                   <button
                     onClick={() => setShowApplyModal(false)}
-                    className="flex-1 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+                    className="flex-1 py-2.5 border border-gray-300 rounded-lg hover:bg-komuna-cream transition-colors text-sm font-medium"
                   >
                     Batal
                   </button>

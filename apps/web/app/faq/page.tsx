@@ -46,14 +46,15 @@ const faqs = [
 
 export default function FAQPage() {
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-komuna-cream text-komuna-dark">
       <JsonLd type="website" data={{ potentialAction: { "@type": "SearchAction", target: "https://komuna.id/search?q={search_term_string}" } }} />
       <Header />
 
       <main className="container mx-auto px-4 py-16 flex-1">
         <div className="max-w-3xl mx-auto">
-          <h1 className="text-4xl font-bold text-komuna-navy mb-3">Pertanyaan Umum (FAQ)</h1>
-          <p className="text-gray-500 text-lg mb-10">
+          <p className="text-sm font-bold uppercase tracking-[0.16em] text-komuna-coral mb-3">Bantuan</p>
+          <h1 className="font-display text-4xl font-semibold tracking-[-0.03em] text-komuna-dark mb-3">Pertanyaan Umum (FAQ)</h1>
+          <p className="text-komuna-dark/65 text-lg mb-10">
             Temukan jawaban atas pertanyaan yang paling sering ditanyakan tentang KomunaID.
           </p>
 

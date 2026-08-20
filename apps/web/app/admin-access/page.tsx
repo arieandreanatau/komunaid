@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect } from "react";
 import Link from "next/link";
@@ -18,7 +18,7 @@ export default function AdminAccessPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-komuna-cream">
         <div className="h-8 w-8 border-4 border-komuna-blue border-t-transparent rounded-full animate-spin" />
       </div>
     );

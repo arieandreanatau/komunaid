@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import { Footer } from "@/components/footer";
 
 export const metadata: Metadata = {
@@ -8,10 +8,10 @@ export const metadata: Metadata = {
 
 export default function VolunteerGuidelinesPage() {
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-komuna-cream text-komuna-dark">
       <main className="container mx-auto px-4 py-16 flex-1">
         <div className="max-w-3xl mx-auto">
-          <h1 className="text-4xl font-bold text-komuna-navy mb-6">Panduan Volunteer</h1>
+          <h1 className="font-display text-4xl font-semibold tracking-[-0.03em] text-komuna-dark mb-6">Panduan Volunteer</h1>
           <p className="text-gray-600 text-lg mb-10">
             Panduan lengkap untuk menjadi relawan di KomunaID. Pastikan Anda memahami seluruh prosedur sebelum mendaftar.
           </p>

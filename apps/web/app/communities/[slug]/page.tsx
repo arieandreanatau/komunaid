@@ -133,7 +133,7 @@ export default function CommunityDetailPage() {
   const isMember = !!community?.userMembership && !isPending;
 
   if (loading) return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-komuna-cream">
       <Header />
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center"><div className="h-12 w-12 border-4 border-komuna-blue border-t-transparent rounded-full animate-spin mx-auto mb-4" /><p className="text-gray-500">Memuat komunitas...</p></div>
@@ -142,7 +142,7 @@ export default function CommunityDetailPage() {
   );
 
   if (error || !community) return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-komuna-cream">
       <Header />
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center max-w-md mx-auto px-4">
@@ -165,7 +165,7 @@ export default function CommunityDetailPage() {
     );
     if (isAdmin) return (
       <div className="flex flex-wrap gap-3">
-        <Link href={`/communities/${slug}/edit`} className="px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors text-sm">Edit</Link>
+        <Link href={`/communities/${slug}/edit`} className="px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-komuna-cream transition-colors text-sm">Edit</Link>
         <Link href={`/dashboard/communities/${community!.id}/overview`} className="px-5 py-2.5 bg-komuna-blue text-white rounded-lg font-medium hover:bg-komuna-navy transition-colors text-sm">
           Dashboard {community!.pendingJoinRequests > 0 && <span className="ml-1 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full font-bold">{community!.pendingJoinRequests}</span>}
         </Link>
@@ -189,7 +189,7 @@ export default function CommunityDetailPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-komuna-cream">
       <Header />
       <main className="flex-1">
         {community.banner ? (
@@ -276,7 +276,7 @@ export default function CommunityDetailPage() {
                     return (
                       <div className="space-y-3">
                         {events.map((event) => (
-                          <Link key={event.id} href={`/events/${event.slug}`} className="flex items-center gap-4 p-3 rounded-lg hover:bg-gray-50 transition-colors group">
+                          <Link key={event.id} href={`/events/${event.slug}`} className="flex items-center gap-4 p-3 rounded-lg hover:bg-komuna-cream transition-colors group">
                             {event.coverImage ? (
                               <img src={event.coverImage} alt={event.title} className="h-12 w-12 rounded-lg object-cover shrink-0" />
                             ) : (
@@ -348,7 +348,7 @@ export default function CommunityDetailPage() {
                   </div>
                   <div className="space-y-3">
                     {community.membersPreview.slice(0, 10).map((member) => (
-                      <Link key={member.id} href={`/communities/${slug}/members`} className="flex items-center gap-3 hover:bg-gray-50 rounded-lg p-1 -m-1 transition-colors">
+                      <Link key={member.id} href={`/communities/${slug}/members`} className="flex items-center gap-3 hover:bg-komuna-cream rounded-lg p-1 -m-1 transition-colors">
                         {member.avatar ? <img src={member.avatar} alt={member.name} className="h-8 w-8 rounded-full object-cover" /> : <div className="h-8 w-8 rounded-full bg-komuna-blue/10 flex items-center justify-center shrink-0"><span className="text-komuna-blue font-bold text-xs">{member.name[0]}</span></div>}
                         <div className="min-w-0 flex-1"><p className="text-sm font-medium text-komuna-navy truncate">{member.name}</p>{member.role !== "MEMBER" && <p className="text-xs text-gray-500 capitalize">{member.role.toLowerCase()}</p>}</div>
                       </Link>
@@ -389,7 +389,7 @@ export default function CommunityDetailPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Pesan (opsional)</label>
             <textarea value={joinMessage} onChange={(e) => setJoinMessage(e.target.value)} rows={4} placeholder="Ceritakan mengapa kamu ingin bergabung..." className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-komuna-blue outline-none resize-none" />
             <div className="flex gap-3 mt-4">
-              <button onClick={() => setJoinModalOpen(false)} className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors text-sm">Batal</button>
+              <button onClick={() => setJoinModalOpen(false)} className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-komuna-cream transition-colors text-sm">Batal</button>
               <button onClick={handleJoin} disabled={joinLoading} className="flex-1 px-4 py-2.5 bg-komuna-blue text-white rounded-lg font-medium hover:bg-komuna-navy transition-colors text-sm disabled:opacity-50">{joinLoading ? "Mengirim..." : "Kirim Permintaan"}</button>
             </div>
           </div>
@@ -437,7 +437,7 @@ function CommunityMediaSection({ communityId }: { communityId: string }) {
       <h2 className="text-lg font-semibold text-komuna-navy mb-4">Pengumuman & Berita</h2>
       <div className="space-y-3">
         {media.map((item) => (
-          <div key={item.id} className="p-4 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
+          <div key={item.id} className="p-4 rounded-lg border border-gray-100 hover:bg-komuna-cream transition-colors">
             <div className="flex items-start gap-3">
               <div className={`h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 ${item.type === "ANNOUNCEMENT" ? "bg-blue-100" : "bg-emerald-100"}`}>
                 <svg className={`h-4 w-4 ${item.type === "ANNOUNCEMENT" ? "text-blue-600" : "text-emerald-600"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
