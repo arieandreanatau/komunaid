@@ -11,6 +11,7 @@ import { Breadcrumbs } from "@/components/breadcrumbs";
 import { getInitial } from "@/lib/initial";
 import { GallerySection } from "@/components/gallery-section";
 import { ForumSection } from "@/components/forum-section";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface CommunityMember {
   id: string;
@@ -252,17 +253,23 @@ export default function CommunityDetailPage() {
                     <h2 className="text-lg font-semibold text-komuna-navy">Event</h2>
                     <Link href={`/events?communityId=${community.id}`} className="text-xs text-komuna-blue hover:underline">Lihat Semua</Link>
                   </div>
-                  <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1">
-                    <button onClick={() => setEventTab("now")} className={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${eventTab === "now" ? "bg-white text-komuna-blue shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-                      Sekarang {community.currentEvents.length > 0 && <span className="ml-1 px-1.5 py-0.5 bg-komuna-blue/10 text-komuna-blue rounded text-xs">{community.currentEvents.length}</span>}
-                    </button>
-                    <button onClick={() => setEventTab("upcoming")} className={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${eventTab === "upcoming" ? "bg-white text-komuna-blue shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-                      Mendatang {community.futureEvents.length > 0 && <span className="ml-1 px-1.5 py-0.5 bg-komuna-blue/10 text-komuna-blue rounded text-xs">{community.futureEvents.length}</span>}
-                    </button>
-                    <button onClick={() => setEventTab("past")} className={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${eventTab === "past" ? "bg-white text-komuna-blue shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-                      Riwayat {community.pastEvents.length > 0 && <span className="ml-1 px-1.5 py-0.5 bg-komuna-blue/10 text-komuna-blue rounded text-xs">{community.pastEvents.length}</span>}
-                    </button>
-                  </div>
+                  <Tabs
+                    value={eventTab}
+                    onValueChange={(v) => setEventTab(v as "now" | "upcoming" | "past")}
+                    className="mb-4"
+                  >
+                    <TabsList>
+                      <TabsTrigger value="now">
+                        Sekarang {community.currentEvents.length > 0 && <span className="ml-1 px-1.5 py-0.5 bg-komuna-blue/10 text-komuna-blue rounded text-xs">{community.currentEvents.length}</span>}
+                      </TabsTrigger>
+                      <TabsTrigger value="upcoming">
+                        Mendatang {community.futureEvents.length > 0 && <span className="ml-1 px-1.5 py-0.5 bg-komuna-blue/10 text-komuna-blue rounded text-xs">{community.futureEvents.length}</span>}
+                      </TabsTrigger>
+                      <TabsTrigger value="past">
+                        Riwayat {community.pastEvents.length > 0 && <span className="ml-1 px-1.5 py-0.5 bg-komuna-blue/10 text-komuna-blue rounded text-xs">{community.pastEvents.length}</span>}
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
                   {(() => {
                     const events = eventTab === "now" ? community.currentEvents : eventTab === "upcoming" ? community.futureEvents : community.pastEvents;
                     if (events.length === 0) {
@@ -430,7 +437,38 @@ function CommunityMediaSection({ communityId }: { communityId: string }) {
     fetchMedia();
   }, [communityId]);
 
-  if (loading || media.length === 0) return null;
+  if (loading) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm p-6">
+        <div className="h-5 w-48 bg-gray-200 rounded animate-pulse mb-4" />
+        <div className="space-y-3">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div key={i} className="flex items-start gap-3 p-4 rounded-lg border border-gray-100">
+              <div className="h-8 w-8 rounded-lg bg-gray-200 animate-pulse flex-shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-2/3 bg-gray-200 rounded animate-pulse" />
+                <div className="h-3 w-full bg-gray-200 rounded animate-pulse" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (media.length === 0) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm p-6">
+        <h2 className="text-lg font-semibold text-komuna-navy mb-4">Pengumuman & Berita</h2>
+        <div className="text-center py-8 text-gray-400">
+          <svg className="h-10 w-10 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+          </svg>
+          <p className="text-sm">Belum ada pengumuman atau berita komunitas.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white rounded-xl shadow-sm p-6">

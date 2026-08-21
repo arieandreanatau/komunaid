@@ -7,6 +7,10 @@ import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { useAuth } from "@/components/auth-provider";
+import { Modal } from "@/components/ui/modal";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import api from "@/lib/api";
 
 interface Position {
@@ -189,19 +193,38 @@ export default function VolunteerDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-komuna-cream">
-        <div className="h-12 w-12 border-4 border-komuna-blue border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen flex flex-col bg-komuna-cream">
+        <Header />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="h-12 w-12 border-4 border-komuna-blue border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-komuna-dark/60">Memuat volunteer...</p>
+          </div>
+        </div>
+        <Footer />
       </div>
     );
   }
 
   if (!opportunity) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-komuna-cream">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-komuna-navy mb-2">Volunteer Tidak Ditemukan</h2>
-          <Link href="/volunteer" className="text-komuna-blue hover:underline">Kembali ke Daftar Volunteer</Link>
+      <div className="min-h-screen flex flex-col bg-komuna-cream">
+        <Header />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center max-w-md mx-auto px-4">
+            <div className="h-16 w-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="h-8 w-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-komuna-navy mb-2">Volunteer Tidak Ditemukan</h2>
+            <p className="text-gray-500 mb-6">Volunteer yang kamu cari tidak tersedia.</p>
+            <Link href="/volunteer" className="inline-flex items-center gap-2 px-5 py-2.5 bg-komuna-blue text-white rounded-lg font-medium hover:bg-komuna-navy transition-colors">
+              Kembali ke Daftar Volunteer
+            </Link>
+          </div>
         </div>
+        <Footer />
       </div>
     );
   }
@@ -447,110 +470,84 @@ export default function VolunteerDetailPage() {
 
       <Footer />
 
-      {showApplyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setShowApplyModal(false)} />
-          <div className="relative bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-komuna-navy">Daftar Volunteer</h2>
-                <button onClick={() => setShowApplyModal(false)} className="p-1 hover:bg-gray-100 rounded">
-                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
+      <Modal open={showApplyModal} onClose={() => setShowApplyModal(false)} title="Daftar Volunteer" size="lg">
+        {formError && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            {formError}
+          </div>
+        )}
 
-              {formError && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-                  {formError}
-                </div>
-              )}
+        <div className="space-y-4">
+          <Select
+            label="Pilih Posisi *"
+            value={selectedPosition}
+            onChange={(e) => setSelectedPosition(e.target.value)}
+          >
+            <option value="">-- Pilih Posisi --</option>
+            {opportunity.positions
+              .filter((p) => p.remainingSlot > 0)
+              .map((pos) => (
+                <option key={pos.id} value={pos.id}>
+                  {pos.name} ({pos.remainingSlot} slot tersisa)
+                </option>
+              ))}
+          </Select>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Pilih Posisi *</label>
-                  <select
-                    value={selectedPosition}
-                    onChange={(e) => setSelectedPosition(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-komuna-blue focus:border-transparent"
-                  >
-                    <option value="">-- Pilih Posisi --</option>
-                    {opportunity.positions
-                      .filter((p) => p.remainingSlot > 0)
-                      .map((pos) => (
-                        <option key={pos.id} value={pos.id}>
-                          {pos.name} ({pos.remainingSlot} slot tersisa)
-                        </option>
-                      ))}
-                  </select>
-                </div>
+          <Textarea
+            label="Motivasi *"
+            value={form.motivation}
+            onChange={(e) => setForm({ ...form, motivation: e.target.value })}
+            rows={4}
+            placeholder="Ceritakan motivasi Anda mengikuti volunteer ini..."
+            className="resize-none"
+          />
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Motivasi *</label>
-                  <textarea
-                    value={form.motivation}
-                    onChange={(e) => setForm({ ...form, motivation: e.target.value })}
-                    rows={4}
-                    placeholder="Ceritakan motivasi Anda mengikuti volunteer ini..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-komuna-blue focus:border-transparent resize-none"
-                  />
-                </div>
+          <Textarea
+            label="Pengalaman"
+            value={form.experience}
+            onChange={(e) => setForm({ ...form, experience: e.target.value })}
+            rows={3}
+            placeholder="Ceritakan pengalaman volunteer atau kegiatan sosial Anda sebelumnya..."
+            className="resize-none"
+          />
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Pengalaman</label>
-                  <textarea
-                    value={form.experience}
-                    onChange={(e) => setForm({ ...form, experience: e.target.value })}
-                    rows={3}
-                    placeholder="Ceritakan pengalaman volunteer atau kegiatan sosial Anda sebelumnya..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-komuna-blue focus:border-transparent resize-none"
-                  />
-                </div>
+          <Input
+            label="Ketersediaan"
+            type="text"
+            value={form.availability}
+            onChange={(e) => setForm({ ...form, availability: e.target.value })}
+            placeholder="Contoh: Weekends, weekday malam, full time"
+          />
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Ketersediaan</label>
-                  <input
-                    type="text"
-                    value={form.availability}
-                    onChange={(e) => setForm({ ...form, availability: e.target.value })}
-                    placeholder="Contoh: Weekends, weekday malam, full time"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-komuna-blue focus:border-transparent"
-                  />
-                </div>
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={form.agreement}
+              onChange={(e) => setForm({ ...form, agreement: e.target.checked })}
+              className="mt-1 h-4 w-4 text-komuna-blue border-gray-300 rounded focus:ring-komuna-blue"
+            />
+            <span className="text-sm text-gray-600">
+              Saya menyetujui untuk mengikuti seluruh rangkaian kegiatan volunteer dan mematuhi ketentuan yang berlaku.
+            </span>
+          </label>
 
-                <label className="flex items-start gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form.agreement}
-                    onChange={(e) => setForm({ ...form, agreement: e.target.checked })}
-                    className="mt-1 h-4 w-4 text-komuna-blue border-gray-300 rounded focus:ring-komuna-blue"
-                  />
-                  <span className="text-sm text-gray-600">
-                    Saya menyetujui untuk mengikuti seluruh rangkaian kegiatan volunteer dan mematuhi ketentuan yang berlaku.
-                  </span>
-                </label>
-
-                <div className="flex gap-3 pt-2">
-                  <button
-                    onClick={() => setShowApplyModal(false)}
-                    className="flex-1 py-2.5 border border-gray-300 rounded-lg hover:bg-komuna-cream transition-colors text-sm font-medium"
-                  >
-                    Batal
-                  </button>
-                  <button
-                    onClick={handleApply}
-                    disabled={applying}
-                    className="flex-1 py-2.5 bg-komuna-blue text-white rounded-lg hover:bg-komuna-navy transition-colors text-sm font-medium disabled:opacity-50"
-                  >
-                    {applying ? "Mendaftar..." : "Daftar Sekarang"}
-                  </button>
-                </div>
-              </div>
-            </div>
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={() => setShowApplyModal(false)}
+              className="flex-1 py-2.5 border border-gray-300 rounded-lg hover:bg-komuna-cream transition-colors text-sm font-medium"
+            >
+              Batal
+            </button>
+            <button
+              onClick={handleApply}
+              disabled={applying}
+              className="flex-1 py-2.5 bg-komuna-blue text-white rounded-lg hover:bg-komuna-navy transition-colors text-sm font-medium disabled:opacity-50"
+            >
+              {applying ? "Mendaftar..." : "Daftar Sekarang"}
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 }
