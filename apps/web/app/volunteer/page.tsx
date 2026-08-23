@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { Pagination } from "@/components/pagination";
@@ -37,6 +38,8 @@ interface Category {
 }
 
 export default function VolunteerListPage() {
+  const searchParams = useSearchParams();
+  const communityIdParam = searchParams.get("communityId") || "";
   const [activeSection, setActiveSection] = useState<SectionTab>("browse");
   const [opportunities, setOpportunities] = useState<VolunteerCardData[]>([]);
   const [sectionList, setSectionList] = useState<VolunteerCardData[]>([]);
@@ -93,6 +96,7 @@ export default function VolunteerListPage() {
       if (debouncedSearch) params.search = debouncedSearch;
       if (status) params.status = status;
       if (categoryId) params.categoryId = categoryId;
+      if (communityIdParam) params.communityId = communityIdParam;
 
       if (sort === "name") {
         params.orderBy = "title";
@@ -117,15 +121,19 @@ export default function VolunteerListPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, debouncedSearch, status, categoryId, sort]);
+  }, [page, debouncedSearch, status, categoryId, sort, communityIdParam]);
 
   useEffect(() => {
     if (activeSection === "browse") fetchOpportunities();
   }, [activeSection, fetchOpportunities]);
 
   useEffect(() => {
+    if (communityIdParam && activeSection !== "browse") setActiveSection("browse");
+  }, [communityIdParam, activeSection]);
+
+  useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, status, categoryId, sort]);
+  }, [debouncedSearch, status, categoryId, sort, communityIdParam]);
 
   const activeFilters: Array<{ label: string; clear: () => void }> = [];
   if (search) activeFilters.push({ label: `Cari: ${search}`, clear: () => { setSearch(""); setDebouncedSearch(""); } });
@@ -270,6 +278,13 @@ export default function VolunteerListPage() {
                   {tab.label}
                 </button>
               ))}
+            </div>
+          )}
+
+          {communityIdParam && (
+            <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-komuna-coral/10 text-xs font-semibold text-komuna-coral">
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+              Kesempatan volunteer komunitas ini
             </div>
           )}
         </div>

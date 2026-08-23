@@ -212,9 +212,46 @@ describe("Communities Integration Tests", () => {
         website: null, membershipType: "OPEN", createdAt: new Date(), updatedAt: new Date(),
       });
       (prisma.communityMember.findUnique as any).mockResolvedValue(null);
+      (prisma.communityMember.findMany as any).mockResolvedValue([]);
 
       const res = await app.request("/api/v1/communities/test");
       expect(res.status).toBe(200);
+      const body = await res.json() as any;
+      expect(Array.isArray(body.data.officers)).toBe(true);
+    });
+
+    it("returns community officers separately from member preview", async () => {
+      const token = await generateToken({ sub: "user-1", email: "u1@test.com", name: "U1", username: "u1", type: "access" });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
+      (prisma.community.findUnique as any).mockResolvedValue({
+        id: "comm-1", name: "Test", slug: "test", description: "desc",
+        status: "APPROVED", visibility: "PUBLIC", deletedAt: null, ownerId: "user-1",
+        members: [
+          { user: { id: "user-1", name: "Owner", avatar: null }, role: "OWNER" },
+          { user: { id: "user-9", name: "Anggota", avatar: null }, role: "MEMBER" },
+        ],
+        events: [], categories: [], tags: [], settings: null,
+        _count: { members: 2, events: 0 },
+        owner: { id: "user-1", name: "Owner", avatar: null, bio: null },
+        coverImage: null, logo: null, banner: null, location: null,
+        address: null, address1: null, address2: null, postalCode: null,
+        district: null, village: null, country: null, province: null, city: null,
+        website: null, membershipType: "OPEN", createdAt: new Date(), updatedAt: new Date(),
+      });
+      (prisma.communityMember.findUnique as any).mockResolvedValue({ role: "OWNER", status: "ACTIVE", deletedAt: null });
+      (prisma.communityMember.findMany as any).mockResolvedValue([
+        { user: { id: "user-1", name: "Owner", avatar: null }, role: "OWNER", status: "ACTIVE", deletedAt: null, joinedAt: new Date() },
+        { user: { id: "user-2", name: "Budi", avatar: null }, role: "ADMIN", status: "ACTIVE", deletedAt: null, joinedAt: new Date() },
+      ]);
+
+      const res = await app.request("/api/v1/communities/test", { headers: { Authorization: `Bearer ${token}` } });
+      expect(res.status).toBe(200);
+      const body = await res.json() as any;
+      expect(body.data.membersPreview).toHaveLength(2);
+      expect(body.data.officers).toEqual([
+        { id: "user-1", name: "Owner", avatar: null, role: "OWNER" },
+        { id: "user-2", name: "Budi", avatar: null, role: "ADMIN" },
+      ]);
     });
 
     it("should hide private community from suspended or deleted members", async () => {
@@ -398,6 +435,115 @@ describe("Communities Integration Tests", () => {
       });
 
       expect(res.status).toBe(409);
+    });
+  });
+
+  describe("POST /communities/:communityId/members/:memberId/restore", () => {
+    function mockMembership(caller: { role: string; status: string }) {
+      (prisma.communityMember.findUnique as any).mockImplementation(({ where }: any) => {
+        if (where.communityId_userId) {
+          if (where.communityId_userId.userId === "owner-1") {
+            return { role: caller.role, status: caller.status, deletedAt: null };
+          }
+          return null;
+        }
+        return null;
+      });
+    }
+
+    it("rejects non-admin caller", async () => {
+      const token = await generateToken({ sub: "user-2", email: "u2@test.com", name: "U2", username: "u2", type: "access" });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
+      (prisma.userRole.findMany as any).mockResolvedValue([{ role: "MEMBER" }]);
+      mockMembership({ role: "MEMBER", status: "ACTIVE" });
+
+      const res = await app.request("/api/v1/communities/comm-1/members/m-1/restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      });
+      expect(res.status).toBe(403);
+      expect(prisma.communityMember.update).not.toHaveBeenCalled();
+    });
+
+    it("rejects restoring a member who is not banned", async () => {
+      const token = await generateToken({ sub: "owner-1", email: "o1@test.com", name: "O1", username: "o1", type: "access" });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
+      (prisma.userRole.findMany as any).mockResolvedValue([{ role: "MEMBER" }]);
+      mockMembership({ role: "OWNER", status: "ACTIVE" });
+      (prisma.community.findUnique as any).mockResolvedValue({ id: "comm-1", name: "Kom", ownerId: "owner-1", deletedAt: null });
+      (prisma.communityMember.findUnique as any).mockImplementation(({ where }: any) => {
+        if (where.id === "m-1") {
+          return { id: "m-1", communityId: "comm-1", userId: "u9", role: "MEMBER", status: "ACTIVE", user: { id: "u9", name: "Budi" } };
+        }
+        return { role: "OWNER", status: "ACTIVE", deletedAt: null };
+      });
+
+      const res = await app.request("/api/v1/communities/comm-1/members/m-1/restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      });
+      expect(res.status).toBe(400);
+      expect(prisma.communityMember.update).not.toHaveBeenCalled();
+    });
+
+    it("restores a banned member to active", async () => {
+      const token = await generateToken({ sub: "owner-1", email: "o1@test.com", name: "O1", username: "o1", type: "access" });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
+      (prisma.userRole.findMany as any).mockResolvedValue([{ role: "MEMBER" }]);
+      (prisma.community.findUnique as any).mockResolvedValue({ id: "comm-1", name: "Kom", ownerId: "owner-1", deletedAt: null });
+      (prisma.communityMember.findUnique as any).mockImplementation(({ where }: any) => {
+        if (where.id === "m-1") {
+          return { id: "m-1", communityId: "comm-1", userId: "u9", role: "MEMBER", status: "BANNED", deletedAt: new Date(), user: { id: "u9", name: "Budi" } };
+        }
+        return { role: "OWNER", status: "ACTIVE", deletedAt: null };
+      });
+      (prisma.communityMember.update as any).mockResolvedValue({ id: "m-1", status: "ACTIVE", deletedAt: null });
+
+      const res = await app.request("/api/v1/communities/comm-1/members/m-1/restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json() as any;
+      expect(body.message).toContain("Budi");
+      expect(prisma.communityMember.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: "m-1" }, data: { status: "ACTIVE", deletedAt: null } })
+      );
+    });
+  });
+
+  describe("GET /communities/:communityId/members status filter", () => {
+    it("lists banned members for owner", async () => {
+      const token = await generateToken({ sub: "owner-1", email: "o1@test.com", name: "O1", username: "o1", type: "access" });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
+      (prisma.userRole.findMany as any).mockResolvedValue([{ role: "MEMBER" }]);
+      (prisma.community.findUnique as any).mockResolvedValue({ id: "comm-1", name: "Kom", ownerId: "owner-1", status: "APPROVED", visibility: "PUBLIC", deletedAt: null, settings: { showMemberList: true } });
+      (prisma.communityMember.findFirst as any).mockResolvedValue({ id: "owner-m", role: "OWNER" });
+      (prisma.communityMember.findMany as any).mockImplementation(({ where }: any) =>
+        where.status === "BANNED"
+          ? [{ id: "m-1", user: { id: "u9", name: "Budi", username: "budi", avatar: null }, role: "MEMBER", status: "BANNED", joinedAt: new Date() }]
+          : []
+      );
+      (prisma.communityMember.count as any).mockResolvedValue(1);
+
+      const res = await app.request("/api/v1/communities/comm-1/members?status=BANNED", { headers: { Authorization: `Bearer ${token}` } });
+      expect(res.status).toBe(200);
+      const body = await res.json() as any;
+      expect(body.data).toHaveLength(1);
+      expect(body.data[0].status).toBe("BANNED");
+      expect(prisma.communityMember.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ status: "BANNED" }) }));
+    });
+
+    it("denies banned member list to plain members", async () => {
+      const token = await generateToken({ sub: "user-2", email: "u2@test.com", name: "U2", username: "u2", type: "access" });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
+      (prisma.userRole.findMany as any).mockResolvedValue([{ role: "MEMBER" }]);
+      (prisma.community.findUnique as any).mockResolvedValue({ id: "comm-1", name: "Kom", ownerId: "owner-1", status: "APPROVED", visibility: "PUBLIC", deletedAt: null, settings: { showMemberList: true } });
+      (prisma.communityMember.findFirst as any).mockResolvedValue({ id: "m-2", role: "MEMBER" });
+
+      const res = await app.request("/api/v1/communities/comm-1/members?status=BANNED", { headers: { Authorization: `Bearer ${token}` } });
+      expect(res.status).toBe(403);
+      expect(prisma.communityMember.findMany).not.toHaveBeenCalled();
     });
   });
 });

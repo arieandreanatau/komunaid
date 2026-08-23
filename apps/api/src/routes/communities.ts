@@ -483,6 +483,17 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
     }
   }
 
+  const officers = await prisma.communityMember.findMany({
+    where: { communityId: community.id, status: "ACTIVE", deletedAt: null, role: { not: "MEMBER" } },
+    include: {
+      user: {
+        select: { id: true, name: true, avatar: true },
+      },
+    },
+    orderBy: { joinedAt: "asc" },
+    take: 10,
+  });
+
   return c.json({
     success: true,
     data: {
@@ -515,6 +526,12 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
       memberCount: community._count.members,
       eventCount: community._count.events,
       membersPreview: community.members.map((m) => ({
+        id: m.user.id,
+        name: m.user.name,
+        avatar: m.user.avatar,
+        role: m.role,
+      })),
+      officers: officers.map((m) => ({
         id: m.user.id,
         name: m.user.name,
         avatar: m.user.avatar,
@@ -1914,11 +1931,12 @@ communityRoutes.get(
             status: "ACTIVE",
             deletedAt: null,
           },
-          select: { id: true },
+          select: { id: true, role: true },
         })
       : null;
 
     const canViewPrivateMembers = Boolean(isMember || community.ownerId === authUser?.id);
+    const isAdminMember = community.ownerId === authUser?.id || Boolean(isMember && ["OWNER", "ADMIN"].includes(isMember.role));
 
     if (community.visibility === "PRIVATE" && !canViewPrivateMembers) {
       return c.json({ success: false, message: "Komunitas ini bersifat privat" }, 403);
@@ -1933,14 +1951,23 @@ communityRoutes.get(
     const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") || "20") || 20));
     const search = url.searchParams.get("search") || "";
     const roleFilter = url.searchParams.get("role") || "";
+    const statusFilter = url.searchParams.get("status") || "";
     const sort = url.searchParams.get("sort") || "asc";
     const orderByParam = url.searchParams.get("orderBy") || "joinedAt";
 
-    const where: any = {
-      communityId,
-      status: "ACTIVE",
-      deletedAt: null,
-    };
+    if (statusFilter && statusFilter !== "ACTIVE" && !isAdminMember) {
+      return c.json({ success: false, message: "Anda tidak memiliki akses untuk melihat daftar anggota tersebut" }, 403);
+    }
+
+    const where: any = { communityId };
+
+    const allowedStatuses = ["ACTIVE", "BANNED", "LEFT", "PENDING", "REJECTED"];
+    if (statusFilter && allowedStatuses.includes(statusFilter)) {
+      where.status = statusFilter;
+    } else {
+      where.status = "ACTIVE";
+      where.deletedAt = null;
+    }
 
     if (roleFilter) {
       where.role = roleFilter;
@@ -2084,7 +2111,96 @@ communityRoutes.delete(
 );
 
 // ==========================================
-// 19. CHANGE MEMBER ROLE (Owner)
+// 19. RESTORE MEMBER (Admin)
+// ==========================================
+
+communityRoutes.post(
+  "/:communityId/members/:memberId/restore",
+  authMiddleware,
+  requireCommunityAdmin,
+  async (c) => {
+    const authUser = c.get("user");
+    const communityId = c.req.param("communityId") as string;
+    const memberId = c.req.param("memberId") as string;
+
+    const member = await prisma.communityMember.findUnique({
+      where: { id: memberId },
+      include: {
+        user: { select: { id: true, name: true } },
+      },
+    });
+
+    if (!member || member.communityId !== communityId) {
+      return c.json({ success: false, message: "Anggota tidak ditemukan" }, 404);
+    }
+
+    if (member.role === "OWNER") {
+      return c.json(
+        { success: false, message: "Tidak bisa memulihkan owner" },
+        403
+      );
+    }
+
+    if (member.status !== "BANNED") {
+      return c.json(
+        { success: false, message: "Hanya anggota yang diblokir yang dapat dipulihkan" },
+        400
+      );
+    }
+
+    const community = await prisma.community.findUnique({ where: { id: communityId } });
+    if (!community || community.deletedAt) {
+      return c.json({ success: false, message: "Komunitas tidak ditemukan" }, 404);
+    }
+    const isOwner = community.ownerId === authUser.id;
+
+    if (member.role === "ADMIN" && !isOwner) {
+      return c.json(
+        { success: false, message: "Hanya owner yang dapat memulihkan admin" },
+        403
+      );
+    }
+
+    await prisma.communityMember.update({
+      where: { id: memberId },
+      data: { status: "ACTIVE", deletedAt: null },
+    });
+
+    await createAuditLog({
+      userId: authUser.id,
+      actionType: AuditActions.COMMUNITY_ROLE_CHANGE,
+      resourceName: "Community",
+      resourceId: communityId,
+      afterData: {
+        action: "restore_member",
+        targetUserId: member.userId,
+        targetUserName: member.user.name,
+        previousRole: member.role,
+      },
+    });
+
+    await prisma.activityHistory.create({
+      data: {
+        userId: authUser.id,
+        action: "COMMUNITY_MEMBER_RESTORE",
+        details: {
+          communityId,
+          communityName: community?.name || communityId,
+          memberName: member.user.name,
+          memberId: member.userId,
+        },
+      },
+    });
+
+    return c.json({
+      success: true,
+      message: `Anggota "${member.user.name}" berhasil dipulihkan ke komunitas`,
+    });
+  }
+);
+
+// ==========================================
+// 20. CHANGE MEMBER ROLE (Owner)
 // ==========================================
 
 communityRoutes.put(

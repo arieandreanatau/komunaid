@@ -124,6 +124,32 @@ describe("Volunteer program route authorization", () => {
     expect(prisma.volunteerProgram.findUniqueOrThrow).not.toHaveBeenCalled();
     expect(prisma.volunteerProgramOrganizerAccess.upsert).not.toHaveBeenCalled();
   });
+
+  it("filters public discovery by communityId", async () => {
+    (prisma.volunteerProgram.findMany as any).mockResolvedValue([
+      program({ id: "p-1", organizerType: "COMMUNITY", communityId: "community-a", status: "REGISTRATION_OPEN", community: { id: "community-a", name: "Komunitas Buku Jakarta", slug: "komunitas-buku-jakarta" } }),
+    ]);
+    (prisma.volunteerProgram.count as any).mockResolvedValue(1);
+    const response = await app.request("/api/v1/volunteer-programs?communityId=community-a&limit=5");
+    expect(response.status).toBe(200);
+    expect(prisma.volunteerProgram.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ communityId: "community-a", deletedAt: null }),
+    }));
+    const body = await response.json();
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].organizer.name).toBe("Komunitas Buku Jakarta");
+    expect(body.pagination.total).toBe(1);
+  });
+
+  it("keeps public discovery unconstrained without communityId", async () => {
+    (prisma.volunteerProgram.findMany as any).mockResolvedValue([]);
+    (prisma.volunteerProgram.count as any).mockResolvedValue(0);
+    const response = await app.request("/api/v1/volunteer-programs?limit=5");
+    expect(response.status).toBe(200);
+    const whereArg = (prisma.volunteerProgram.findMany as any).mock.calls[0][0].where;
+    expect(whereArg.communityId).toBeUndefined();
+    expect(whereArg.deletedAt).toBeNull();
+  });
 });
 
 describe("Volunteer program superadmin panel endpoints", () => {

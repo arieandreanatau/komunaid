@@ -42,6 +42,7 @@ interface Member {
   username: string;
   avatar: string | null;
   role: string;
+  status?: string;
   joinedAt: string;
 }
 
@@ -54,6 +55,7 @@ interface MemberResponseItem {
     avatar: string | null;
   };
   role: string;
+  status: string;
   joinedAt: string;
 }
 
@@ -76,11 +78,12 @@ interface InsightData {
   topMembers: { role: string; count: number }[];
 }
 
-type Tab = "ringkasan" | "anggota" | "permintaan" | "media" | "pengaturan" | "insight" | "event";
+type Tab = "ringkasan" | "pengurus" | "anggota" | "permintaan" | "media" | "pengaturan" | "insight" | "event";
 
 const tabs: { key: Tab; label: string }[] = [
   { key: "ringkasan", label: "Ringkasan" },
   { key: "event", label: "Event" },
+  { key: "pengurus", label: "Pengurus" },
   { key: "anggota", label: "Anggota" },
   { key: "permintaan", label: "Permintaan" },
   { key: "media", label: "Media" },
@@ -154,8 +157,11 @@ export function CommunityDashboardRoute({
 
   const [memberSearch, setMemberSearch] = useState("");
   const [memberRoleFilter, setMemberRoleFilter] = useState("");
+  const [memberStatusFilter, setMemberStatusFilter] = useState("");
   const [memberPage, setMemberPage] = useState(1);
   const [memberTotalPages, setMemberTotalPages] = useState(1);
+  const [officers, setOfficers] = useState<Member[]>([]);
+  const [officersLoading, setOfficersLoading] = useState(false);
 
   const [requestStatusFilter, setRequestStatusFilter] = useState<string>("");
   const [requestPage, setRequestPage] = useState(1);
@@ -219,7 +225,7 @@ export function CommunityDashboardRoute({
   const fetchMembers = useCallback(async () => {
     try {
       const { data } = await api.get(`/communities/${communityId}/members`, {
-        params: { page: memberPage, limit: 10, search: memberSearch, role: memberRoleFilter },
+        params: { page: memberPage, limit: 10, search: memberSearch, role: memberRoleFilter, status: memberStatusFilter || undefined },
       });
       const items = (data.data || []) as MemberResponseItem[];
       setMembers(items.map((member) => ({
@@ -229,13 +235,39 @@ export function CommunityDashboardRoute({
         username: member.user.username,
         avatar: member.user.avatar,
         role: member.role,
+        status: member.status,
         joinedAt: member.joinedAt,
       })));
       setMemberTotalPages(data.pagination?.totalPages || 1);
     } catch (err: any) {
       setError(err?.response?.status === 403 ? "Anda tidak memiliki akses untuk melihat anggota komunitas ini." : "Anggota komunitas tidak dapat dimuat");
     }
-  }, [communityId, memberPage, memberSearch, memberRoleFilter]);
+  }, [communityId, memberPage, memberSearch, memberRoleFilter, memberStatusFilter]);
+
+  const fetchOfficers = useCallback(async () => {
+    try {
+      setOfficersLoading(true);
+      const { data } = await api.get(`/communities/${communityId}/members`, {
+        params: { status: "ACTIVE", limit: 100, orderBy: "role", sort: "asc" },
+      });
+      const items = (data.data || []) as MemberResponseItem[];
+      setOfficers(items
+        .filter((member) => member.role !== "MEMBER")
+        .map((member) => ({
+          id: member.id,
+          userId: member.user.id,
+          name: member.user.name,
+          username: member.user.username,
+          avatar: member.user.avatar,
+          role: member.role,
+          status: member.status,
+          joinedAt: member.joinedAt,
+        })));
+    } catch {}
+    finally {
+      setOfficersLoading(false);
+    }
+  }, [communityId]);
 
   const fetchJoinRequests = useCallback(async () => {
     try {
@@ -272,6 +304,10 @@ export function CommunityDashboardRoute({
   }, [tab, fetchMembers]);
 
   useEffect(() => {
+    if (tab === "pengurus") fetchOfficers();
+  }, [tab, fetchOfficers]);
+
+  useEffect(() => {
     if (tab === "permintaan") fetchJoinRequests();
   }, [tab, fetchJoinRequests]);
 
@@ -304,6 +340,7 @@ export function CommunityDashboardRoute({
     try {
       await api.put(`/communities/${communityId}/members/${memberId}/role`, { role: newRole });
       fetchMembers();
+      if (tab === "pengurus") fetchOfficers();
     } catch (err: any) {
       alert(err?.response?.data?.message || "Gagal mengubah role.");
     }
@@ -314,9 +351,21 @@ export function CommunityDashboardRoute({
     try {
       await api.delete(`/communities/${communityId}/members/${memberId}`);
       fetchMembers();
+      if (tab === "pengurus") fetchOfficers();
       fetchDashboard();
     } catch (err: any) {
       alert(err?.response?.data?.message || "Gagal mengeluarkan anggota.");
+    }
+  };
+
+  const handleRestoreMember = async (memberId: string, memberName: string) => {
+    if (!confirm(`Yakin ingin memulihkan ${memberName} ke komunitas?`)) return;
+    try {
+      await api.post(`/communities/${communityId}/members/${memberId}/restore`);
+      fetchMembers();
+      fetchDashboard();
+    } catch (err: any) {
+      alert(err?.response?.data?.message || "Gagal memulihkan anggota.");
     }
   };
 
@@ -378,6 +427,7 @@ export function CommunityDashboardRoute({
   const canonicalTabPath: Record<Tab, string> = {
     ringkasan: "overview",
     event: "events",
+    pengurus: "pengurus",
     anggota: "members",
     permintaan: "requests",
     pengaturan: "settings",
@@ -427,6 +477,11 @@ export function CommunityDashboardRoute({
                 {navTab.key === "anggota" && (
                   <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                )}
+                {navTab.key === "pengurus" && (
+                  <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                   </svg>
                 )}
                 {navTab.key === "permintaan" && (
@@ -516,9 +571,23 @@ export function CommunityDashboardRoute({
                 setMemberSearch={setMemberSearch}
                 memberRoleFilter={memberRoleFilter}
                 setMemberRoleFilter={setMemberRoleFilter}
+                memberStatusFilter={memberStatusFilter}
+                setMemberStatusFilter={setMemberStatusFilter}
                 memberPage={memberPage}
                 setMemberPage={setMemberPage}
                 memberTotalPages={memberTotalPages}
+                isOwner={isOwner}
+                currentUserId={user?.id}
+                onChangeRole={handleChangeRole}
+                onRemoveMember={handleRemoveMember}
+                onRestoreMember={handleRestoreMember}
+              />
+            )}
+
+            {tab === "pengurus" && (
+              <PengurusTab
+                officers={officers}
+                loading={officersLoading}
                 isOwner={isOwner}
                 currentUserId={user?.id}
                 onChangeRole={handleChangeRole}
@@ -705,6 +774,8 @@ function AnggotaTab({
   setMemberSearch,
   memberRoleFilter,
   setMemberRoleFilter,
+  memberStatusFilter,
+  setMemberStatusFilter,
   memberPage,
   setMemberPage,
   memberTotalPages,
@@ -712,12 +783,15 @@ function AnggotaTab({
   currentUserId,
   onChangeRole,
   onRemoveMember,
+  onRestoreMember,
 }: {
   members: Member[];
   memberSearch: string;
   setMemberSearch: (v: string) => void;
   memberRoleFilter: string;
   setMemberRoleFilter: (v: string) => void;
+  memberStatusFilter: string;
+  setMemberStatusFilter: (v: string) => void;
   memberPage: number;
   setMemberPage: (v: number) => void;
   memberTotalPages: number;
@@ -725,9 +799,21 @@ function AnggotaTab({
   currentUserId?: string;
   onChangeRole: (memberId: string, role: string) => void;
   onRemoveMember: (memberId: string, name: string) => void;
+  onRestoreMember: (memberId: string, name: string) => void;
 }) {
   return (
     <div className="space-y-4">
+      <div className="flex gap-1 border-b border-gray-200 pb-px">
+        {[{ value: "", label: "Anggota Aktif" }, { value: "BANNED", label: "Diblokir" }].map((f) => (
+          <button
+            key={f.value}
+            onClick={() => { setMemberStatusFilter(f.value); setMemberPage(1); }}
+            className={`px-4 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${memberStatusFilter === f.value ? "border-komuna-blue text-komuna-blue" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
       <div className="bg-white rounded-xl shadow-sm p-4">
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
@@ -759,7 +845,7 @@ function AnggotaTab({
 
       <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
         {members.length === 0 ? (
-          <div className="p-8 text-center text-gray-400 text-sm">Tidak ada anggota ditemukan.</div>
+          <div className="p-8 text-center text-gray-400 text-sm">{memberStatusFilter === "BANNED" ? "Tidak ada anggota yang diblokir." : "Tidak ada anggota ditemukan."}</div>
         ) : (
           members.map((member) => (
             <div key={member.id} className="flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors">
@@ -774,10 +860,10 @@ function AnggotaTab({
                 <p className="font-medium text-komuna-navy truncate">{member.name}</p>
                 <p className="text-xs text-gray-400">@{member.username}</p>
               </div>
-              <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${roleBadge[member.role] || ""}`}>
-                {member.role}
+              <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${member.status === "BANNED" ? "bg-red-100 text-red-600" : roleBadge[member.role] || ""}`}>
+                {member.status === "BANNED" ? "Diblokir" : member.role}
               </span>
-              {member.userId !== currentUserId && (
+              {member.userId !== currentUserId && member.status !== "BANNED" && (
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {isOwner && (
                     <select
@@ -804,6 +890,14 @@ function AnggotaTab({
                   )}
                 </div>
               )}
+              {member.userId !== currentUserId && member.status === "BANNED" && (
+                <button
+                  onClick={() => onRestoreMember(member.id, member.name)}
+                  className="px-3 py-1.5 text-xs font-medium text-white bg-emerald-500 rounded-lg hover:bg-emerald-600 transition-colors flex-shrink-0"
+                >
+                  Pulihkan
+                </button>
+              )}
             </div>
           ))
         )}
@@ -828,6 +922,91 @@ function AnggotaTab({
           >
             Berikutnya
           </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PengurusTab({
+  officers,
+  loading,
+  isOwner,
+  currentUserId,
+  onChangeRole,
+  onRemoveMember,
+}: {
+  officers: Member[];
+  loading: boolean;
+  isOwner: boolean;
+  currentUserId?: string;
+  onChangeRole: (memberId: string, role: string) => void;
+  onRemoveMember: (memberId: string, name: string) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="bg-white rounded-xl shadow-sm p-4">
+        <p className="text-sm text-gray-500">
+          Pengurus komunitas adalah anggota dengan peran pengelolaan: Owner, Admin, Pengelola Event, dan Koordinator Volunteer.
+          Perubahan peran hanya dapat dilakukan oleh Owner.
+        </p>
+      </div>
+
+      {loading ? (
+        <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+          <div className="h-8 w-8 border-4 border-komuna-blue border-t-transparent rounded-full animate-spin mx-auto" />
+        </div>
+      ) : officers.length === 0 ? (
+        <div className="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 text-sm">
+          Belum ada pengurus selain owner. Gunakan tab Anggota untuk menetapkan peran.
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
+          {officers.map((member) => (
+            <div key={member.id} className="flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors">
+              {member.avatar ? (
+                <img src={member.avatar} alt="" className="h-10 w-10 rounded-full object-cover flex-shrink-0" />
+              ) : (
+                <div className="h-10 w-10 rounded-full bg-komuna-blue flex items-center justify-center flex-shrink-0">
+                  <span className="text-white font-bold text-sm">{member.name?.[0]}</span>
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-komuna-navy truncate">{member.name}</p>
+                <p className="text-xs text-gray-400">@{member.username}</p>
+              </div>
+              <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${roleBadge[member.role] || ""}`}>
+                {member.role}
+              </span>
+              {member.userId !== currentUserId && (
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {isOwner && member.role !== "OWNER" && (
+                    <select
+                      value={member.role}
+                      onChange={(e) => onChangeRole(member.id, e.target.value)}
+                      className="px-2 py-1 border border-gray-200 rounded text-xs bg-white focus:ring-1 focus:ring-komuna-blue outline-none"
+                    >
+                      <option value="MEMBER">Member</option>
+                      <option value="ADMIN">Admin</option>
+                      <option value="EVENT_MANAGER">Manajer Event</option>
+                      <option value="VOLUNTEER_COORDINATOR">Koordinator Volunteer</option>
+                    </select>
+                  )}
+                  {member.role !== "OWNER" && (
+                    <button
+                      onClick={() => onRemoveMember(member.id, member.name)}
+                      className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                      title="Keluarkan pengurus"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6v1h12v-1a6 6 0 00-6-6zM21 12h-6" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -1156,7 +1335,7 @@ interface MediaItem {
   id: string;
   title: string;
   content: string;
-  type: "ANNOUNCEMENT" | "NEWS";
+  type: "ANNOUNCEMENT" | "NEWS" | "GALLERY" | "FORUM_POST";
   imageUrl: string | null;
   isPublished: boolean;
   publishedAt: string | null;
@@ -1165,15 +1344,22 @@ interface MediaItem {
   updatedAt: string;
 }
 
+const MEDIA_TYPE_META: Record<string, { label: string; badge: string }> = {
+  ANNOUNCEMENT: { label: "Pengumuman", badge: "bg-blue-100 text-blue-700" },
+  NEWS: { label: "Berita", badge: "bg-emerald-100 text-emerald-700" },
+  GALLERY: { label: "Galeri", badge: "bg-purple-100 text-purple-700" },
+  FORUM_POST: { label: "Diskusi", badge: "bg-amber-100 text-amber-700" },
+};
+
 function MediaTab({ communityId, isOwner }: { communityId: string; isOwner: boolean }) {
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState<string>("");
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [createForm, setCreateForm] = useState({ title: "", content: "", type: "ANNOUNCEMENT" as "ANNOUNCEMENT" | "NEWS", isPublished: false });
+  const [createForm, setCreateForm] = useState({ title: "", content: "", type: "ANNOUNCEMENT" as "ANNOUNCEMENT" | "NEWS" | "GALLERY", isPublished: false, imageUrl: "" });
   const [creating, setCreating] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ title: "", content: "", type: "ANNOUNCEMENT" as "ANNOUNCEMENT" | "NEWS", isPublished: false });
+  const [editForm, setEditForm] = useState({ title: "", content: "", type: "ANNOUNCEMENT" as MediaItem["type"], isPublished: false, imageUrl: "" });
 
   const fetchMedia = useCallback(async () => {
     setLoading(true);
@@ -1192,9 +1378,9 @@ function MediaTab({ communityId, isOwner }: { communityId: string; isOwner: bool
     if (!createForm.title.trim() || !createForm.content.trim()) return;
     setCreating(true);
     try {
-      await api.post(`/communities/${communityId}/media`, createForm);
+      await api.post(`/communities/${communityId}/media`, { ...createForm, imageUrl: createForm.imageUrl.trim() || undefined });
       setShowCreateModal(false);
-      setCreateForm({ title: "", content: "", type: "ANNOUNCEMENT", isPublished: false });
+      setCreateForm({ title: "", content: "", type: "ANNOUNCEMENT", isPublished: false, imageUrl: "" });
       fetchMedia();
     } catch (err: any) { alert(err?.response?.data?.message || "Gagal membuat media."); }
     finally { setCreating(false); }
@@ -1204,7 +1390,7 @@ function MediaTab({ communityId, isOwner }: { communityId: string; isOwner: bool
     if (!editId || !editForm.title.trim() || !editForm.content.trim()) return;
     setCreating(true);
     try {
-      await api.put(`/communities/${communityId}/media/${editId}`, editForm);
+      await api.put(`/communities/${communityId}/media/${editId}`, { ...editForm, imageUrl: editForm.imageUrl.trim() || undefined });
       setEditId(null);
       fetchMedia();
     } catch (err: any) { alert(err?.response?.data?.message || "Gagal mengupdate media."); }
@@ -1230,7 +1416,7 @@ function MediaTab({ communityId, isOwner }: { communityId: string; isOwner: bool
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div className="flex overflow-x-auto gap-1 border-b border-gray-200 pb-px flex-1">
-          {[{ value: "", label: "Semua" }, { value: "ANNOUNCEMENT", label: "Pengumuman" }, { value: "NEWS", label: "Berita" }].map((f) => (
+          {[{ value: "", label: "Semua" }, { value: "ANNOUNCEMENT", label: "Pengumuman" }, { value: "NEWS", label: "Berita" }, { value: "GALLERY", label: "Galeri" }, { value: "FORUM_POST", label: "Diskusi" }].map((f) => (
             <button key={f.value} onClick={() => setTypeFilter(f.value)} className={`px-4 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${typeFilter === f.value ? "border-komuna-blue text-komuna-blue" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
               {f.label}
             </button>
@@ -1248,19 +1434,21 @@ function MediaTab({ communityId, isOwner }: { communityId: string; isOwner: bool
         <div className="bg-white rounded-xl shadow-sm p-8 text-center"><div className="h-8 w-8 border-4 border-komuna-blue border-t-transparent rounded-full animate-spin mx-auto" /></div>
       ) : media.length === 0 ? (
         <div className="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 text-sm">
-          Belum ada media. {isOwner && "Buat pengumuman atau berita baru."}
+          Belum ada media. {isOwner && "Buat pengumuman, berita, atau galeri baru."}
         </div>
       ) : (
         <div className="space-y-3">
-          {media.map((item) => (
+          {media.map((item) => {
+            const meta = MEDIA_TYPE_META[item.type] || { label: item.type, badge: "bg-gray-100 text-gray-600" };
+            return (
             <div key={item.id} className="bg-white rounded-xl shadow-sm p-5">
               <div className="flex items-start gap-3">
                 {item.imageUrl && <img src={item.imageUrl} alt="" className="h-12 w-12 rounded-lg object-cover flex-shrink-0" />}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h4 className="font-medium text-komuna-navy">{item.title}</h4>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${item.type === "ANNOUNCEMENT" ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}>
-                      {item.type === "ANNOUNCEMENT" ? "Pengumuman" : "Berita"}
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${meta.badge}`}>
+                      {meta.label}
                     </span>
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${item.isPublished ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
                       {item.isPublished ? "Dipublikasikan" : "Draft"}
@@ -1276,7 +1464,7 @@ function MediaTab({ communityId, isOwner }: { communityId: string; isOwner: bool
                     <button onClick={() => handlePublishToggle(item)} className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${item.isPublished ? "text-amber-600 hover:bg-amber-50" : "text-green-600 hover:bg-green-50"}`}>
                       {item.isPublished ? "Unpublish" : "Publish"}
                     </button>
-                    <button onClick={() => { setEditId(item.id); setEditForm({ title: item.title, content: item.content, type: item.type, isPublished: item.isPublished }); }} className="p-1.5 text-gray-400 hover:text-komuna-blue hover:bg-komuna-blue/5 rounded transition-colors">
+                    <button onClick={() => { setEditId(item.id); setEditForm({ title: item.title, content: item.content, type: item.type, isPublished: item.isPublished, imageUrl: item.imageUrl || "" }); }} className="p-1.5 text-gray-400 hover:text-komuna-blue hover:bg-komuna-blue/5 rounded transition-colors">
                       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                     </button>
                     <button onClick={() => handleDelete(item.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors">
@@ -1286,7 +1474,8 @@ function MediaTab({ communityId, isOwner }: { communityId: string; isOwner: bool
                 )}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -1299,9 +1488,10 @@ function MediaTab({ communityId, isOwner }: { communityId: string; isOwner: bool
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tipe</label>
-                <select value={createForm.type} onChange={(e) => setCreateForm({ ...createForm, type: e.target.value as "ANNOUNCEMENT" | "NEWS" })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-komuna-blue outline-none">
+                <select value={createForm.type} onChange={(e) => setCreateForm({ ...createForm, type: e.target.value as "ANNOUNCEMENT" | "NEWS" | "GALLERY" })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-komuna-blue outline-none">
                   <option value="ANNOUNCEMENT">Pengumuman</option>
                   <option value="NEWS">Berita</option>
+                  <option value="GALLERY">Galeri</option>
                 </select>
               </div>
               <div>
@@ -1312,6 +1502,12 @@ function MediaTab({ communityId, isOwner }: { communityId: string; isOwner: bool
                 <label className="block text-sm font-medium text-gray-700 mb-1">Konten</label>
                 <textarea value={createForm.content} onChange={(e) => setCreateForm({ ...createForm, content: e.target.value })} rows={6} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-komuna-blue outline-none resize-none" placeholder="Tulis konten..." />
               </div>
+              {createForm.type === "GALLERY" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">URL Gambar</label>
+                  <input type="url" value={createForm.imageUrl} onChange={(e) => setCreateForm({ ...createForm, imageUrl: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-komuna-blue outline-none" placeholder="https://..." />
+                </div>
+              )}
               <label className="flex items-center gap-2 text-sm text-gray-700">
                 <input type="checkbox" checked={createForm.isPublished} onChange={(e) => setCreateForm({ ...createForm, isPublished: e.target.checked })} className="rounded text-komuna-blue focus:ring-komuna-blue" />
                 Langsung publikasikan
@@ -1334,9 +1530,11 @@ function MediaTab({ communityId, isOwner }: { communityId: string; isOwner: bool
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tipe</label>
-                <select value={editForm.type} onChange={(e) => setEditForm({ ...editForm, type: e.target.value as "ANNOUNCEMENT" | "NEWS" })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-komuna-blue outline-none">
+                <select value={editForm.type} onChange={(e) => setEditForm({ ...editForm, type: e.target.value as MediaItem["type"] })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-komuna-blue outline-none">
                   <option value="ANNOUNCEMENT">Pengumuman</option>
                   <option value="NEWS">Berita</option>
+                  <option value="GALLERY">Galeri</option>
+                  <option value="FORUM_POST">Diskusi</option>
                 </select>
               </div>
               <div>
@@ -1346,6 +1544,10 @@ function MediaTab({ communityId, isOwner }: { communityId: string; isOwner: bool
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Konten</label>
                 <textarea value={editForm.content} onChange={(e) => setEditForm({ ...editForm, content: e.target.value })} rows={6} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-komuna-blue outline-none resize-none" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">URL Gambar</label>
+                <input type="url" value={editForm.imageUrl} onChange={(e) => setEditForm({ ...editForm, imageUrl: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-komuna-blue outline-none" placeholder="https://..." />
               </div>
               <label className="flex items-center gap-2 text-sm text-gray-700">
                 <input type="checkbox" checked={editForm.isPublished} onChange={(e) => setEditForm({ ...editForm, isPublished: e.target.checked })} className="rounded text-komuna-blue focus:ring-komuna-blue" />

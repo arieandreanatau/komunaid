@@ -187,6 +187,7 @@ volunteerProgramRoutes.get("/", optionalAuthMiddleware, async (c) => {
   const overrideStatus = url.searchParams.get("status")?.trim();
   const organizerType = url.searchParams.get("organizerType")?.trim();
   const categoryId = url.searchParams.get("categoryId")?.trim();
+  const communityId = url.searchParams.get("communityId")?.trim();
   const upcomingParam = url.searchParams.get("upcoming")?.trim();
   const sort = url.searchParams.get("sort") === "asc" ? "asc" : "desc";
   const orderByRaw = url.searchParams.get("orderBy") || "startDate";
@@ -197,6 +198,7 @@ volunteerProgramRoutes.get("/", optionalAuthMiddleware, async (c) => {
   if (search) where.OR = [{ title: { contains: search } }, { description: { contains: search } }, { location: { contains: search } }];
   if (organizerType && ["COMMUNITY", "INDEPENDENT"].includes(organizerType)) where.organizerType = organizerType;
   if (categoryId) where.community = { categories: { some: { categoryId } } };
+  if (communityId) where.communityId = communityId;
   if (upcomingParam === "true") where.startDate = { gte: new Date() };
   const orderByMap: Record<string, any> = {
     createdAt: { createdAt: sort },
