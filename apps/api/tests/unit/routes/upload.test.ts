@@ -49,28 +49,28 @@ describe("Upload route security guards (SEC-02)", () => {
 
   it("rejects unauthenticated upload", async () => {
     const form = new FormData();
-    form.append("file", new File([jpegBuffer()], "x.jpg", { type: "image/jpeg" }));
+    form.append("file", new File([jpegBuffer() as unknown as BlobPart], "x.jpg", { type: "image/jpeg" }));
     const res = await app.request("/upload", { method: "POST", body: form });
     expect(res.status).toBe(401);
   });
 
   it("rejects disallowed MIME type", async () => {
     const form = new FormData();
-    form.append("file", new File([Buffer.from("<script>alert(1)</script>")], "evil.html", { type: "text/html" }));
+    form.append("file", new File([Buffer.from("<script>alert(1)</script>") as unknown as BlobPart], "evil.html", { type: "text/html" }));
     const res = await app.request("/upload", { method: "POST", headers: { Authorization: `Bearer ${await token()}` }, body: form });
     expect(res.status).toBe(400);
   });
 
   it("rejects MIME spoof: type says jpeg but content is html", async () => {
     const form = new FormData();
-    form.append("file", new File([Buffer.from("<html>not an image</html>")], "x.jpg", { type: "image/jpeg" }));
+    form.append("file", new File([Buffer.from("<html>not an image</html>") as unknown as BlobPart], "x.jpg", { type: "image/jpeg" }));
     const res = await app.request("/upload", { method: "POST", headers: { Authorization: `Bearer ${await token()}` }, body: form });
     expect(res.status).toBe(400);
   });
 
   it("accepts genuine PNG", async () => {
     const form = new FormData();
-    form.append("file", new File([pngBuffer()], "x.png", { type: "image/png" }));
+    form.append("file", new File([pngBuffer() as unknown as BlobPart], "x.png", { type: "image/png" }));
     const res = await app.request("/upload", { method: "POST", headers: { Authorization: `Bearer ${await token()}` }, body: form });
     expect(res.status).toBe(200);
   });
