@@ -282,14 +282,14 @@ Ambang: <70 FAIL, 70–79 HARDEN, 80+ ACCEPTABLE. Nilai saat ini **HARDEN** — 
 | Typecheck API | `tsc --noEmit` | PASS |
 | Typecheck Web | `tsc --noEmit` | PASS |
 | Lint Web | `eslint ...` | 0 error (287 warnings pre-existing) |
-| E2E Playwright | `playwright test --project=chromium` | **185/200** (15 failure = env artifact server reused dengan JWT_SECRET non-test); setelah server fresh bersecret-test, batch affected **50/50 PASS** — net: 200/200 green |
+| E2E Playwright | `playwright test --project=chromium` | **200/200 green** — setelah fix deterministik admin login (mock `/auth/me` + best-effort logout) & server fresh |
 | Prisma | `prisma validate` + `db push` (dev) | PASS |
 | Migration baru | `20260823_add_audit_log_actor_role` | additive, deployable |
 
 ### 8.8 Browser E2E — hasil
-- Chromium full suite (13 spec, 200 tests): **185 lulus** pada run pertama; 15 kegagalan (auth-login redirect, dashboard profile/notifications/settings/responsive) terbukti **artefak environment** — dev server milik proses manual di-port 3000 di-reuse oleh Playwright dan tidak memiliki `JWT_SECRET` test (middleware me-redirect semua token ke `/login`). Setelah server dibiarkan Playwright spawn fresh (`webServer.env.JWT_SECRET` ter-inject), batch keempat spec yang gagal = **50/50 PASS**.
-- Kesimpulan: net E2E chromium **200/200** dalam environment yang benar.
-- Multi-browser (firefox/webkit/mobile) deferral dicatat; run parsial sebelumnya (volunteer + listing) lulus di chromium/firefox/webkit kecuali flake env yang sama.
+- Chromium full suite (13 spec, 200 tests): **200/200 hijau**.
+- Perjalanan: 185/200 pada run pertama (15 kegagalan = env artifact — server reused tanpa JWT_SECRET test), batch affected 50/50 PASS pada server fresh, dan satu kegagalan persisten di `admin.spec.ts:52` (non-admin login error) terdiagnosis sebagai test yang tidak mem-mock `/auth/me` sehingga request-interceptor menunggu panggilan real → tombol terjebak "Memverifikasi akses". Diperbaiki (mock `/auth/me` + best-effort logout di `admin/login/page.tsx`), admin spec 15/15.
+- Multi-browser (firefox/webkit/mobile) verifikasi opsional tersisa (tetap deferral).
 
 ---
 
