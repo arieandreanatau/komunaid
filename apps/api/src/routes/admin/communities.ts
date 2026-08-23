@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { prisma } from "@komunaid/database";
 import { validate } from "../../middleware/validate";
+import { requireSuperAdmin } from "../../middleware/rbac";
 import { adminActionNoteSchema } from "@komunaid/shared";
 import { createAuditLog, AuditActions } from "../../services/audit";
 import type { AuthUser } from "../../middleware/auth";
@@ -433,4 +434,90 @@ communitiesRoutes.patch("/communities/:communityId/request-revision", validate(a
   });
 
   return c.json({ success: true, message: "Revisi berhasil diminta" });
+});
+
+// ==========================================
+// 8. SOFT DELETE COMMUNITY (Super Admin)
+// ==========================================
+
+communitiesRoutes.put("/communities/:communityId/soft-delete", requireSuperAdmin(), async (c) => {
+  const authUser = c.get("user");
+  const communityId = c.req.param("communityId") as string;
+
+  const community = await prisma.community.findUnique({ where: { id: communityId } });
+  if (!community) {
+    return c.json({ success: false, message: "Komunitas tidak ditemukan" }, 404);
+  }
+
+  if (community.deletedAt) {
+    return c.json({ success: false, message: "Komunitas sudah dihapus" }, 400);
+  }
+
+  const before = { status: community.status, deletedAt: community.deletedAt };
+
+  await prisma.community.update({
+    where: { id: communityId },
+    data: { deletedAt: new Date() },
+  });
+
+  await createAuditLog({
+    userId: authUser.id,
+    actionType: AuditActions.COMMUNITY_DELETE,
+    resourceName: "Community",
+    resourceId: communityId,
+    beforeData: before,
+    afterData: { deletedAt: new Date().toISOString() },
+  });
+
+  return c.json({ success: true, message: "Komunitas berhasil dihapus" });
+});
+
+// ==========================================
+// 9. BULK SOFT DELETE COMMUNITIES (Super Admin)
+// ==========================================
+
+communitiesRoutes.post("/communities/bulk-delete", requireSuperAdmin(), async (c) => {
+  const authUser = c.get("user");
+  const body = await c.req.json();
+  const ids: string[] = body.ids;
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return c.json({ success: false, message: "Pilih komunitas yang akan dihapus" }, 400);
+  }
+
+  if (ids.length > 100) {
+    return c.json({ success: false, message: "Maksimal 100 komunitas per aksi" }, 400);
+  }
+
+  const communities = await prisma.community.findMany({
+    where: { id: { in: ids }, deletedAt: null },
+    select: { id: true, name: true, status: true, deletedAt: true },
+  });
+
+  if (communities.length === 0) {
+    return c.json({ success: false, message: "Tidak ada komunitas yang dapat dihapus" }, 404);
+  }
+
+  const now = new Date();
+  await prisma.community.updateMany({
+    where: { id: { in: communities.map((c) => c.id) } },
+    data: { deletedAt: now },
+  });
+
+  for (const comm of communities) {
+    await createAuditLog({
+      userId: authUser.id,
+      actionType: AuditActions.COMMUNITY_DELETE,
+      resourceName: "Community",
+      resourceId: comm.id,
+      beforeData: { status: comm.status, deletedAt: comm.deletedAt },
+      afterData: { deletedAt: now.toISOString() },
+    });
+  }
+
+  return c.json({
+    success: true,
+    message: `${communities.length} komunitas berhasil dihapus`,
+    data: { deletedCount: communities.length, ids: communities.map((c) => c.id) },
+  });
 });
