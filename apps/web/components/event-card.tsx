@@ -4,7 +4,7 @@ export interface EventCardData {
   id: string;
   title: string;
   slug: string;
-  description: string;
+  description: string | null;
   coverImage: string | null;
   thumbnail: string | null;
   location?: string | null;
@@ -68,7 +68,7 @@ export function EventCard({ event }: { event: EventCardData }) {
         <h3 className="mt-2 font-semibold text-komuna-dark mb-2 line-clamp-1 group-hover:text-komuna-forest transition-colors">
           {event.title}
         </h3>
-        <p className="text-sm text-komuna-dark/65 line-clamp-2 mb-3 min-h-10">{event.description}</p>
+        <p className="text-sm text-komuna-dark/65 line-clamp-2 mb-3 min-h-10">{event.description ?? ""}</p>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-komuna-dark/55 mb-2">
           <span className="inline-flex items-center gap-1">
             <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -66,7 +66,7 @@ export default async function HomePage() {
                 </Link>
               </div>
               <Link href="/communities/create" className="mt-5 inline-flex text-sm font-semibold text-komuna-forest underline decoration-komuna-coral decoration-2 underline-offset-4 hover:text-komuna-dark">
-                Buat Komunitas
+                + Buat Komunitas
               </Link>
             </div>
 
@@ -104,34 +104,6 @@ export default async function HomePage() {
         </section>
 
         <HomepageDiscovery communities={communities} events={events} volunteers={volunteers} />
-
-        <section id="tentang" className="bg-komuna-soft px-4 py-16 sm:py-24">
-          <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-2 lg:items-center">
-            <div>
-              <p className="text-sm font-bold uppercase tracking-[0.18em] text-komuna-coral">Tentang KomunaID</p>
-              <h2 className="mt-4 max-w-xl font-display text-4xl font-semibold leading-tight text-komuna-dark sm:text-5xl">
-                Ruang temu untuk gerakan yang tumbuh dari komunitas.
-              </h2>
-            </div>
-            <div className="space-y-5 text-base leading-8 text-komuna-dark/70">
-              <p>KomunaID membantu masyarakat menemukan komunitas, mengikuti kegiatan, dan mengambil bagian lewat kesempatan volunteer.</p>
-              <p>Setiap komunitas dapat bertumbuh melalui partisipasi anggota, event yang terbuka, dan kontribusi yang nyata.</p>
-              <Link href="/about" className="inline-flex font-bold text-komuna-forest underline decoration-komuna-coral decoration-2 underline-offset-4 hover:text-komuna-dark">Pelajari KomunaID</Link>
-            </div>
-          </div>
-        </section>
-
-        <section className="bg-komuna-dark px-4 py-16 sm:py-24">
-          <div className="mx-auto max-w-4xl text-center">
-            <p className="text-sm font-bold uppercase tracking-[0.18em] text-komuna-coral">Mulai Perjalananmu</p>
-            <h2 className="mt-4 font-display text-4xl font-semibold text-white sm:text-6xl">Siap menemukan komunitasmu?</h2>
-            <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-white/70">Temukan komunitas, kegiatan, dan kesempatan volunteer yang sesuai dengan minatmu.</p>
-            <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-              <Link href="/communities" className="rounded-xl bg-komuna-coral px-6 py-3.5 text-sm font-bold text-white transition hover:bg-[#e96650]">Jelajahi Komunitas</Link>
-              <Link href="/register" className="rounded-xl border border-white/25 px-6 py-3.5 text-sm font-bold text-white transition hover:bg-white/10">Daftar di KomunaID</Link>
-            </div>
-          </div>
-        </section>
       </main>
       <Footer />
     </div>

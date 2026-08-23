@@ -29,6 +29,16 @@ export default function AboutPage() {
           </div>
         </section>
 
+        <section className="border-b border-gray-100 bg-white">
+          <div className="container mx-auto flex flex-wrap gap-2 px-4 py-4 justify-center" aria-label="Navigasi halaman Tentang">
+            <Link href="/about" className="rounded-full bg-komuna-forest px-4 py-2 text-sm font-bold text-white">Tentang Kami</Link>
+            <Link href="/organization-structure" className="rounded-full border border-komuna-forest/20 px-4 py-2 text-sm font-bold text-komuna-forest transition hover:bg-komuna-forest/5">Struktur Organisasi</Link>
+            <Link href="/contact" className="rounded-full border border-komuna-forest/20 px-4 py-2 text-sm font-bold text-komuna-forest transition hover:bg-komuna-forest/5">Kontak</Link>
+            <Link href="/saran" className="rounded-full border border-komuna-forest/20 px-4 py-2 text-sm font-bold text-komuna-forest transition hover:bg-komuna-forest/5">Saran</Link>
+            <Link href="/admin/login" className="rounded-full border border-komuna-forest/20 px-4 py-2 text-sm font-bold text-komuna-forest transition hover:bg-komuna-forest/5">Platform Access</Link>
+          </div>
+        </section>
+
         <section className="py-16">
           <div className="container mx-auto px-4">
             <div className="max-w-4xl mx-auto">
@@ -111,6 +121,28 @@ export default function AboutPage() {
                       <p className="text-sm text-gray-600">{value.desc}</p>
                     </div>
                   ))}
+                </div>
+              </div>
+
+              <div id="platform-access" className="mb-16 rounded-2xl border border-komuna-forest/15 bg-komuna-soft p-8">
+                <h2 className="text-2xl font-bold text-komuna-navy mb-3">Platform Access</h2>
+                <p className="text-gray-600 leading-relaxed">
+                  Area ini diperuntukkan bagi pengelola platform KomunaID yang memiliki akses administratif.
+                </p>
+                <div className="mt-6 flex flex-col sm:flex-row gap-3">
+                  <Link
+                    href="/admin/login"
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-komuna-forest text-white rounded-xl font-semibold hover:bg-komuna-dark transition-colors"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                    Masuk ke Platform
+                  </Link>
+                  <Link
+                    href="/admin-access"
+                    className="inline-flex items-center gap-2 px-6 py-3 border border-komuna-forest/25 text-komuna-forest rounded-xl font-semibold hover:bg-komuna-forest/5 transition-colors"
+                  >
+                    Informasi Akses
+                  </Link>
                 </div>
               </div>
 

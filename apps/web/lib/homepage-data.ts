@@ -5,9 +5,19 @@ export interface HomepageCommunity {
   description: string | null;
   coverImage: string | null;
   logo: string | null;
+  banner: string | null;
   location: string | null;
+  province: string | null;
+  city: string | null;
+  membershipType: string;
+  status: string;
+  visibility: string;
+  owner: { id: string; name: string; avatar: string | null } | null;
   memberCount: number;
+  eventCount: number;
   categories: { id: string; name: string }[];
+  tags: { id: string; tag: string }[];
+  createdAt: string;
 }
 
 export interface HomepageEvent {
@@ -36,6 +46,7 @@ export interface HomepageVolunteer {
   registrationDeadline: string | null;
   activityStartDate: string | null;
   applicationCount: number;
+  positions?: { id: string; name: string; requiredQty: number }[];
   event: {
     title: string;
     slug: string;

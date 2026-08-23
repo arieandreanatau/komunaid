@@ -37,6 +37,16 @@ test.describe("Navigation - Header", () => {
     await expect(page.locator("header")).toBeVisible();
   });
 
+  test("V1.5 public pages load with header and footer", async ({ page }) => {
+    test.setTimeout(120000);
+    await page.goto("/network", { waitUntil: "domcontentloaded" });
+    await expect(page.locator("header")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Terhubung Lebih Luas" }).first()).toBeVisible();
+    await page.goto("/kolaborasi", { waitUntil: "domcontentloaded" });
+    await expect(page.locator("header")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Kolaborasi Komunitas" }).first()).toBeVisible();
+  });
+
   test("header is sticky on scroll", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.evaluate(() => window.scrollTo(0, 500));
