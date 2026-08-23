@@ -1,10 +1,11 @@
 import { Hono } from "hono";
 import { prisma } from "@komunaid/database";
-import { requireSuperAdmin } from "../../middleware/rbac";
+import { requirePlatformAdmin, requireSuperAdmin } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
 import { adminResolveReportSchema, adminModerationWarningSchema } from "@komunaid/shared";
 import { createAuditLog, AuditActions } from "../../services/audit";
 import { invalidateRoleCache } from "../../middleware/rbac";
+import { transitionEvent, EventTransitionError } from "../../services/event-transition";
 import type { AuthUser } from "../../middleware/auth";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
@@ -19,6 +20,16 @@ function pagination(url: string) {
   const sortOrder = u.searchParams.get("sortOrder") === "asc" ? "asc" : "desc";
   return { page, limit, search, sortBy, sortOrder, skip: (page - 1) * limit };
 }
+
+reportsRoutes.get("/moderation/stats", requirePlatformAdmin(), async (c) => {
+  const [open, underReview, suspended, dismissed] = await Promise.all([
+    prisma.report.count({ where: { status: "OPEN" } }),
+    prisma.report.count({ where: { status: "UNDER_REVIEW" } }),
+    prisma.report.count({ where: { status: "SUSPENDED" } }),
+    prisma.report.count({ where: { status: "DISMISSED" } }),
+  ]);
+  return c.json({ success: true, data: { openReports: open, underReview, resolved: suspended, dismissed } });
+});
 
 reportsRoutes.get("/reports", async (c) => {
   const { page, limit, search, skip } = pagination(c.req.url);
@@ -74,7 +85,7 @@ reportsRoutes.get("/reports", async (c) => {
   });
 });
 
-async function suspendTargetEntity(targetType: string, targetId: string): Promise<boolean> {
+async function suspendTargetEntity(targetType: string, targetId: string, actorId: string): Promise<boolean> {
   try {
     switch (targetType) {
       case "USER": {
@@ -93,8 +104,7 @@ async function suspendTargetEntity(targetType: string, targetId: string): Promis
       case "EVENT": {
         const event = await prisma.event.findUnique({ where: { id: targetId }, select: { id: true, status: true } });
         if (!event || event.status === "CANCELLED" || event.status === "ARCHIVED") return false;
-        await prisma.event.update({ where: { id: targetId }, data: { status: "CANCELLED" } });
-        return true;
+        return Boolean(await transitionEvent({ eventId: targetId, expectedStatus: event.status, targetStatus: "CANCELLED", actorId, actorRole: "SUPER_ADMIN", reason: "Ditangguhkan melalui resolusi laporan" }).catch((error) => error instanceof EventTransitionError ? null : Promise.reject(error)));
       }
       case "ORGANIZATION": {
         const org = await prisma.organization.findUnique({ where: { id: targetId }, select: { id: true, status: true } });
@@ -154,7 +164,7 @@ reportsRoutes.put("/reports/:reportId/resolve", validate(adminResolveReportSchem
 
   let targetSuspended = false;
   if (action === "SUSPENDED") {
-    targetSuspended = await suspendTargetEntity(report.targetType, report.targetId);
+    targetSuspended = await suspendTargetEntity(report.targetType, report.targetId, authUser.id);
   }
 
   const reportStatus = action === "SUSPENDED" ? "SUSPENDED" : "DISMISSED";

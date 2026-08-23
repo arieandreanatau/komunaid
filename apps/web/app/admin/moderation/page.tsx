@@ -13,8 +13,7 @@ interface ModerationStats {
 
 const quickActions = [
   { label: "Laporan", desc: "Review laporan pelanggaran", href: "/admin/moderation/reports", color: "bg-red-500" },
-  { label: "Audit Log", desc: "Riwayat aktivitas admin", href: "/admin/moderation/audit-log", color: "bg-komuna-blue" },
-  { label: "Pelanggaran", desc: "Manajemen pelanggaran", href: "/admin/moderation/violations", color: "bg-orange-500" },
+  { label: "Audit Log", desc: "Riwayat aktivitas admin", href: "/admin/audit-logs", color: "bg-komuna-blue" },
 ];
 
 export default function ModerationOverviewPage() {
@@ -36,7 +35,7 @@ export default function ModerationOverviewPage() {
   const statCards = [
     { label: "Open Reports", value: stats.openReports, icon: "M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z", color: "text-red-500 bg-red-500/10" },
     { label: "Under Review", value: stats.underReview, icon: "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z", color: "text-yellow-500 bg-yellow-500/10" },
-    { label: "Resolved", value: stats.resolved, icon: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z", color: "text-green-500 bg-green-500/10" },
+    { label: "Suspended", value: stats.resolved, icon: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z", color: "text-green-500 bg-green-500/10" },
     { label: "Dismissed", value: stats.dismissed, icon: "M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636", color: "text-gray-400 bg-gray-400/10" },
   ];
 

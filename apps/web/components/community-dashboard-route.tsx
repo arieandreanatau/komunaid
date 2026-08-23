@@ -750,6 +750,8 @@ function AnggotaTab({
             <option value="">Semua Role</option>
             <option value="OWNER">Owner</option>
             <option value="ADMIN">Admin</option>
+            <option value="EVENT_MANAGER">Event Manager</option>
+            <option value="VOLUNTEER_COORDINATOR">Volunteer Coordinator</option>
             <option value="MEMBER">Member</option>
           </select>
         </div>

@@ -20,6 +20,17 @@ type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } 
 
 export const volunteerRoutes = new Hono<Env>();
 
+// VolunteerOpportunity is retained only for historical reads during canonical
+// VolunteerProgram migration. New lifecycle writes must use /volunteer-programs.
+volunteerRoutes.use("*", async (c, next) => {
+  if (["GET", "HEAD", "OPTIONS"].includes(c.req.method)) return next();
+  return c.json({
+    success: false,
+    code: "LEGACY_VOLUNTEER_DEPRECATED",
+    message: "VolunteerOpportunity sudah read-only. Gunakan VolunteerProgram API untuk lifecycle dan pendaftaran baru.",
+  }, 410);
+});
+
 async function getEventOrganizerRole(userId: string, event: any): Promise<string | null> {
   if (event.communityId) {
     const membership = await prisma.communityMember.findUnique({
@@ -44,7 +55,6 @@ async function isSuperAdmin(userId: string): Promise<boolean> {
 async function canManageEvent(role: string | null, userId: string, event: any): Promise<boolean> {
   if (await isSuperAdmin(userId)) return true;
   if (!role) return false;
-  if (event.createdById === userId) return true;
   if (["OWNER", "ADMIN", "EVENT_MANAGER"].includes(role)) return true;
   return false;
 }
@@ -59,6 +69,16 @@ const VALID_OPPORTUNITY_TRANSITIONS: Record<string, string[]> = {
 
 function isValidOpportunityTransition(from: string, to: string): boolean {
   return VALID_OPPORTUNITY_TRANSITIONS[from]?.includes(to) ?? false;
+}
+
+async function recordVolunteerStatusChange(opportunityId: string, fromStatus: string, toStatus: string, actorId: string, reason?: string) {
+  try {
+    await prisma.volunteerStatusHistory.create({
+      data: { opportunityId, fromStatus: fromStatus as any, toStatus: toStatus as any, actorId, reason: reason || null },
+    });
+  } catch {
+    // status history is best-effort; never fail the transition because a history write fails
+  }
 }
 
 // ==========================================
@@ -688,6 +708,8 @@ volunteerRoutes.post("/:opportunityId/publish", authMiddleware, async (c) => {
     afterData: { status: targetStatus },
   });
 
+  await recordVolunteerStatusChange(opportunityId, opportunity.status, targetStatus, authUser.id);
+
   return c.json({
     success: true,
     message: "Volunteer opportunity berhasil dipublikasikan",
@@ -696,7 +718,56 @@ volunteerRoutes.post("/:opportunityId/publish", authMiddleware, async (c) => {
 });
 
 // ==========================================
-// 9. CLOSE VOLUNTEER OPPORTUNITY
+// 9. OPEN VOLUNTEER OPPORTUNITY
+// ==========================================
+
+volunteerRoutes.post("/:opportunityId/open", authMiddleware, async (c) => {
+  const authUser = c.get("user");
+  const opportunityId = c.req.param("opportunityId") as string;
+  const opportunity = await prisma.volunteerOpportunity.findUnique({
+    where: { id: opportunityId },
+    include: { event: true },
+  });
+
+  if (!opportunity || opportunity.deletedAt) {
+    return c.json({ success: false, message: "Volunteer opportunity tidak ditemukan" }, 404);
+  }
+  if (!await canManageEvent(await getEventOrganizerRole(authUser.id, opportunity.event), authUser.id, opportunity.event)) {
+    return c.json({ success: false, message: "Tidak memiliki akses membuka opportunity ini" }, 403);
+  }
+  if (["CANCELLED", "ARCHIVED", "COMPLETED"].includes(opportunity.event.status)) {
+    return c.json({ success: false, message: "Event induk tidak lagi menerima volunteer" }, 400);
+  }
+  if (!isValidOpportunityTransition(opportunity.status, "OPEN")) {
+    return c.json({ success: false, message: `Tidak dapat membuka dari status ${opportunity.status}` }, 400);
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const changed = await tx.volunteerOpportunity.updateMany({
+      where: { id: opportunityId, status: "PUBLISHED", deletedAt: null },
+      data: { status: "OPEN" },
+    });
+    if (changed.count !== 1) throw new Error("OPPORTUNITY_STATUS_CHANGED");
+    await tx.volunteerStatusHistory.create({
+      data: { opportunityId, fromStatus: "PUBLISHED", toStatus: "OPEN", actorId: authUser.id },
+    });
+    return tx.volunteerOpportunity.findUniqueOrThrow({ where: { id: opportunityId } });
+  }).catch((error) => error?.message === "OPPORTUNITY_STATUS_CHANGED" ? null : Promise.reject(error));
+
+  if (!updated) return c.json({ success: false, message: "Status opportunity telah berubah" }, 409);
+  await createAuditLog({
+    userId: authUser.id,
+    actionType: AuditActions.VOLUNTEER_OPPORTUNITY_PUBLISH,
+    resourceName: "VolunteerOpportunity",
+    resourceId: opportunityId,
+    beforeData: { status: opportunity.status },
+    afterData: { status: "OPEN" },
+  });
+  return c.json({ success: true, message: "Pendaftaran volunteer dibuka", data: { id: updated.id, status: updated.status } });
+});
+
+// ==========================================
+// 10. CLOSE VOLUNTEER OPPORTUNITY
 // ==========================================
 
 volunteerRoutes.post("/:opportunityId/close", authMiddleware, async (c) => {
@@ -763,6 +834,8 @@ volunteerRoutes.post("/:opportunityId/close", authMiddleware, async (c) => {
     afterData: { status: "CLOSED" },
   });
 
+  await recordVolunteerStatusChange(opportunityId, opportunity.status, "CLOSED", authUser.id, "Opportunity ditutup oleh penyelenggara");
+
   return c.json({
     success: true,
     message: "Volunteer opportunity berhasil ditutup",
@@ -771,7 +844,7 @@ volunteerRoutes.post("/:opportunityId/close", authMiddleware, async (c) => {
 });
 
 // ==========================================
-// 10. ARCHIVE VOLUNTEER OPPORTUNITY
+// 11. ARCHIVE VOLUNTEER OPPORTUNITY
 // ==========================================
 
 volunteerRoutes.post("/:opportunityId/archive", authMiddleware, async (c) => {
@@ -810,6 +883,8 @@ volunteerRoutes.post("/:opportunityId/archive", authMiddleware, async (c) => {
     afterData: { status: "ARCHIVED" },
   });
 
+  await recordVolunteerStatusChange(opportunityId, opportunity.status, "ARCHIVED", authUser.id);
+
   return c.json({
     success: true,
     message: "Volunteer opportunity berhasil diarsipkan",
@@ -818,7 +893,7 @@ volunteerRoutes.post("/:opportunityId/archive", authMiddleware, async (c) => {
 });
 
 // ==========================================
-// 11. APPLY FOR VOLUNTEER
+// 12. APPLY FOR VOLUNTEER
 // ==========================================
 
 volunteerRoutes.post("/:opportunityId/apply", authMiddleware, validate(applyVolunteerSchema), async (c) => {
@@ -835,8 +910,12 @@ volunteerRoutes.post("/:opportunityId/apply", authMiddleware, validate(applyVolu
     return c.json({ success: false, message: "Volunteer opportunity tidak ditemukan" }, 404);
   }
 
-  if (!["PUBLISHED", "OPEN"].includes(opportunity.status)) {
+  if (opportunity.status !== "OPEN") {
     return c.json({ success: false, message: "Volunteer opportunity belum dibuka" }, 400);
+  }
+
+  if (["CANCELLED", "ARCHIVED", "COMPLETED"].includes(opportunity.event.status)) {
+    return c.json({ success: false, message: "Event induk tidak lagi menerima volunteer" }, 400);
   }
 
   if (opportunity.registrationDeadline && new Date() > new Date(opportunity.registrationDeadline)) {
@@ -1078,6 +1157,10 @@ volunteerRoutes.patch("/applications/:applicationId/accept", authMiddleware, val
 
   if (!application) {
     return c.json({ success: false, message: "Pendaftaran tidak ditemukan" }, 404);
+  }
+
+  if (application.userId === authUser.id) {
+    return c.json({ success: false, message: "Tidak dapat menerima pendaftaran volunteer sendiri" }, 403);
   }
 
   const role = await getEventOrganizerRole(authUser.id, application.opportunity.event);

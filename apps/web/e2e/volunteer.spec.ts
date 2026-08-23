@@ -60,7 +60,7 @@ test.describe("Volunteer Listing", () => {
 
   test("loads the volunteer directory page", async ({ page }) => {
     await page.goto("/volunteer");
-    await expect(page.getByRole("heading", { name: "Direktori Volunteer" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Rasakan Menjadi Volunteer" })).toBeVisible();
   });
 
   test("displays status filter tabs", async ({ page }) => {
@@ -78,8 +78,8 @@ test.describe("Volunteer Listing", () => {
 
   test("displays volunteer cards", async ({ page }) => {
     await page.goto("/volunteer");
-    await expect(page.getByText("Bersih-bersih Pantai")).toBeVisible();
-    await expect(page.getByText("Guru Mengajar")).toBeVisible();
+    await expect(page.getByText("Bersih-bersih Pantai").first()).toBeVisible();
+    await expect(page.getByText("Guru Mengajar").first()).toBeVisible();
   });
 
   test("volunteer cards link to detail page", async ({ page }) => {
@@ -101,7 +101,7 @@ test.describe("Volunteer Listing", () => {
 
   test("sort dropdown is present", async ({ page }) => {
     await page.goto("/volunteer");
-    const sortSelect = page.getByRole("combobox");
+    const sortSelect = page.getByLabel("Urutkan volunteer");
     await expect(sortSelect).toBeVisible();
   });
 
@@ -113,7 +113,7 @@ test.describe("Volunteer Listing", () => {
   test("page is responsive on mobile", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/volunteer");
-    await expect(page.getByRole("heading", { name: "Direktori Volunteer" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Rasakan Menjadi Volunteer" })).toBeVisible();
   });
 });
 
@@ -121,7 +121,9 @@ test.describe("Volunteer - Detail Page", () => {
   test("navigates to volunteer detail from listing", async ({ page }) => {
     await mockVolunteer(page, mockVolunteerData);
     await page.goto("/volunteer");
-    await page.getByRole("link", { name: "Bersih-bersih Pantai" }).first().click();
+    const detailLink = page.locator('a[href*="bersih-bersih-pantai"]').first();
+    await detailLink.click();
+    await page.waitForURL(/volunteer\/bersih-bersih-pantai/);
     await expect(page).toHaveURL(/volunteer\/bersih-bersih-pantai/);
   });
 });

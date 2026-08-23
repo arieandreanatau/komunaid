@@ -151,6 +151,7 @@ userRoutes.get("/profile", authMiddleware, async (c) => {
         bio: user.bio,
         location: user.location,
         avatar: user.avatar,
+        isProfilePublic: user.isProfilePublic,
         status: user.status,
         roles: user.roles.map((r) => r.role),
         interests: user.interests.map((i) => i.interest),
@@ -400,6 +401,39 @@ userRoutes.put("/interests", authMiddleware, validate(updateInterestsSchema), as
 });
 
 // ==========================================
+// PRIVACY SETTINGS
+// ==========================================
+
+userRoutes.put("/privacy", authMiddleware, async (c) => {
+  const authUser = c.get("user");
+  const { isProfilePublic } = await c.req.json();
+
+  if (typeof isProfilePublic !== "boolean") {
+    return c.json({ success: false, message: "isProfilePublic harus boolean" }, 400);
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: authUser.id },
+    data: { isProfilePublic },
+    select: { id: true, isProfilePublic: true },
+  });
+
+  await createAuditLog({
+    userId: authUser.id,
+    actionType: AuditActions.USER_UPDATE_PROFILE,
+    resourceName: "User",
+    resourceId: authUser.id,
+    afterData: { isProfilePublic },
+  });
+
+  return c.json({
+    success: true,
+    message: "Pengaturan privasi berhasil diperbarui",
+    data: { isProfilePublic: updated.isProfilePublic },
+  });
+});
+
+// ==========================================
 // CHANGE EMAIL
 // ==========================================
 
@@ -589,6 +623,7 @@ userRoutes.get("/:id", async (c) => {
       avatar: true,
       bio: true,
       location: true,
+      isProfilePublic: true,
       createdAt: true,
       joinedCommunities: {
         select: {
@@ -604,6 +639,20 @@ userRoutes.get("/:id", async (c) => {
 
   if (!user) {
     return c.json({ success: false, message: "User tidak ditemukan" }, 404);
+  }
+
+  if (!user.isProfilePublic) {
+    return c.json({
+      success: true,
+      data: {
+        user: {
+          id: user.id,
+          name: user.name,
+          avatar: user.avatar,
+          createdAt: user.createdAt,
+        },
+      },
+    });
   }
 
   return c.json({ success: true, data: { user } });

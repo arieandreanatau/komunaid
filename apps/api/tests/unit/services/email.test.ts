@@ -144,8 +144,6 @@ describe("Email Service", () => {
       delete process.env.SMTP_HOST;
       process.env.NODE_ENV = "development";
 
-      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-
       const result = await sendEmail({
         to: "user@example.com",
         subject: "Test Subject",
@@ -153,8 +151,6 @@ describe("Email Service", () => {
       });
 
       expect(result).toBe(true);
-      expect(consoleSpy).toHaveBeenCalled();
-      consoleSpy.mockRestore();
     });
 
     it("should return false in production when no email provider configured", async () => {
@@ -175,8 +171,6 @@ describe("Email Service", () => {
       process.env.NODE_ENV = "development";
       mockSendMail.mockRejectedValue(new Error("Connection refused"));
 
-      const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-
       const result = await sendEmail({
         to: "user@example.com",
         subject: "Test",
@@ -184,7 +178,6 @@ describe("Email Service", () => {
       });
 
       expect(result).toBe(true);
-      consoleSpy.mockRestore();
     });
 
     it("should use custom EMAIL_FROM when set", async () => {

@@ -101,7 +101,7 @@ test.describe("Community Settings - Edit", () => {
       }
     });
 
-    const nameInput = page.getByLabel("Nama Komunitas");
+    const nameInput = page.locator("input[type=text]").first();
     await nameInput.fill("Tech Jakarta Baru");
     await page.getByRole("button", { name: "Simpan Perubahan" }).click();
     await expect(page.getByText("Pengaturan berhasil disimpan!")).toBeVisible();

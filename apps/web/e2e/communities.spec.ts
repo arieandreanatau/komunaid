@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { testAccessToken } from "./helpers/api";
 import {
   mockCommunities,
   mockCategories,
@@ -90,7 +91,7 @@ test.describe("Communities Listing", () => {
 
   test("loads the communities directory page", async ({ page }) => {
     await page.goto("/communities");
-    await expect(page.getByRole("heading", { name: "Direktori Komunitas" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Temukan Komunitas Sesuai Minatmu" })).toBeVisible();
   });
 
   test("displays section tabs", async ({ page }) => {
@@ -149,7 +150,7 @@ test.describe("Communities Listing", () => {
   test("page is responsive on mobile", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/communities");
-    await expect(page.getByRole("heading", { name: "Direktori Komunitas" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Temukan Komunitas Sesuai Minatmu" })).toBeVisible();
   });
 });
 
@@ -170,13 +171,8 @@ test.describe("Communities - Create (Auth Required)", () => {
       });
     });
 
-    const fakeToken =
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9." +
-      btoa(JSON.stringify({ sub: "user1", exp: Math.floor(Date.now() / 1000) + 3600 })) +
-      ".fake";
-    await page.context().addCookies([
-      { name: "token", value: fakeToken, domain: "localhost", path: "/" },
-    ]);
+    const fakeToken = await testAccessToken("user1", ["USER"]);
+    await page.context().addCookies([{ name: "token", value: fakeToken, domain: "localhost", path: "/" }]);
 
     await page.goto("/communities/create");
     await expect(page).toHaveURL(/communities\/create/);

@@ -23,6 +23,7 @@ model User {
   phone           String?
   bio             String?    @db.Text
   location        String?
+  isProfilePublic Boolean    @default(true)
   emailVerifiedAt DateTime?
   status          UserStatus @default(ACTIVE)
   deletedAt       DateTime?
@@ -40,6 +41,7 @@ model User {
   createdCommunities    Community[]
   createdOrganizations  Organization[]
   createdEvents         Event[]
+  reviewedEvents        Event[]               @relation("EventReviewer")
   auditLogs             AuditLog[]
   reportedReports       Report[]               @relation("ReportReporter")
   reviewedReports       Report[]               @relation("ReportReviewer")
@@ -56,10 +58,15 @@ model User {
   volunteerProgramApplications VolunteerProgramApplication[]
   reviewedVolunteerProgramApplications VolunteerProgramApplication[] @relation("ReviewedVolunteerProgramApplications")
   reviewedVolunteerPrograms VolunteerProgram[] @relation("ReviewedVolunteerPrograms")
+  volunteerProgramStatusHistory VolunteerProgramStatusHistory[] @relation("VolunteerProgramStatusActor")
+  volunteerProgramApplicationHistory VolunteerProgramApplicationHistory[] @relation("VolunteerProgramApplicationHistoryActor")
   communityMedias       CommunityMedia[]
   forumReplies          ForumReply[]
   loginHistory          LoginHistory[]
   refreshTokens         RefreshToken[]
+  eventAgendasCreated   EventAgenda[]          @relation("EventAgendaCreator")
+  eventStatusHistory    EventStatusHistory[]   @relation("EventStatusActor")
+  volunteerStatusHistory VolunteerStatusHistory[] @relation("VolunteerStatusActor")
 
   @@index([status])
   @@index([deletedAt])
@@ -514,7 +521,13 @@ model Event {
   timezone      String?         @default("Asia/Jakarta")
   quota         Int
   allowWaitlist Boolean         @default(false)
+  registrationOpensAt DateTime?
+  registrationDeadline DateTime?
   status        EventStatus     @default(DRAFT)
+  submittedAt   DateTime?
+  reviewedAt    DateTime?
+  reviewedById  String?
+  reviewNote    String?         @db.Text
   visibility    EventVisibility @default(PUBLIC)
   contactName   String?
   contactEmail  String?
@@ -531,16 +544,26 @@ model Event {
   community              Community?             @relation(fields: [communityId], references: [id], onDelete: SetNull)
   organization           Organization?          @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   createdBy              User                   @relation(fields: [createdById], references: [id])
+  reviewedBy              User?                  @relation("EventReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
   registrations          EventRegistration[]
   savedBy                EventSave[]
   categories             EventCategory[]
   volunteerOpportunities VolunteerOpportunity[]
+  volunteerPrograms      VolunteerProgram[]
+  agendas                EventAgenda[]
+  speakers               EventSpeaker[]
+  tickets                EventTicket[]
+  statusHistory          EventStatusHistory[]
 
   @@index([communityId])
   @@index([organizationId])
   @@index([createdById])
   @@index([eventDate])
+  @@index([registrationOpensAt])
+  @@index([registrationDeadline])
   @@index([status])
+  @@index([status, submittedAt])
+  @@index([reviewedById])
   @@index([deletedAt])
   @@index([communityId, status, eventDate])
   @@index([organizationId, status, eventDate])
@@ -549,6 +572,11 @@ model Event {
 
 enum EventStatus {
   DRAFT
+  SUBMITTED
+  IN_REVIEW
+  REVISION_REQUESTED
+  RESUBMITTED
+  APPROVED
   PUBLISHED
   REGISTRATION_OPEN
   REGISTRATION_CLOSED
@@ -635,6 +663,87 @@ model EventCategory {
 }
 
 // ==========================================
+// EVENT DETAIL — additive models (spec §15)
+// Agendas, speakers, and tickets are additive to the existing Event model.
+// No existing column/table is altered.
+// ==========================================
+
+model EventAgenda {
+  id          String   @id @default(cuid())
+  eventId     String
+  session     String
+  description String?  @db.Text
+  startTime   DateTime?
+  endTime     DateTime?
+  room        String?
+  speakerName String?
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  event     Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  createdBy User?  @relation("EventAgendaCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([eventId])
+  @@index([startTime])
+  @@map("event_agendas")
+}
+
+model EventSpeaker {
+  id          String   @id @default(cuid())
+  eventId     String
+  name        String
+  photo       String?
+  bio         String?  @db.Text
+  position    String?
+  institution String?
+  socialMedia String?
+  topic       String?
+  material    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@map("event_speakers")
+}
+
+model EventTicket {
+  id          String   @id @default(cuid())
+  eventId     String
+  name        String
+  description String?
+  price       Decimal  @db.Decimal(12, 2)
+  quota       Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@map("event_tickets")
+}
+
+model EventStatusHistory {
+  id        String      @id @default(cuid())
+  eventId   String
+  fromStatus EventStatus
+  toStatus  EventStatus
+  actorId   String
+  actorRole String?
+  reason    String?
+  createdAt DateTime    @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  actor User  @relation("EventStatusActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([eventId, createdAt])
+  @@index([actorId])
+  @@map("event_status_histories")
+}
+
+// ==========================================
 // VOLUNTEER
 // ==========================================
 
@@ -659,6 +768,7 @@ model VolunteerOpportunity {
   createdBy    User                   @relation(fields: [createdById], references: [id])
   positions    VolunteerPosition[]
   applications VolunteerApplication[]
+  statusHistory VolunteerStatusHistory[]
 
   @@index([eventId])
   @@index([createdById])
@@ -674,6 +784,23 @@ enum VolunteerOpportunityStatus {
   OPEN
   CLOSED
   ARCHIVED
+}
+
+model VolunteerStatusHistory {
+  id         String                   @id @default(cuid())
+  opportunityId String
+  fromStatus VolunteerOpportunityStatus
+  toStatus   VolunteerOpportunityStatus
+  actorId    String
+  reason     String?
+  createdAt  DateTime                 @default(now())
+
+  opportunity VolunteerOpportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  actor       User                 @relation("VolunteerStatusActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([opportunityId, createdAt])
+  @@index([actorId])
+  @@map("volunteer_status_histories")
 }
 
 // ==========================================
@@ -700,6 +827,8 @@ model VolunteerProgram {
   reviewNote      String?                 @db.Text
   reviewedAt      DateTime?
   reviewedById    String?
+  legacyOpportunityId String?             @db.VarChar(191)
+  eventId         String?
   deletedAt       DateTime?
   createdAt       DateTime                @default(now())
   updatedAt       DateTime                @updatedAt
@@ -707,14 +836,18 @@ model VolunteerProgram {
   community       Community?              @relation("VolunteerProgramCommunity", fields: [communityId], references: [id], onDelete: SetNull, map: "vp_community_fk")
   organizerUser   User                    @relation("VolunteerProgramOrganizer", fields: [organizerUserId], references: [id], map: "vp_organizer_user_fk")
   reviewedBy      User?                   @relation("ReviewedVolunteerPrograms", fields: [reviewedById], references: [id], map: "vp_reviewed_by_fk")
+  event           Event?                  @relation(fields: [eventId], references: [id], onDelete: SetNull, map: "vp_event_fk")
   accesses        VolunteerProgramOrganizerAccess[]
   applications    VolunteerProgramApplication[]
+  statusHistory   VolunteerProgramStatusHistory[]
 
   @@unique([slug], map: "vp_slug_uq")
+  @@unique([legacyOpportunityId], map: "vp_legacy_opportunity_uq")
   @@index([communityId, status], map: "vp_community_status_idx")
   @@index([organizerUserId, status], map: "vp_organizer_user_status_idx")
   @@index([organizerType, status], map: "vp_organizer_type_status_idx")
   @@index([status, startDate], map: "vp_status_start_date_idx")
+  @@index([eventId], map: "vp_event_idx")
   @@index([deletedAt], map: "vp_deleted_at_idx")
   @@map("volunteer_programs")
 }
@@ -737,6 +870,25 @@ enum VolunteerProgramStatus {
   ONGOING
   COMPLETED
   CANCELLED
+  ARCHIVED
+}
+
+model VolunteerProgramStatusHistory {
+  id                 String                 @id @default(cuid())
+  volunteerProgramId String
+  previousStatus     VolunteerProgramStatus
+  newStatus          VolunteerProgramStatus
+  actorId            String
+  actorRole          String?
+  reason             String?                @db.Text
+  createdAt          DateTime               @default(now())
+
+  volunteerProgram VolunteerProgram @relation(fields: [volunteerProgramId], references: [id], onDelete: Restrict, map: "vpsh_program_fk")
+  actor            User             @relation("VolunteerProgramStatusActor", fields: [actorId], references: [id], onDelete: Restrict, map: "vpsh_actor_fk")
+
+  @@index([volunteerProgramId, createdAt], map: "vpsh_program_created_idx")
+  @@index([actorId], map: "vpsh_actor_idx")
+  @@map("volunteer_program_status_histories")
 }
 
 model VolunteerProgramOrganizerAccess {
@@ -788,6 +940,7 @@ model VolunteerProgramApplication {
   user             User                          @relation(fields: [userId], references: [id], onDelete: Cascade, map: "vpa_user_fk")
   reviewedBy       User?                         @relation("ReviewedVolunteerProgramApplications", fields: [reviewedById], references: [id], map: "vpa_reviewer_fk")
   participation    VolunteerProgramParticipation?
+  statusHistory    VolunteerProgramApplicationHistory[]
 
   @@unique([volunteerProgramId, userId], map: "vpa_program_user_uq")
   @@index([userId, status], map: "vpa_user_status_idx")
@@ -801,6 +954,24 @@ enum VolunteerProgramApplicationStatus {
   REJECTED
   CANCELLED_BY_USER
   CANCELLED_BY_ORGANIZER
+}
+
+model VolunteerProgramApplicationHistory {
+  id            String                            @id @default(cuid())
+  applicationId String
+  previousStatus VolunteerProgramApplicationStatus
+  newStatus     VolunteerProgramApplicationStatus
+  actorId       String
+  actorRole     String?
+  reason        String?                           @db.Text
+  createdAt     DateTime                          @default(now())
+
+  application VolunteerProgramApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict, map: "vpah_application_fk")
+  actor       User                        @relation("VolunteerProgramApplicationHistoryActor", fields: [actorId], references: [id], onDelete: Restrict, map: "vpah_actor_fk")
+
+  @@index([applicationId, createdAt], map: "vpah_application_created_idx")
+  @@index([actorId], map: "vpah_actor_idx")
+  @@map("volunteer_program_application_histories")
 }
 
 model VolunteerProgramParticipation {
@@ -1018,6 +1189,7 @@ enum ReportStatus {
 model AuditLog {
   id           String   @id @default(cuid())
   userId       String
+  actorRole    String?
   actionType   String
   resourceName String
   resourceId   String
@@ -1031,6 +1203,7 @@ model AuditLog {
   @@index([userId])
   @@index([resourceName, resourceId])
   @@index([actionType])
+  @@index([actorRole])
   @@index([createdAt])
   @@map("audit_logs")
 }

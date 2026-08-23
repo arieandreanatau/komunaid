@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useForm } from "react-hook-form";
+import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation } from "@tanstack/react-query";
@@ -28,6 +28,43 @@ const eventSchema = z.object({
   allowWaitlist: z.boolean(),
   coverImage: z.string().optional().nullable(),
   thumbnail: z.string().optional().nullable(),
+  agendas: z
+    .array(
+      z.object({
+        session: z.string().min(1, "Nama sesi wajib").max(200),
+        description: z.string().optional(),
+        startTime: z.string().optional(),
+        endTime: z.string().optional(),
+        room: z.string().optional(),
+        speakerName: z.string().optional(),
+      })
+    )
+    .max(30, "Maksimal 30 sesi")
+    .optional(),
+  speakers: z
+    .array(
+      z.object({
+        name: z.string().min(1, "Nama pembicara wajib").max(200),
+        photo: z.string().optional(),
+        bio: z.string().optional(),
+        position: z.string().optional(),
+        institution: z.string().optional(),
+        topic: z.string().optional(),
+      })
+    )
+    .max(30, "Maksimal 30 pembicara")
+    .optional(),
+  tickets: z
+    .array(
+      z.object({
+        name: z.string().min(1, "Nama tiket wajib").max(200),
+        description: z.string().optional(),
+        price: z.coerce.number().min(0, "Harga tidak boleh negatif"),
+        quota: z.coerce.number().min(1).optional().nullable(),
+      })
+    )
+    .max(10, "Maksimal 10 tiket")
+    .optional(),
 }).refine((data) => Boolean(data.communityId || data.organizationId), {
   message: "Pilih komunitas atau organisasi penyelenggara",
   path: ["communityId"],
@@ -64,7 +101,7 @@ function localDateTimeToIso(value: string, timezone: string): string {
   )).toISOString();
 }
 
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = 7;
 
 const STEP_LABELS = [
   "Informasi Dasar",
@@ -72,6 +109,7 @@ const STEP_LABELS = [
   "Lokasi",
   "Kapasitas",
   "Media",
+  "Detail & Tiket",
   "Ringkasan",
 ];
 
@@ -101,6 +139,7 @@ export default function CreateEventPage() {
     handleSubmit,
     watch,
     setValue,
+    control,
     formState: { errors },
     trigger,
   } = useForm<EventFormData>({
@@ -122,8 +161,15 @@ export default function CreateEventPage() {
       allowWaitlist: false,
       coverImage: "",
       thumbnail: "",
+      agendas: [],
+      speakers: [],
+      tickets: [],
     },
   });
+
+  const agendaFields = useFieldArray({ control, name: "agendas" });
+  const speakerFields = useFieldArray({ control, name: "speakers" });
+  const ticketFields = useFieldArray({ control, name: "tickets" });
 
   const formValues = watch();
 
@@ -148,11 +194,43 @@ export default function CreateEventPage() {
       };
       if (data.communityId) payload.communityId = data.communityId;
       if (data.organizationId) payload.organizationId = data.organizationId;
+
+      if (data.agendas && data.agendas.length > 0) {
+        payload.agendas = data.agendas.map((agenda) => ({
+          session: agenda.session.trim(),
+          description: agenda.description?.trim() || undefined,
+          startTime: agenda.startTime ? localDateTimeToIso(agenda.startTime, data.timezone) : undefined,
+          endTime: agenda.endTime ? localDateTimeToIso(agenda.endTime, data.timezone) : undefined,
+          room: agenda.room?.trim() || undefined,
+          speakerName: agenda.speakerName?.trim() || undefined,
+        }));
+      }
+
+      if (data.speakers && data.speakers.length > 0) {
+        payload.speakers = data.speakers.map((speaker) => ({
+          name: speaker.name.trim(),
+          photo: speaker.photo?.trim() || undefined,
+          bio: speaker.bio?.trim() || undefined,
+          position: speaker.position?.trim() || undefined,
+          institution: speaker.institution?.trim() || undefined,
+          topic: speaker.topic?.trim() || undefined,
+        }));
+      }
+
+      if (data.tickets && data.tickets.length > 0) {
+        payload.tickets = data.tickets.map((ticket) => ({
+          name: ticket.name.trim(),
+          description: ticket.description?.trim() || undefined,
+          price: Number(ticket.price),
+          quota: ticket.quota ? Number(ticket.quota) : undefined,
+        }));
+      }
+
       return api.post("/events", payload);
     },
     onSuccess: (res) => {
-      const slug = res.data.event?.slug || res.data.data?.slug;
-      router.push(slug ? `/events/${slug}` : "/dashboard/events");
+      const eventId = res.data.event?.id || res.data.data?.id;
+      router.push(eventId ? `/dashboard/events/${eventId}` : "/dashboard/events");
     },
   });
 
@@ -656,8 +734,236 @@ export default function CreateEventPage() {
             </div>
           )}
 
-          {/* Step 6: Review */}
+          {/* Step 6: Detail & Tickets */}
           {step === 6 && (
+            <div className="space-y-8">
+              {/* Agendas */}
+              <section>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900">Agenda</h3>
+                    <p className="text-xs text-gray-500">Susunan acara event (opsional)</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => agendaFields.append({ session: "", description: "", startTime: "", endTime: "", room: "", speakerName: "" })}
+                    className="px-3 py-1.5 text-sm font-medium text-komuna-blue border border-komuna-blue/30 rounded-lg hover:bg-komuna-blue/5 transition-colors"
+                  >
+                    + Tambah Sesi
+                  </button>
+                </div>
+                {agendaFields.fields.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-4 border border-dashed border-gray-200 rounded-lg">
+                    Belum ada agenda. Tambahkan sesi acara.
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {agendaFields.fields.map((field, index) => (
+                      <div key={field.id} className="border border-gray-200 rounded-lg p-4 space-y-3 bg-gray-50/50">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1">
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Nama Sesi</label>
+                            <input
+                              type="text"
+                              {...register(`agendas.${index}.session`)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm"
+                              placeholder="Contoh: Pembukaan & Registrasi"
+                            />
+                            {errors.agendas?.[index]?.session && (
+                              <p className="mt-1 text-xs text-red-500">{errors.agendas?.[index]?.session?.message}</p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => agendaFields.remove(index)}
+                            className="mt-5 text-gray-400 hover:text-red-500 transition-colors"
+                            aria-label="Hapus sesi"
+                          >
+                            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Mulai</label>
+                            <input type="datetime-local" {...register(`agendas.${index}.startTime`)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Selesai</label>
+                            <input type="datetime-local" {...register(`agendas.${index}.endTime`)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Ruang / Lokasi Sesi</label>
+                            <input type="text" {...register(`agendas.${index}.room`)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm" placeholder="Contoh: Ruang A" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Pembicara</label>
+                            <input type="text" {...register(`agendas.${index}.speakerName`)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm" placeholder="Nama pembicara sesi" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Deskripsi Sesi</label>
+                          <textarea
+                            rows={2}
+                            {...register(`agendas.${index}.description`)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm resize-none"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              {/* Speakers */}
+              <section>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900">Pembicara</h3>
+                    <p className="text-xs text-gray-500">Narasumber atau pembicara event (opsional)</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => speakerFields.append({ name: "", photo: "", bio: "", position: "", institution: "", topic: "" })}
+                    className="px-3 py-1.5 text-sm font-medium text-komuna-blue border border-komuna-blue/30 rounded-lg hover:bg-komuna-blue/5 transition-colors"
+                  >
+                    + Tambah Pembicara
+                  </button>
+                </div>
+                {speakerFields.fields.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-4 border border-dashed border-gray-200 rounded-lg">
+                    Belum ada pembicara.
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {speakerFields.fields.map((field, index) => (
+                      <div key={field.id} className="border border-gray-200 rounded-lg p-4 space-y-3 bg-gray-50/50">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1">
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Nama</label>
+                            <input
+                              type="text"
+                              {...register(`speakers.${index}.name`)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm"
+                              placeholder="Nama lengkap pembicara"
+                            />
+                            {errors.speakers?.[index]?.name && (
+                              <p className="mt-1 text-xs text-red-500">{errors.speakers?.[index]?.name?.message}</p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => speakerFields.remove(index)}
+                            className="mt-5 text-gray-400 hover:text-red-500 transition-colors"
+                            aria-label="Hapus pembicara"
+                          >
+                            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Jabatan</label>
+                            <input type="text" {...register(`speakers.${index}.position`)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Institusi</label>
+                            <input type="text" {...register(`speakers.${index}.institution`)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Topik</label>
+                            <input type="text" {...register(`speakers.${index}.topic`)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm" />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Foto (URL)</label>
+                            <input type="text" {...register(`speakers.${index}.photo`)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm" placeholder="https://..." />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Bio</label>
+                            <textarea rows={2} {...register(`speakers.${index}.bio`)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm resize-none" />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              {/* Tickets */}
+              <section>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900">Tiket</h3>
+                    <p className="text-xs text-gray-500">
+                      Tipe tiket & harga (opsional). Tanpa payment gateway, daftar menunggu pembayaran manual.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => ticketFields.append({ name: "", description: "", price: 0 })}
+                    className="px-3 py-1.5 text-sm font-medium text-komuna-blue border border-komuna-blue/30 rounded-lg hover:bg-komuna-blue/5 transition-colors"
+                  >
+                    + Tambah Tiket
+                  </button>
+                </div>
+                {ticketFields.fields.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-4 border border-dashed border-gray-200 rounded-lg">
+                    Belum ada tiket. Event gratis jika tidak ada tiket berbayar.
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {ticketFields.fields.map((field, index) => (
+                      <div key={field.id} className="border border-gray-200 rounded-lg p-4 space-y-3 bg-gray-50/50">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1">
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Nama Tiket</label>
+                            <input
+                              type="text"
+                              {...register(`tickets.${index}.name`)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm"
+                              placeholder="Contoh: Early Bird, VIP"
+                            />
+                            {errors.tickets?.[index]?.name && (
+                              <p className="mt-1 text-xs text-red-500">{errors.tickets?.[index]?.name?.message}</p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => ticketFields.remove(index)}
+                            className="mt-5 text-gray-400 hover:text-red-500 transition-colors"
+                            aria-label="Hapus tiket"
+                          >
+                            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Harga (Rp)</label>
+                            <input type="number" min={0} {...register(`tickets.${index}.price`)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Kuota (Opsional)</label>
+                            <input type="number" min={1} {...register(`tickets.${index}.quota`)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm" placeholder="Kosongkan jika tanpa batas" />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Deskripsi</label>
+                            <input type="text" {...register(`tickets.${index}.description`)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm" />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
+          )}
+
+          {/* Step 7: Review */}
+          {step === 7 && (
             <div className="space-y-4">
               <p className="text-sm text-gray-500 mb-4">
                 Pastikan semua data sudah benar sebelum mengirim.
@@ -720,6 +1026,30 @@ export default function CreateEventPage() {
                   <span className="text-xs font-medium text-gray-500 uppercase">Waiting List</span>
                   <p className="text-sm text-gray-900">{formValues.allowWaitlist ? "Aktif" : "Nonaktif"}</p>
                 </div>
+                {formValues.agendas && formValues.agendas.length > 0 && (
+                  <div className="p-3">
+                    <span className="text-xs font-medium text-gray-500 uppercase">Agenda</span>
+                    <p className="text-sm text-gray-900">{formValues.agendas.length} sesi</p>
+                  </div>
+                )}
+                {formValues.speakers && formValues.speakers.length > 0 && (
+                  <div className="p-3">
+                    <span className="text-xs font-medium text-gray-500 uppercase">Pembicara</span>
+                    <p className="text-sm text-gray-900">{formValues.speakers.map((s) => s.name).join(", ")}</p>
+                  </div>
+                )}
+                {formValues.tickets && formValues.tickets.length > 0 && (
+                  <div className="p-3">
+                    <span className="text-xs font-medium text-gray-500 uppercase">Tiket</span>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {formValues.tickets.map((t, i) => (
+                        <span key={i} className="px-2 py-0.5 bg-komuna-blue/10 text-komuna-blue rounded text-xs font-medium">
+                          {t.name} — {Number(t.price) > 0 ? `Rp ${Number(t.price).toLocaleString("id-ID")}` : "Gratis"}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {formValues.coverImage && (
                   <div className="p-3">
                     <span className="text-xs font-medium text-gray-500 uppercase">Cover Image</span>

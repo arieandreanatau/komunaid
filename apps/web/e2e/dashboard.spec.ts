@@ -176,13 +176,13 @@ test.describe("Dashboard - Komunitas Saya", () => {
     await expect(page.getByRole("tab", { name: "Dibuat oleh Saya" })).toBeVisible();
     await expect(page.getByRole("tab", { name: "Diikuti", exact: true })).toBeVisible();
     await expect(page.getByRole("tab", { name: "Pernah Diikuti" })).toBeVisible();
-    await expect(page.getByText("Komunitas Buatan")).toBeVisible();
+    await expect(page.getByText("Komunitas Buatan").first()).toBeVisible();
 
     await page.getByRole("tab", { name: "Diikuti", exact: true }).click();
-    await expect(page.getByText("Komunitas Aktif")).toBeVisible();
+    await expect(page.getByText("Komunitas Aktif").first()).toBeVisible();
 
     await page.getByRole("tab", { name: "Pernah Diikuti" }).click();
-    await expect(page.getByText("Komunitas Lama")).toBeVisible();
-    await expect(page.getByText("Pernah bergabung")).toBeVisible();
+    await expect(page.getByText("Komunitas Lama").first()).toBeVisible();
+    await expect(page.getByText("Pernah bergabung").first()).toBeVisible();
   });
 });

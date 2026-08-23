@@ -17,6 +17,7 @@ vi.mock("@komunaid/database", () => {
     auditLog: { findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
     report: { findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
     activityHistory: { findMany: vi.fn(async () => []) },
+    volunteerProgramParticipation: { count: vi.fn(async () => 0), findMany: vi.fn(async () => []) },
     notification: { create: vi.fn(async () => ({})), findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
     notificationTemplate: { findMany: vi.fn(async () => []) },
     category: { findUnique: vi.fn(async () => null), findMany: vi.fn(async () => []), create: vi.fn(async ({ data }: any) => ({ id: "cat-1", ...data })), update: vi.fn(), delete: vi.fn() },

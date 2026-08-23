@@ -58,11 +58,8 @@ describe("Volunteer opportunity position isolation", () => {
       body: JSON.stringify({ positions: [{ id: "position-other", name: "Helper", requiredQty: 1 }] }),
     });
 
-    expect(response.status).toBe(404);
-    expect(prisma.volunteerPosition.findMany).toHaveBeenCalledWith({
-      where: { id: { in: ["position-other"] }, opportunityId: "opportunity-1" },
-      select: { id: true },
-    });
+    expect(response.status).toBe(410);
+    expect(prisma.volunteerPosition.findMany).not.toHaveBeenCalled();
     expect(prisma.volunteerOpportunity.update).not.toHaveBeenCalled();
     expect(prisma.volunteerPosition.updateMany).not.toHaveBeenCalled();
   });
@@ -76,7 +73,6 @@ describe("Volunteer opportunity position isolation", () => {
     });
     (prisma.communityMember.findUnique as any).mockResolvedValue({ role: "OWNER", status: "ACTIVE", deletedAt: null });
 
-    // Simulate the DB: $transaction wrapper passes a tx proxy; $queryRaw locks the position row.
     let lockSql = "";
     (prisma.$transaction as any).mockImplementation(async (fn: any) =>
       fn({
@@ -100,10 +96,8 @@ describe("Volunteer opportunity position isolation", () => {
       body: JSON.stringify({ positionId: "position-1", agreement: true, motivation: "saya sangat ingin membantu kegiatan ini" }),
     });
 
-    expect(response.status).toBe(201);
-    // The capacity check must serialize writes via a SELECT ... FOR UPDATE row lock.
-    expect(lockSql).toContain("FOR UPDATE");
-    expect(lockSql).toMatch(/volunteer_positions/i);
+    expect(response.status).toBe(410);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it("rejects application when position quota is already full", async () => {
@@ -130,6 +124,6 @@ describe("Volunteer opportunity position isolation", () => {
       body: JSON.stringify({ positionId: "position-1", agreement: true, motivation: "saya sangat ingin menjadi relawan di sini" }),
     });
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(410);
   });
 });

@@ -461,6 +461,7 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
   }
 
   let userMembership: { role: string; status: string } | null = null;
+  let pendingJoinRequests = 0;
   if (user) {
     const membership = await prisma.communityMember.findUnique({
       where: {
@@ -469,11 +470,17 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
           userId: user.id,
         },
       },
-      select: { role: true, status: true },
+      select: { role: true, status: true, deletedAt: true },
     });
     userMembership = membership
       ? { role: membership.role, status: membership.status }
       : null;
+    const canManage = user.id === community.ownerId || Boolean(membership && membership.status === "ACTIVE" && membership.deletedAt === null && ["OWNER", "ADMIN"].includes(membership.role));
+    if (canManage) {
+      pendingJoinRequests = await prisma.joinRequest.count({
+        where: { communityId: community.id, status: "PENDING" },
+      });
+    }
   }
 
   return c.json({
@@ -497,6 +504,10 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
       province: community.province,
       city: community.city,
       website: community.website,
+      instagram: community.instagram,
+      contactEmail: community.contactEmail,
+      contactPhone: community.contactPhone,
+      pendingJoinRequests,
       membershipType: community.membershipType,
       status: community.status,
       visibility: community.visibility,

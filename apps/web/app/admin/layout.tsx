@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Header } from "@/components/header";
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/components/auth-provider";
-import { sidebarItems, isActiveHref } from "@/components/admin/navigation";
+import { sidebarSections, isActiveHref } from "@/components/admin/navigation";
 import { WorkspaceTabs } from "@/components/admin/workspace-tabs";
 import { useDrawerDialog } from "@/components/ui/use-drawer-dialog";
 
@@ -31,12 +31,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useDrawerDialog(sidebarOpen, sidebarRef, menuButtonRef, () => setSidebarOpen(false), mainRef);
 
-  const filteredItems = sidebarItems.filter((item) => {
-    if (item.superAdminOnly && !isSuperAdmin) return false;
-    return true;
-  });
+  const filteredSections = sidebarSections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => !item.superAdminOnly || isSuperAdmin),
+    }))
+    .filter((section) => section.items.length > 0);
 
-  const renderSidebarItem = (item: typeof sidebarItems[0]) => {
+  const renderSidebarItem = (item: { href: string; label: string; icon: string }) => {
     const active = isActiveHref(pathname, item.href);
     return (
       <Link
@@ -91,13 +93,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           role="complementary"
         >
           <div className="flex-1 overflow-y-auto py-3 px-2">
-            <nav className="space-y-0.5" aria-label="Navigasi admin">
-              {!sidebarCollapsed && (
-                <div className="px-2 mb-2">
-                  <h3 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Navigation</h3>
+            <nav className="space-y-5" aria-label="Navigasi admin">
+              {filteredSections.map((section) => (
+                <div key={section.id}>
+                  {!sidebarCollapsed && (
+                    <h3 className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                      {section.label}
+                    </h3>
+                  )}
+                  <div className="space-y-0.5">{section.items.map(renderSidebarItem)}</div>
                 </div>
-              )}
-              {filteredItems.map(renderSidebarItem)}
+              ))}
             </nav>
           </div>
           <div className="border-t p-2">
@@ -150,8 +156,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   </svg>
                 </button>
               </div>
-              <nav className="p-3 space-y-0.5" aria-label="Navigasi admin mobile">
-                {filteredItems.map(renderSidebarItem)}
+              <nav className="p-3 space-y-5" aria-label="Navigasi admin mobile">
+                {filteredSections.map((section) => (
+                  <div key={section.id}>
+                    <h3 className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                      {section.label}
+                    </h3>
+                    <div className="space-y-0.5">{section.items.map(renderSidebarItem)}</div>
+                  </div>
+                ))}
               </nav>
             </aside>
           </div>

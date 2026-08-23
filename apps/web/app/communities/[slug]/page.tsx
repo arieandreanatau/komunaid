@@ -59,6 +59,7 @@ interface Community {
   settings: { showMemberList: boolean; showEventList: boolean };
   userMembership: { role: string; status: string } | null;
   pendingJoinRequests: number;
+  createdAt?: string;
 }
 
 const TAG_COLORS = [
@@ -126,6 +127,18 @@ export default function CommunityDetailPage() {
     try { await api.post(`/communities/${community.id}/leave`); fetchCommunity(); }
     catch (err: any) { alert(err?.response?.data?.message || "Gagal keluar dari komunitas."); }
     finally { setActionLoading(false); }
+  };
+
+  const handleShare = async () => {
+    const url = typeof window !== "undefined" ? window.location.href : `/communities/${slug}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: community?.name, url });
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(url);
+        alert("Link komunitas disalin.");
+      }
+    } catch {}
   };
 
   const isOwner = user && community && user.id === community.owner.id;
@@ -222,8 +235,22 @@ export default function CommunityDetailPage() {
                   <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${community.membershipType === "OPEN" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{community.membershipType === "OPEN" ? "Terbuka" : "Terbatas"}</span>
                 </div>
                 {community.location && <p className="flex items-center gap-1 text-sm text-gray-500"><svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>{community.location}</p>}
+                <p className="flex items-center gap-1.5 text-sm text-gray-500">
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                  {community.memberCount} anggota
+                </p>
               </div>
-              <div className="flex-shrink-0">{renderActions()}</div>
+              <div className="flex flex-shrink-0 items-center gap-2">
+                <button
+                  onClick={handleShare}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-komuna-cream transition-colors text-sm"
+                  title="Bagikan komunitas"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+                  Bagikan
+                </button>
+                {renderActions()}
+              </div>
             </div>
           </div>
 
@@ -329,6 +356,41 @@ export default function CommunityDetailPage() {
             </div>
 
             <div className="space-y-6">
+              <div className="bg-white rounded-xl shadow-sm p-6">
+                <h3 className="text-sm font-medium text-gray-500 mb-4">Informasi Komunitas</h3>
+                <div className="space-y-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-gray-500">Tipe</span>
+                    <span className="font-medium text-komuna-navy text-right capitalize">{community.membershipType.toLowerCase() === "open" ? "Komunitas Terbuka" : "Komunitas Terbatas"}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-gray-500">Status</span>
+                    <span className="font-medium text-komuna-navy text-right capitalize">{community.status.toLowerCase()}</span>
+                  </div>
+                  {community.createdAt && (
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-gray-500">Berdiri</span>
+                      <span className="font-medium text-komuna-navy text-right">{new Date(community.createdAt).toLocaleDateString("id-ID", { month: "long", year: "numeric" })}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-gray-500">Keanggotaan</span>
+                    <span className="font-medium text-komuna-navy text-right">{community.memberCount} anggota</span>
+                  </div>
+                  {community.location && (
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-gray-500">Lokasi</span>
+                      <span className="font-medium text-komuna-navy text-right">{community.location}</span>
+                    </div>
+                  )}
+                  {community.website && (
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-gray-500">Situs</span>
+                      <a href={community.website} target="_blank" rel="noopener noreferrer" className="font-medium text-komuna-blue text-right hover:underline truncate max-w-[55%]">{community.website.replace(/^https?:\/\//, "").slice(0, 30)}</a>
+                    </div>
+                  )}
+                </div>
+              </div>
               <div className="bg-white rounded-xl shadow-sm p-6">
                 <h3 className="text-sm font-medium text-gray-500 mb-3">Pemilik</h3>
                 <div className="flex items-center gap-3">

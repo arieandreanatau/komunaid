@@ -3,8 +3,8 @@ import { test, expect } from "@playwright/test";
 test.describe("Admin - Login", () => {
   test("loads admin login page", async ({ page }) => {
     await page.goto("/admin/login");
-    await expect(page.getByText("Admin Panel")).toBeVisible();
-    await expect(page.getByText("Masuk ke Admin Panel")).toBeVisible();
+    await expect(page.getByText("Admin Panel").first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Masuk ke Admin Panel" })).toBeVisible();
   });
 
   test("displays login form with all fields", async ({ page }) => {
@@ -76,13 +76,13 @@ test.describe("Admin - Login", () => {
 
   test("page has KomunaID branding", async ({ page }) => {
     await page.goto("/admin/login");
-    await expect(page.locator("a").filter({ hasText: "KomunaID" }).first()).toBeVisible();
+    await expect(page.getByText("KomunaID Administration Panel")).toBeVisible();
   });
 
   test("admin login page is responsive", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/admin/login");
-    await expect(page.getByText("Masuk ke Admin Panel")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Masuk ke Admin Panel" })).toBeVisible();
   });
 
   test("admin access page redirects correctly", async ({ page }) => {

@@ -27,7 +27,7 @@ export default async function HomePage() {
   const [communities, events, volunteers] = await Promise.all([
     fetchPublic<HomepageCommunity[]>("communities?limit=24&sort=desc&orderBy=memberCount", []),
     fetchPublic<HomepageEvent[]>("events/popular/upcoming", []),
-    fetchPublic<HomepageVolunteer[]>("volunteer?limit=6&status=OPEN", []),
+    fetchPublic<HomepageVolunteer[]>("volunteer-programs?limit=6&status=REGISTRATION_OPEN", []),
   ]);
 
   return (

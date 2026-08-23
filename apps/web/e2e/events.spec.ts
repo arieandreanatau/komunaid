@@ -47,15 +47,15 @@ test.describe("Events Listing", () => {
 
   test("loads the events directory page", async ({ page }) => {
     await page.goto("/events");
-    await expect(page.getByRole("heading", { name: "Direktori Event" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Temukan Event yang Kamu Sukai" })).toBeVisible();
   });
 
-  test("displays status filter tabs", async ({ page }) => {
+  test("displays section filter tabs", async ({ page }) => {
     await page.goto("/events");
-    await expect(page.getByRole("button", { name: "Semua" }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Jelajahi" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Unggulan" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Mendatang" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Berlangsung" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Selesai" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Populer" })).toBeVisible();
   });
 
   test("displays location type filter", async ({ page }) => {
@@ -97,14 +97,14 @@ test.describe("Events Listing", () => {
   test("page is responsive on mobile", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/events");
-    await expect(page.getByRole("heading", { name: "Direktori Event" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Temukan Event yang Kamu Sukai" })).toBeVisible();
   });
 
-  test("clicking status tab changes the filter", async ({ page }) => {
+  test("clicking section tab changes the filter", async ({ page }) => {
     await page.goto("/events");
     const upcomingTab = page.getByRole("button", { name: "Mendatang" });
     await upcomingTab.click();
-    await expect(upcomingTab).toHaveClass(/bg-komuna-forest/);
+    await expect(upcomingTab).toHaveClass(/border-komuna-forest/);
   });
 });
 

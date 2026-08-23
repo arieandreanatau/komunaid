@@ -19,6 +19,38 @@ settingsRoutes.get("/settings", async (c) => {
   return c.json({ success: true, data: settingsMap });
 });
 
+settingsRoutes.get("/master-data/stats", async (c) => {
+  const [categories, provinces, cities, countries, interests, districts, kelurahan, tags, roles] = await Promise.all([
+    prisma.category.count(),
+    prisma.setting.findUnique({ where: { key: "master_provinces" } }),
+    prisma.setting.findUnique({ where: { key: "master_cities" } }),
+    prisma.setting.findUnique({ where: { key: "master_countries" } }),
+    prisma.setting.findUnique({ where: { key: "master_interests" } }),
+    prisma.setting.findUnique({ where: { key: "master_districts" } }),
+    prisma.setting.findUnique({ where: { key: "master_kelurahan" } }),
+    prisma.setting.findUnique({ where: { key: "master_tags" } }),
+    prisma.userRole.findMany({ select: { role: true }, distinct: ["role"] }),
+  ]);
+  const len = (setting: { value: any } | null) => Array.isArray(setting?.value) ? setting.value.length : 0;
+  const totalLocations = len(provinces) + len(cities) + len(countries) + len(districts) + len(kelurahan);
+  return c.json({
+    success: true,
+    data: {
+      categories,
+      provinces: len(provinces),
+      cities: len(cities),
+      countries: len(countries),
+      interests: len(interests),
+      districts: len(districts),
+      kelurahan: len(kelurahan),
+      tags: len(tags),
+      totalCategories: categories,
+      totalLocations,
+      totalRoles: roles.length,
+    },
+  });
+});
+
 settingsRoutes.get("/settings/:key", async (c) => {
   const key = c.req.param("key") as string;
   const setting = await prisma.setting.findUnique({ where: { key } });

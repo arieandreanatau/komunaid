@@ -94,12 +94,7 @@ export async function sendEmail(params: SendEmailParams): Promise<boolean> {
 
   // Development fallback: expose content locally without contacting a provider.
   if (process.env.NODE_ENV !== "production") {
-    console.log("\n========================================");
-    console.log("DEV EMAIL (not actually sent)");
-    console.log("To:", pendingRecipients.join(", "));
-    console.log("Subject:", params.subject);
-    console.log("HTML:\n", params.html);
-    console.log("========================================\n");
+    log.info({ recipientCount: pendingRecipients.length, subject: params.subject }, "dev email skipped (not actually sent)");
     return true;
   }
 

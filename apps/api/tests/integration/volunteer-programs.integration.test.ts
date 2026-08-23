@@ -8,12 +8,17 @@ vi.mock("@komunaid/database", () => {
   const prisma: any = {
     user: { findUnique: vi.fn() },
     userRole: { findMany: vi.fn() },
-    communityMember: { findUnique: vi.fn() },
+    communityMember: { findUnique: vi.fn(), findMany: vi.fn() },
     volunteerProgram: { findUnique: vi.fn(), findMany: vi.fn(), update: vi.fn(), updateMany: vi.fn(), findUniqueOrThrow: vi.fn(), count: vi.fn() },
+    volunteerProgramStatusHistory: { create: vi.fn() },
     volunteerProgramOrganizerAccess: { findUnique: vi.fn(), upsert: vi.fn() },
-    volunteerProgramApplication: { count: vi.fn(), findMany: vi.fn() },
-    volunteerProgramParticipation: { count: vi.fn(), findMany: vi.fn() },
-    auditLog: { create: vi.fn() },
+    volunteerProgramApplication: { count: vi.fn(), findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), updateMany: vi.fn(), findUniqueOrThrow: vi.fn() },
+    volunteerProgramApplicationHistory: { create: vi.fn() },
+    volunteerProgramParticipation: { count: vi.fn(), findMany: vi.fn(), updateMany: vi.fn() },
+    notification: { create: vi.fn(), createMany: vi.fn(), findMany: vi.fn(), count: vi.fn(), findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+    activityHistory: { create: vi.fn() },
+    auditLog: { create: vi.fn(), createMany: vi.fn() },
+    $queryRaw: vi.fn(),
     $transaction: vi.fn(async (fn: any) => typeof fn === "function" ? fn(prisma) : Promise.all(fn)),
   };
   return { prisma };
@@ -24,6 +29,8 @@ vi.mock("pino-pretty", () => ({ default: vi.fn(() => ({})) }));
 
 import { prisma } from "@komunaid/database";
 import { invalidateRoleCache } from "../../src/middleware/rbac";
+import { volunteerProgramRoutes } from "../../src/routes/volunteer-programs";
+import { Hono } from "hono";
 import app from "../../src/app";
 
 const CSRF_TOKEN = "a".repeat(64);
@@ -63,6 +70,7 @@ describe("Volunteer program route authorization", () => {
     (prisma.volunteerProgramParticipation.count as any).mockResolvedValue(0);
     (prisma.volunteerProgramParticipation.findMany as any).mockResolvedValue([]);
     (prisma.auditLog.create as any).mockResolvedValue({});
+    (prisma.volunteerProgramStatusHistory.create as any).mockResolvedValue({});
   });
 
   it("isolates coordinator community program discovery", async () => {
@@ -91,13 +99,19 @@ describe("Volunteer program route authorization", () => {
     const current = program();
     (prisma.volunteerProgram.findUnique as any).mockImplementation(async () => current);
     (prisma.volunteerProgram.update as any).mockImplementation(async ({ data }: any) => Object.assign(current, data, { updatedAt: new Date("2026-08-02T00:00:00.000Z") }));
+    (prisma.volunteerProgram.updateMany as any).mockImplementation(async ({ where, data }: any) => {
+      if (where.status !== current.status) return { count: 0 };
+      Object.assign(current, data);
+      return { count: 1 };
+    });
     const blocked = await app.request("/api/v1/volunteer-programs/program-1/resubmit", { method: "POST", headers: authHeaders(accessToken, true) });
     expect(blocked.status).toBe(400);
     const update = await app.request("/api/v1/volunteer-programs/program-1", { method: "PATCH", headers: authHeaders(accessToken, true), body: JSON.stringify({ description: "Deskripsi proposal sudah direvisi sesuai arahan." }) });
     expect(update.status).toBe(200);
     const resubmitted = await app.request("/api/v1/volunteer-programs/program-1/resubmit", { method: "POST", headers: authHeaders(accessToken, true) });
     expect(resubmitted.status).toBe(200);
-    expect(prisma.volunteerProgram.update).toHaveBeenLastCalledWith({ where: { id: "program-1" }, data: { status: "UNDER_REVIEW", reviewNote: null } });
+    expect(prisma.volunteerProgramStatusHistory.create).toHaveBeenCalledTimes(2);
+    expect(current.status).toBe("UNDER_REVIEW");
   });
 
   it("returns conflict when another superadmin already reviewed proposal", async () => {
@@ -185,5 +199,41 @@ describe("Volunteer program superadmin panel endpoints", () => {
     const body = await response.json();
     expect(body.data[0].volunteer.name).toBe("Budi");
     expect(body.data[0].program.name).toBe("Bersih Pantai");
+  });
+
+  it("returns 409 QUOTA_FULL when a concurrent request consumes the final slot", async () => {
+    const accessToken = await token("applicant-1", ["MEMBER"]);
+    (prisma.userRole.findMany as any).mockResolvedValue([{ role: "MEMBER" }]);
+    (prisma.$queryRaw as any).mockResolvedValue([
+      { id: "program-1", status: "REGISTRATION_OPEN", capacity: 1, registrationDeadline: null, organizerUserId: "owner-1", deletedAt: null },
+    ]);
+    (prisma.volunteerProgramApplication.findUnique as any).mockResolvedValue(null);
+    (prisma.volunteerProgramApplication.count as any).mockResolvedValueOnce(0).mockResolvedValueOnce(1);
+    let createCalls = 0;
+    (prisma.volunteerProgramApplication.create as any).mockImplementation(async (args: any) => {
+      createCalls += 1;
+      return { id: `app-${createCalls}`, volunteerProgramId: "program-1", userId: "applicant-1", motivation: args.data.motivation, status: "PENDING" };
+    });
+    (prisma.volunteerProgramApplicationHistory.create as any).mockResolvedValue({});
+    (prisma.auditLog.create as any).mockResolvedValue({});
+
+    const app = new Hono();
+    app.route("/api/v1/volunteer-programs", volunteerProgramRoutes);
+    const first = await app.request("/api/v1/volunteer-programs/program-1/apply", {
+      method: "POST",
+      headers: authHeaders(accessToken, true),
+      body: JSON.stringify({ motivation: "saya ingin membantu" }),
+    });
+    expect(first.status).toBe(201);
+
+    const second = await app.request("/api/v1/volunteer-programs/program-1/apply", {
+      method: "POST",
+      headers: authHeaders(accessToken, true),
+      body: JSON.stringify({ motivation: "saya ingin membantu" }),
+    });
+    expect(second.status).toBe(409);
+    const secondBody = await second.json();
+    expect(secondBody.code).toBe("QUOTA_FULL");
+    expect(createCalls).toBe(1);
   });
 });

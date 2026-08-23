@@ -47,6 +47,13 @@ vi.mock("@komunaid/database", () => {
         Object.assign(e, data);
         return e;
       }),
+      updateMany: vi.fn(async ({ where, data }: any) => {
+        const e = events.get(where.id);
+        // Handler-specific tests override findUnique and do not share a DB fixture.
+        // Treat conditional writes as successful; race behavior has dedicated tests.
+        if (e) Object.assign(e, data);
+        return { count: 1 };
+      }),
       count: vi.fn(async () => events.size),
       findFirst: vi.fn(async ({ where }: any) => events.get(where.id) || null),
     },
@@ -96,6 +103,7 @@ vi.mock("@komunaid/database", () => {
     volunteerOpportunity: { findMany: vi.fn(async () => []), updateMany: vi.fn(async () => ({ count: 0 })) },
     volunteerApplication: { findMany: vi.fn(async () => []), updateMany: vi.fn(async () => ({ count: 0 })) },
     eventCategory: { deleteMany: vi.fn(async () => ({ count: 0 })), createMany: vi.fn(async () => ({ count: 0 })) },
+    eventStatusHistory: { create: vi.fn(async ({ data }: any) => ({ id: `history-${Date.now()}`, ...data })) },
     user: { findUnique: vi.fn(async () => null) },
     $transaction: vi.fn(async (fn: any) => { if (typeof fn === "function") return fn(prisma); return Promise.all(fn); }),
     $queryRaw: vi.fn(async () => []),
@@ -128,6 +136,7 @@ describe("Events Integration Tests", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    (prisma.userRole.findMany as any).mockResolvedValue([]);
     app = new Hono();
     app.onError((err, c) => {
       if (err.message === "Unauthorized") {
@@ -211,6 +220,10 @@ describe("Events Integration Tests", () => {
         deletedAt: null, quota: 100, allowWaitlist: false, createdById: "user-2",
         _count: { registrations: 0 },
       });
+      (prisma.$queryRaw as any).mockResolvedValue([{
+        quota: 100, status: "REGISTRATION_OPEN", allowWaitlist: false,
+        registrationOpensAt: null, registrationDeadline: null, deletedAt: null,
+      }]);
       (prisma.eventRegistration.findUnique as any).mockResolvedValue({
         id: "reg-1", userId: "user-1", eventId: "event-1", status: "CONFIRMED",
       });

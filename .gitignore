@@ -50,3 +50,6 @@ public/uploads/
 .cache/
 .vercel
 .env*
+
+# Scratch work (never committed)
+.scratch/

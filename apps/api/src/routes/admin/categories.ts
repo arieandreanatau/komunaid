@@ -4,6 +4,7 @@ import { validate } from "../../middleware/validate";
 import { adminCreateCategorySchema, adminUpdateCategorySchema } from "@komunaid/shared";
 import { createAuditLog, AuditActions } from "../../services/audit";
 import { isUniqueConstraintError } from "../../lib/slug";
+import { requireSuperAdmin } from "../../middleware/rbac";
 import type { AuthUser } from "../../middleware/auth";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
@@ -50,7 +51,7 @@ categoriesRoutes.get("/categories", async (c) => {
   });
 });
 
-categoriesRoutes.post("/categories", validate(adminCreateCategorySchema), async (c) => {
+categoriesRoutes.post("/categories", requireSuperAdmin(), validate(adminCreateCategorySchema), async (c) => {
   const authUser = c.get("user");
   const data = c.get("validated");
   const { name, description, icon, type } = data as { name: string; description?: string; icon?: string; type?: string };
@@ -93,7 +94,7 @@ categoriesRoutes.post("/categories", validate(adminCreateCategorySchema), async 
   }
 });
 
-categoriesRoutes.put("/categories/:categoryId", validate(adminUpdateCategorySchema), async (c) => {
+categoriesRoutes.put("/categories/:categoryId", requireSuperAdmin(), validate(adminUpdateCategorySchema), async (c) => {
   const authUser = c.get("user");
   const categoryId = c.req.param("categoryId") as string;
   const data = c.get("validated");
@@ -128,7 +129,7 @@ categoriesRoutes.put("/categories/:categoryId", validate(adminUpdateCategorySche
   return c.json({ success: true, data: updated });
 });
 
-categoriesRoutes.delete("/categories/:categoryId", async (c) => {
+categoriesRoutes.delete("/categories/:categoryId", requireSuperAdmin(), async (c) => {
   const authUser = c.get("user");
   const categoryId = c.req.param("categoryId") as string;
 

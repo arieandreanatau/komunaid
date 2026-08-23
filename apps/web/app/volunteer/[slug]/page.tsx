@@ -2,114 +2,162 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { Breadcrumbs } from "@/components/breadcrumbs";
-import { useAuth } from "@/components/auth-provider";
 import { Modal } from "@/components/ui/modal";
-import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import api from "@/lib/api";
 
-interface Position {
-  id: string;
-  name: string;
-  description: string;
-  requiredQty: number;
-  requirement: string;
-  remainingSlot: number;
-  applicationCount: number;
-}
-
-interface VolunteerOpportunity {
+interface VolunteerProgramDetail {
   id: string;
   title: string;
   slug: string;
   description: string;
   status: string;
-  registrationDeadline: string;
-  briefingDate: string;
+  location: string | null;
+  registrationDeadline: string | null;
   activityStartDate: string;
   activityEndDate: string;
+  capacity: number;
+  applicationCount: number;
+  acceptedCount: number;
+  slotsLeft: number;
+  organizer: { id: string; name: string; slug?: string; avatar?: string | null } | null;
   event: {
     id: string;
     title: string;
     slug: string;
     eventDate: string;
-    endDate: string;
-    location: string;
-    locationType: string;
-    status: string;
+    endDate: string | null;
+    location: string | null;
     community: { id: string; name: string; slug: string } | null;
     organization: { id: string; name: string; slug: string } | null;
   };
-  createdBy: { id: string; name: string; avatar: string };
-  positions: Position[];
+  userApplication: {
+    id: string;
+    status: string;
+    motivation: string | null;
+    reviewNote: string | null;
+    createdAt: string;
+  } | null;
+}
+
+interface VolunteerListItem {
+  id: string;
+  title: string;
+  slug: string;
+  description: string;
+  status: string;
+  location: string | null;
+  startDate: string;
+  organizer?: { id: string; name: string } | null;
   applicationCount: number;
-  userApplication: any;
+  capacity: number;
+}
+
+const STATUS_STYLES: Record<string, string> = {
+  DRAFT: "bg-gray-100 text-gray-700",
+  SUBMITTED: "bg-yellow-100 text-yellow-700",
+  UNDER_REVIEW: "bg-yellow-100 text-yellow-700",
+  REVISION_REQUIRED: "bg-yellow-100 text-yellow-700",
+  APPROVED: "bg-green-100 text-green-700",
+  SCHEDULED: "bg-blue-100 text-blue-700",
+  REGISTRATION_OPEN: "bg-green-100 text-green-700",
+  REGISTRATION_CLOSED: "bg-red-100 text-red-700",
+  ONGOING: "bg-purple-100 text-purple-700",
+  COMPLETED: "bg-gray-200 text-gray-700",
+  CANCELLED: "bg-red-100 text-red-700",
+  ARCHIVED: "bg-gray-200 text-gray-700",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  DRAFT: "Draft",
+  SUBMITTED: "Dikirim",
+  UNDER_REVIEW: "Dalam Review",
+  REVISION_REQUIRED: "Perlu Revisi",
+  APPROVED: "Disetujui",
+  SCHEDULED: "Terjadwal",
+  REGISTRATION_OPEN: "Pendaftaran Dibuka",
+  REGISTRATION_CLOSED: "Pendaftaran Ditutup",
+  ONGOING: "Berlangsung",
+  COMPLETED: "Selesai",
+  CANCELLED: "Dibatalkan",
+  ARCHIVED: "Diarsipkan",
+};
+
+const APPLICATION_STYLES: Record<string, string> = {
+  PENDING: "bg-blue-100 text-blue-700",
+  ACCEPTED: "bg-green-100 text-green-700",
+  REJECTED: "bg-red-100 text-red-700",
+  CANCELLED_BY_USER: "bg-gray-100 text-gray-600",
+  CANCELLED_BY_ORGANIZER: "bg-gray-100 text-gray-600",
+};
+
+const APPLICATION_LABELS: Record<string, string> = {
+  PENDING: "Menunggu Review",
+  ACCEPTED: "Diterima",
+  REJECTED: "Ditolak",
+  CANCELLED_BY_USER: "Dibatalkan",
+  CANCELLED_BY_ORGANIZER: "Dibatalkan Organizer",
+};
+
+function badgeClass(map: Record<string, string>, key: string) {
+  return map[key] || "bg-gray-100 text-gray-700";
 }
 
 export default function VolunteerDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const slug = params.slug as string;
-  const { isAuthenticated, user } = useAuth();
 
-  const [opportunity, setOpportunity] = useState<VolunteerOpportunity | null>(null);
+  const [opportunity, setOpportunity] = useState<VolunteerProgramDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [showApplyModal, setShowApplyModal] = useState(false);
-  const [selectedPosition, setSelectedPosition] = useState<string>("");
   const [applying, setApplying] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [formError, setFormError] = useState("");
-  const [related, setRelated] = useState<VolunteerOpportunity[]>([]);
-
-  const [form, setForm] = useState({
-    motivation: "",
-    experience: "",
-    availability: "",
-    agreement: false,
-  });
+  const [related, setRelated] = useState<VolunteerListItem[]>([]);
+  const [form, setForm] = useState({ motivation: "", agreement: false });
 
   useEffect(() => {
-    fetchOpportunity();
+    let cancelled = false;
+    const fetchOpportunity = async () => {
+      try {
+        const { data } = await api.get(`/volunteer-programs/detail/${slug}`);
+        if (!cancelled) {
+          setOpportunity(data.data);
+          setError(false);
+        }
+      } catch {
+        if (!cancelled) setError(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    void fetchOpportunity();
+    return () => { cancelled = true; };
   }, [slug]);
-
-  const fetchOpportunity = async () => {
-    try {
-      const { data } = await api.get(`/volunteer/detail/${slug}`);
-      setOpportunity(data.data);
-    } catch {
-      console.error("Failed to fetch opportunity");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   useEffect(() => {
     if (!opportunity) return;
+    let cancelled = false;
     const fetchRelated = async () => {
       try {
-        const { data } = await api.get("/volunteer?limit=3");
-        setRelated(
-          (data.data as VolunteerOpportunity[]).filter(
-            (o) => o.id !== opportunity.id
-          )
-        );
+        const { data } = await api.get("/volunteer-programs?limit=3&sort=asc&orderBy=startDate");
+        if (!cancelled) {
+          setRelated((data.data as VolunteerListItem[]).filter((o) => o.id !== opportunity.id));
+        }
       } catch {
-        // ignore
+        // related list is non-critical
       }
     };
-    fetchRelated();
+    void fetchRelated();
+    return () => { cancelled = true; };
   }, [opportunity]);
 
   const handleApply = async () => {
-    if (!selectedPosition) {
-      setFormError("Pilih posisi terlebih dahulu");
-      return;
-    }
     if (!form.motivation || form.motivation.length < 10) {
       setFormError("Motivasi minimal 10 karakter");
       return;
@@ -122,16 +170,11 @@ export default function VolunteerDetailPage() {
     try {
       setApplying(true);
       setFormError("");
-      await api.post(`/volunteer/${opportunity!.id}/apply`, {
-        positionId: selectedPosition,
-        motivation: form.motivation,
-        experience: form.experience,
-        availability: form.availability,
-        agreement: true,
-      });
+      await api.post(`/volunteer-programs/${opportunity!.id}/apply`, { motivation: form.motivation });
       setShowApplyModal(false);
-      setForm({ motivation: "", experience: "", availability: "", agreement: false });
-      fetchOpportunity();
+      setForm({ motivation: "", agreement: false });
+      const { data } = await api.get(`/volunteer-programs/detail/${slug}`);
+      setOpportunity(data.data);
     } catch (error: any) {
       setFormError(error.response?.data?.message || "Gagal mendaftar");
     } finally {
@@ -140,15 +183,30 @@ export default function VolunteerDetailPage() {
   };
 
   const handleCancelApplication = async () => {
-    if (!confirm("Yakin ingin membatalkan pendaftaran?")) return;
+    if (!window.confirm("Yakin ingin membatalkan pendaftaran?")) return;
     try {
       setCancelling(true);
-      await api.delete(`/volunteer/${opportunity!.id}/apply`);
-      fetchOpportunity();
+      await api.delete(`/volunteer-programs/${opportunity!.id}/apply`);
+      const { data } = await api.get(`/volunteer-programs/detail/${slug}`);
+      setOpportunity(data.data);
     } catch (error: any) {
-      alert(error.response?.data?.message || "Gagal membatalkan");
+      window.alert(error.response?.data?.message || "Gagal membatalkan");
     } finally {
       setCancelling(false);
+    }
+  };
+
+  const handleShare = async () => {
+    try {
+      const url = window.location.href;
+      if (navigator.share) {
+        await navigator.share({ title: opportunity?.title || "Volunteer KomunaID", url });
+      } else {
+        await navigator.clipboard.writeText(url);
+        window.alert("Tautan volunteer disalin");
+      }
+    } catch {
+      // user cancelled share
     }
   };
 
@@ -158,37 +216,16 @@ export default function VolunteerDetailPage() {
       day: "numeric",
       month: "long",
       year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
     });
   };
 
-  const formatShortDate = (dateStr: string) =>
-    new Date(dateStr).toLocaleDateString("id-ID", {
+  const formatShortDate = (dateStr?: string | null) => {
+    if (!dateStr) return "Tanggal menyusul";
+    return new Date(dateStr).toLocaleDateString("id-ID", {
       day: "numeric",
       month: "long",
       year: "numeric",
     });
-
-  const getStatusBadge = (status: string) => {
-    const styles: Record<string, string> = {
-      DRAFT: "bg-gray-100 text-gray-700",
-      PUBLISHED: "bg-blue-100 text-blue-700",
-      OPEN: "bg-green-100 text-green-700",
-      CLOSED: "bg-red-100 text-red-700",
-      ARCHIVED: "bg-yellow-100 text-yellow-700",
-    };
-    return styles[status] || "bg-gray-100 text-gray-700";
-  };
-
-  const getApplicationStatusBadge = (status: string) => {
-    const styles: Record<string, string> = {
-      APPLIED: "bg-blue-100 text-blue-700",
-      REVIEWED: "bg-yellow-100 text-yellow-700",
-      ACCEPTED: "bg-green-100 text-green-700",
-      REJECTED: "bg-red-100 text-red-700",
-    };
-    return styles[status] || "bg-gray-100 text-gray-700";
   };
 
   if (loading) {
@@ -206,7 +243,7 @@ export default function VolunteerDetailPage() {
     );
   }
 
-  if (!opportunity) {
+  if (error || !opportunity) {
     return (
       <div className="min-h-screen flex flex-col bg-komuna-cream">
         <Header />
@@ -230,7 +267,10 @@ export default function VolunteerDetailPage() {
   }
 
   const userApp = opportunity.userApplication;
-  const canApply = !userApp && ["PUBLISHED", "OPEN"].includes(opportunity.status) && opportunity.event.status !== "COMPLETED";
+  const deadlinePassed = opportunity.registrationDeadline ? new Date(opportunity.registrationDeadline).getTime() < Date.now() : false;
+  const quotaFull = opportunity.slotsLeft <= 0;
+  const hasActiveApp = Boolean(userApp && ["PENDING", "ACCEPTED"].includes(userApp.status));
+  const canApply = !hasActiveApp && opportunity.status === "REGISTRATION_OPEN" && !deadlinePassed && !quotaFull;
 
   return (
     <div className="min-h-screen flex flex-col bg-komuna-cream">
@@ -255,52 +295,67 @@ export default function VolunteerDetailPage() {
           </div>
 
           <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
-            <div className="h-40 bg-gradient-to-br from-komuna-teal to-komuna-aqua flex items-center justify-center">
-              <span className="text-white text-5xl font-bold">{opportunity.title[0]}</span>
+            <div className="h-44 relative bg-gradient-to-br from-komuna-teal to-komuna-blue flex items-center justify-center">
+              <span className="text-white text-6xl font-bold opacity-30">{opportunity.title.slice(0, 1)}</span>
+              <span className={`absolute top-3 left-3 px-2.5 py-1 text-xs font-bold rounded-full bg-white/90 ${badgeClass(STATUS_STYLES, opportunity.status)}`}>
+                {STATUS_LABELS[opportunity.status] || opportunity.status}
+              </span>
             </div>
 
             <div className="p-6">
               <div className="flex items-start justify-between mb-3">
-                <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${getStatusBadge(opportunity.status)}`}>
-                  {opportunity.status}
-                </span>
+                <div>
+                  <h1 className="text-2xl font-bold text-komuna-navy">{opportunity.title}</h1>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {opportunity.organizer?.name ? `oleh ${opportunity.organizer.name}` : "Volunteer Program"}
+                  </p>
+                </div>
                 {userApp && (
-                  <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${getApplicationStatusBadge(userApp.status)}`}>
-                    {userApp.status}
+                  <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${badgeClass(APPLICATION_STYLES, userApp.status)}`}>
+                    {APPLICATION_LABELS[userApp.status] || userApp.status}
                   </span>
                 )}
               </div>
 
-              <h1 className="text-2xl font-bold text-komuna-navy mb-2">{opportunity.title}</h1>
-
               <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500 mb-4">
-                <div className="flex items-center gap-1">
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  <span>{opportunity.event.title}</span>
-                </div>
-                {opportunity.event.location && (
-                  <div className="flex items-center gap-1">
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    <span>{opportunity.event.location}</span>
-                  </div>
-                )}
                 <span>{opportunity.applicationCount} pendaftar</span>
+                {opportunity.location && (
+                  <span className="flex items-center gap-1">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0zM15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    {opportunity.location}
+                  </span>
+                )}
               </div>
 
-              {opportunity.event.community && (
-                <div className="text-sm text-komuna-blue mb-4">
-                  oleh <Link href={`/communities/${opportunity.event.community.slug}`} className="underline">{opportunity.event.community.name}</Link>
+              <div className="grid grid-cols-3 gap-3 mb-5">
+                <div className="bg-komuna-cream rounded-lg p-3 text-center">
+                  <p className="text-xl font-bold text-komuna-navy">{opportunity.capacity}</p>
+                  <p className="text-xs text-gray-500">Kuota</p>
                 </div>
-              )}
+                <div className="bg-komuna-cream rounded-lg p-3 text-center">
+                  <p className="text-xl font-bold text-komuna-navy">{opportunity.slotsLeft}</p>
+                  <p className="text-xs text-gray-500">Slot Tersisa</p>
+                </div>
+                <div className="bg-komuna-cream rounded-lg p-3 text-center">
+                  <p className="text-xl font-bold text-komuna-navy">{opportunity.applicationCount}</p>
+                  <p className="text-xs text-gray-500">Pendaftar</p>
+                </div>
+              </div>
 
-              {opportunity.event.organization && (
-                <div className="text-sm text-komuna-blue mb-4">
-                  oleh <Link href={`/organizations/${opportunity.event.organization.slug}`} className="underline">{opportunity.event.organization.name}</Link>
+              {opportunity.capacity > 0 && (
+                <div className="mb-6">
+                  <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+                    <span>Kuota terisi</span>
+                    <span>{opportunity.acceptedCount}/{opportunity.capacity}</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${quotaFull ? "bg-red-500" : "bg-komuna-teal"}`}
+                      style={{ width: `${Math.min(100, Math.round((opportunity.acceptedCount / opportunity.capacity) * 100))}%` }}
+                    />
+                  </div>
                 </div>
               )}
 
@@ -309,55 +364,65 @@ export default function VolunteerDetailPage() {
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-                {opportunity.activityStartDate && (
-                  <div className="bg-komuna-cream rounded-lg p-3">
-                    <p className="text-xs text-gray-500 mb-1">Tanggal Aktivitas</p>
-                    <p className="text-sm font-medium text-gray-900">
-                      {formatDate(opportunity.activityStartDate)}
-                      {opportunity.activityEndDate && ` - ${formatDate(opportunity.activityEndDate)}`}
-                    </p>
-                  </div>
-                )}
-                {opportunity.briefingDate && (
-                  <div className="bg-komuna-cream rounded-lg p-3">
-                    <p className="text-xs text-gray-500 mb-1">Briefing Volunteer</p>
-                    <p className="text-sm font-medium text-gray-900">{formatDate(opportunity.briefingDate)}</p>
-                  </div>
-                )}
+                <div className="bg-komuna-cream rounded-lg p-3">
+                  <p className="text-xs text-gray-500 mb-1">Jadwal Aktivitas</p>
+                  <p className="text-sm font-medium text-gray-900">
+                    {formatDate(opportunity.activityStartDate)}
+                    {opportunity.activityEndDate && ` - ${formatDate(opportunity.activityEndDate)}`}
+                  </p>
+                </div>
                 {opportunity.registrationDeadline && (
                   <div className="bg-komuna-cream rounded-lg p-3">
                     <p className="text-xs text-gray-500 mb-1">Batas Pendaftaran</p>
-                    <p className="text-sm font-medium text-gray-900">{formatDate(opportunity.registrationDeadline)}</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {formatDate(opportunity.registrationDeadline)}
+                      {deadlinePassed && <span className="ml-2 text-xs font-bold text-red-600">(lewat)</span>}
+                    </p>
                   </div>
                 )}
               </div>
-            </div>
-          </div>
 
-          <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-            <h2 className="text-lg font-semibold text-komuna-navy mb-4">Posisi Volunteer</h2>
-            <div className="space-y-4">
-              {opportunity.positions.map((pos) => (
-                <div key={pos.id} className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="font-medium text-gray-900">{pos.name}</h3>
-                    <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-                      pos.remainingSlot > 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                    }`}>
-                      {pos.remainingSlot > 0 ? `${pos.remainingSlot} slot tersisa` : "Penuh"}
-                    </span>
+              <div className="flex flex-col sm:flex-row gap-3">
+                {canApply && (
+                  <button
+                    onClick={() => setShowApplyModal(true)}
+                    className="flex-1 py-3 bg-komuna-blue text-white rounded-lg hover:bg-komuna-navy transition-colors font-medium"
+                  >
+                    Daftar Volunteer
+                  </button>
+                )}
+                {!canApply && !userApp && (
+                  <div className="flex-1 rounded-lg bg-slate-50 px-4 py-3 text-center text-sm font-medium text-gray-500 border border-gray-100">
+                    {quotaFull
+                      ? "Kuota program sudah penuh"
+                      : deadlinePassed
+                        ? "Batas pendaftaran sudah lewat"
+                        : opportunity.status === "REGISTRATION_CLOSED"
+                          ? "Pendaftaran ditutup"
+                          : "Pendaftaran belum dibuka"}
                   </div>
-                  {pos.description && <p className="text-sm text-gray-600 mb-2">{pos.description}</p>}
-                  {pos.requirement && (
-                    <p className="text-xs text-gray-500">
-                      <span className="font-medium">Persyaratan:</span> {pos.requirement}
-                    </p>
-                  )}
-                  <p className="text-xs text-gray-400 mt-1">
-                    {pos.applicationCount}/{pos.requiredQty} terisi
-                  </p>
-                </div>
-              ))}
+                )}
+                {userApp && ["PENDING", "ACCEPTED"].includes(userApp.status) && (
+                  <button
+                    onClick={handleCancelApplication}
+                    disabled={cancelling}
+                    className="flex-1 py-3 text-sm text-red-600 border border-red-300 rounded-lg hover:bg-red-50 disabled:opacity-50 font-medium"
+                  >
+                    {cancelling ? "Membatalkan..." : "Batalkan Pendaftaran"}
+                  </button>
+                )}
+                <button
+                  onClick={handleShare}
+                  className="px-5 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-komuna-cream transition-colors font-medium"
+                >
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 0a3 3 0 11-5.367 2.684 3 3 0 015.367-2.684z" />
+                    </svg>
+                    Bagikan
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -367,59 +432,22 @@ export default function VolunteerDetailPage() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-500">Status</span>
-                  <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${getApplicationStatusBadge(userApp.status)}`}>
-                    {userApp.status}
+                  <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${badgeClass(APPLICATION_STYLES, userApp.status)}`}>
+                    {APPLICATION_LABELS[userApp.status] || userApp.status}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-500">Posisi</span>
-                  <span className="text-sm font-medium text-gray-900">{userApp.position.name}</span>
+                  <span className="text-sm text-gray-500">Tanggal Daftar</span>
+                  <span className="text-sm font-medium text-gray-900">{formatDate(userApp.createdAt)}</span>
                 </div>
-                {userApp.assignment && (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-500">Shift</span>
-                      <span className="text-sm font-medium text-gray-900">
-                        {userApp.assignment.shiftStart ? formatDate(userApp.assignment.shiftStart) : "-"}
-                        {userApp.assignment.shiftEnd ? ` - ${formatDate(userApp.assignment.shiftEnd)}` : ""}
-                      </span>
-                    </div>
-                    {userApp.assignment.attendance && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-500">Absensi</span>
-                        <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${
-                          userApp.assignment.attendance.status === "CHECKED_OUT"
-                            ? "bg-green-100 text-green-700"
-                            : userApp.assignment.attendance.status === "CHECKED_IN"
-                            ? "bg-blue-100 text-blue-700"
-                            : "bg-gray-100 text-gray-700"
-                        }`}>
-                          {userApp.assignment.attendance.status.replace("_", " ")}
-                        </span>
-                      </div>
-                    )}
-                  </>
-                )}
-                {userApp.status === "APPLIED" && (
-                  <button
-                    onClick={handleCancelApplication}
-                    disabled={cancelling}
-                    className="w-full mt-2 py-2 text-sm text-red-600 border border-red-300 rounded-lg hover:bg-red-50 disabled:opacity-50"
-                  >
-                    {cancelling ? "Membatalkan..." : "Batalkan Pendaftaran"}
-                  </button>
+                {userApp.reviewNote && (
+                  <div className="rounded-lg bg-slate-50 p-3">
+                    <p className="text-xs text-gray-500 mb-1">Catatan Review</p>
+                    <p className="text-sm text-gray-800">{userApp.reviewNote}</p>
+                  </div>
                 )}
               </div>
             </div>
-          )}
-
-          {canApply && (
-            <button
-              onClick={() => setShowApplyModal(true)}
-              className="w-full py-3 bg-komuna-blue text-white rounded-lg hover:bg-komuna-navy transition-colors font-medium"
-            >
-              Daftar Volunteer
-            </button>
           )}
 
           {related.length > 0 && (
@@ -433,31 +461,17 @@ export default function VolunteerDetailPage() {
                     className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 hover:shadow-md transition-shadow"
                   >
                     <div className="flex items-start justify-between mb-3">
-                      <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatusBadge(opp.status)}`}>
-                        {opp.status}
+                      <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${badgeClass(STATUS_STYLES, opp.status)}`}>
+                        {STATUS_LABELS[opp.status] || opp.status}
                       </span>
-                      {opp.activityStartDate && (
-                        <span className="text-xs text-gray-500">{formatShortDate(opp.activityStartDate)}</span>
-                      )}
+                      <span className="text-xs text-gray-500">{formatShortDate(opp.startDate)}</span>
                     </div>
                     <h3 className="font-semibold text-komuna-navy mb-2 line-clamp-2">{opp.title}</h3>
                     {opp.description && (
                       <p className="text-sm text-gray-500 mb-3 line-clamp-2">{opp.description}</p>
                     )}
-                    <div className="flex items-center gap-2 text-xs text-gray-500 mb-3">
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      <span>{opp.event.title}</span>
-                    </div>
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {opp.positions.map((pos) => (
-                        <span key={pos.id} className="px-2 py-0.5 text-xs bg-komuna-teal/10 text-komuna-teal rounded-full">
-                          {pos.name}
-                        </span>
-                      ))}
-                    </div>
                     <div className="flex items-center justify-between text-xs text-gray-500">
+                      <span>{opp.location || "Lokasi menyusul"}</span>
                       <span>{opp.applicationCount} pendaftar</span>
                     </div>
                   </Link>
@@ -478,21 +492,6 @@ export default function VolunteerDetailPage() {
         )}
 
         <div className="space-y-4">
-          <Select
-            label="Pilih Posisi *"
-            value={selectedPosition}
-            onChange={(e) => setSelectedPosition(e.target.value)}
-          >
-            <option value="">-- Pilih Posisi --</option>
-            {opportunity.positions
-              .filter((p) => p.remainingSlot > 0)
-              .map((pos) => (
-                <option key={pos.id} value={pos.id}>
-                  {pos.name} ({pos.remainingSlot} slot tersisa)
-                </option>
-              ))}
-          </Select>
-
           <Textarea
             label="Motivasi *"
             value={form.motivation}
@@ -500,23 +499,6 @@ export default function VolunteerDetailPage() {
             rows={4}
             placeholder="Ceritakan motivasi Anda mengikuti volunteer ini..."
             className="resize-none"
-          />
-
-          <Textarea
-            label="Pengalaman"
-            value={form.experience}
-            onChange={(e) => setForm({ ...form, experience: e.target.value })}
-            rows={3}
-            placeholder="Ceritakan pengalaman volunteer atau kegiatan sosial Anda sebelumnya..."
-            className="resize-none"
-          />
-
-          <Input
-            label="Ketersediaan"
-            type="text"
-            value={form.availability}
-            onChange={(e) => setForm({ ...form, availability: e.target.value })}
-            placeholder="Contoh: Weekends, weekday malam, full time"
           />
 
           <label className="flex items-start gap-2 cursor-pointer">

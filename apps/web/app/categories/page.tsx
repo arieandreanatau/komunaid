@@ -101,7 +101,7 @@ export default function CategoriesPage() {
         api.get("/categories", { params: { type: "COMMUNITY" } }),
         api.get("/communities", { params: { limit: 100, orderBy: "memberCount", sort: "desc" } }),
         api.get("/events/popular/upcoming"),
-        api.get("/volunteer", { params: { limit: 6, status: "OPEN" } }),
+        api.get("/volunteer-programs", { params: { limit: 6, status: "REGISTRATION_OPEN" } }),
       ]);
       if (cancelled) return;
 
