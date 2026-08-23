@@ -59,6 +59,22 @@ communityRoutes.get("/", optionalAuthMiddleware, validate(communityQuerySchema, 
     where.membershipType = q.membershipType;
   }
 
+  if (q.category && !q.categoryId) {
+    const category =
+      (await prisma.category.findFirst({
+        where: { slug: q.category, isActive: true, type: "COMMUNITY" },
+        select: { id: true },
+      })) ||
+      (await prisma.category.findFirst({
+        where: { name: q.category, isActive: true, type: "COMMUNITY" },
+        select: { id: true },
+      }));
+    if (!category) {
+      return c.json({ success: false, message: "Kategori tidak ditemukan", data: [], pagination: { page, limit, total: 0, totalPages: 0 } }, 404);
+    }
+    where.categories = { some: { categoryId: category.id } };
+  }
+
   if (q.categoryId) {
     where.categories = { some: { categoryId: q.categoryId } };
   }
@@ -194,6 +210,8 @@ communityRoutes.get("/featured/list", async (c) => {
       categories: comm.categories.map((cc) => cc.category),
       tags: comm.tags.map((t) => t.tag),
       createdAt: comm.createdAt,
+      badge: "Unggulan",
+      badgeCriteria: "Jumlah anggota terbanyak & komunitas terbaru",
     })),
   });
 });
@@ -241,6 +259,8 @@ communityRoutes.get("/new/list", async (c) => {
       categories: comm.categories.map((cc) => cc.category),
       tags: comm.tags.map((t) => t.tag),
       createdAt: comm.createdAt,
+      badge: "Terbaru",
+      badgeCriteria: "Komunitas yang baru saja disetujui",
     })),
   });
 });
@@ -288,6 +308,8 @@ communityRoutes.get("/popular/list", async (c) => {
       categories: comm.categories.map((cc) => cc.category),
       tags: comm.tags.map((t) => t.tag),
       createdAt: comm.createdAt,
+      badge: "Populer",
+      badgeCriteria: "Komunitas dengan jumlah anggota terbanyak",
     })),
   });
 });

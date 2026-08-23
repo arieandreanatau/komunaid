@@ -75,7 +75,7 @@ vi.mock("@komunaid/database", () => {
       create: vi.fn(async ({ data }: any) => ({ id: `jr-${Date.now()}`, ...data, status: "PENDING", createdAt: new Date() })),
       update: vi.fn(), count: vi.fn(async () => 0),
     },
-    category: { findUnique: vi.fn(async () => null), create: vi.fn(async ({ data }: any) => ({ id: `cat-${Date.now()}`, ...data })) },
+    category: { findUnique: vi.fn(async () => null), findFirst: vi.fn(async () => null), create: vi.fn(async ({ data }: any) => ({ id: `cat-${Date.now()}`, ...data })) },
     auditLog: { create: vi.fn(async () => ({})) },
     activityHistory: { create: vi.fn(async () => ({})) },
     membershipHistory: { create: vi.fn(async () => ({})), findMany: vi.fn(async () => []) },
@@ -139,6 +139,32 @@ describe("Communities Integration Tests", () => {
       const body = await res.json() as any;
       expect(body.success).toBe(true);
       expect(body.pagination).toBeDefined();
+    });
+
+    it("should filter communities by category name", async () => {
+      (prisma.category.findFirst as any).mockResolvedValue({ id: "cat-1", name: "Edukasi", slug: "edukasi" });
+      (prisma.community.findMany as any).mockImplementation(({ where }: any) =>
+        where.categories?.some?.categoryId === "cat-1"
+          ? [{ id: "comm-1", name: "Edukasi Club", slug: "edukasi-club", description: null, coverImage: null, logo: null, banner: null, location: null, membershipType: "OPEN", visibility: "PUBLIC", status: "APPROVED", deletedAt: null, owner: { id: "u1", name: "O", avatar: null }, categories: [], tags: [], _count: { members: 0, events: 0 }, province: null, city: null, createdAt: new Date() }]
+          : []
+      );
+      (prisma.community.count as any).mockResolvedValue(1);
+
+      const res = await app.request("/api/v1/communities?category=Edukasi");
+      expect(res.status).toBe(200);
+      const body = await res.json() as any;
+      expect(body.data).toHaveLength(1);
+      expect(body.data[0].name).toBe("Edukasi Club");
+      expect(prisma.community.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ categories: { some: { categoryId: "cat-1" } } }) })
+      );
+    });
+
+    it("should return 404 for unknown category name", async () => {
+      (prisma.category.findFirst as any).mockResolvedValue(null);
+      const res = await app.request("/api/v1/communities?category=tidak-ada");
+      expect(res.status).toBe(404);
+      expect(prisma.community.findMany).not.toHaveBeenCalled();
     });
   });
 

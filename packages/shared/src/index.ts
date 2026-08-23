@@ -220,6 +220,7 @@ export const communityQuerySchema = z.object({
     z.enum(["OPEN", "RESTRICTED"]).optional()
   ),
   categoryId: z.preprocess(emptyToUndefined, z.string().optional()),
+  category: z.preprocess(emptyToUndefined, z.string().optional()),
   province: z.preprocess(emptyToUndefined, z.string().optional()),
   city: z.preprocess(emptyToUndefined, z.string().optional()),
   tag: z.preprocess(emptyToUndefined, z.string().optional()),

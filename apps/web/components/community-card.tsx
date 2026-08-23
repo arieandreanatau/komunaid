@@ -20,6 +20,8 @@ export interface CommunityCardData {
   categories?: { id: string; name: string }[];
   tags?: { id: string; tag: string }[];
   createdAt?: string;
+  badge?: string;
+  badgeCriteria?: string;
 }
 
 export function CommunityCard({ community }: { community: CommunityCardData }) {
@@ -51,6 +53,14 @@ export function CommunityCard({ community }: { community: CommunityCardData }) {
             }`}
           >
             {community.membershipType === "OPEN" ? "Terbuka" : "Terbatas"}
+          </span>
+        )}
+        {community.badge && (
+          <span
+            title={community.badgeCriteria || `Komunitas ${community.badge}`}
+            className="absolute top-3 right-3 px-2.5 py-0.5 rounded-full text-xs font-bold bg-komuna-coral text-white shadow"
+          >
+            {community.badge}
           </span>
         )}
       </div>

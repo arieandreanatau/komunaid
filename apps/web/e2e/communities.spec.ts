@@ -59,11 +59,18 @@ test.describe("Communities Listing", () => {
       { id: "c1", name: "Technology" },
       { id: "c2", name: "Design" },
     ]);
-    await page.route("**/api/v1/communities/meta/provinces", async (route) => {
+    await page.route("**/api/v1/master-data/provinces*", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({ data: ["DKI Jakarta", "Jawa Barat"] }),
+      });
+    });
+    await page.route("**/api/v1/master-data/cities*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ data: [] }),
       });
     });
     await page.route("**/api/v1/communities/featured/list", async (route) => {
@@ -100,6 +107,22 @@ test.describe("Communities Listing", () => {
     await expect(page.getByRole("button", { name: "Unggulan" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Terbaru" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Populer" })).toBeVisible();
+  });
+
+  test("section tabs update the URL route", async ({ page }) => {
+    await page.goto("/communities");
+    await page.getByRole("button", { name: "Unggulan" }).click();
+    await expect(page).toHaveURL(/tab=unggulan/);
+    await page.getByRole("button", { name: "Terbaru" }).click();
+    await expect(page).toHaveURL(/tab=terbaru/);
+    await page.getByRole("button", { name: "Populer" }).click();
+    await expect(page).toHaveURL(/tab=populer/);
+  });
+
+  test("category filter by name updates the URL route", async ({ page }) => {
+    await page.goto("/communities");
+    await page.locator("select").first().selectOption({ label: "Technology" });
+    await expect(page).toHaveURL(/category=Technology/);
   });
 
   test("displays community cards", async ({ page }) => {

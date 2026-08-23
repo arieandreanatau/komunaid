@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import api from "@/lib/api";
 import { Header } from "@/components/header";
@@ -28,15 +29,28 @@ const SORT_OPTIONS = [
 ];
 
 const SECTION_TABS = [
-  { key: "browse", label: "Jelajahi" },
-  { key: "featured", label: "Unggulan" },
-  { key: "new", label: "Terbaru" },
-  { key: "popular", label: "Populer" },
+  { key: "browse", label: "Jelajahi", routeValue: "jelajahi" },
+  { key: "featured", label: "Unggulan", routeValue: "unggulan" },
+  { key: "new", label: "Terbaru", routeValue: "terbaru" },
+  { key: "popular", label: "Populer", routeValue: "populer" },
 ] as const;
 
 type SectionTab = (typeof SECTION_TABS)[number]["key"];
 
+const TAB_ROUTE_TO_KEY: Record<string, SectionTab> = {
+  jelajahi: "browse",
+  unggulan: "featured",
+  terbaru: "new",
+  populer: "popular",
+  browse: "browse",
+  featured: "featured",
+  new: "new",
+  popular: "popular",
+};
+
 export default function CommunitiesPage() {
+  const searchParams = useSearchParams();
+  const urlInitialized = useRef(false);
   const [activeSection, setActiveSection] = useState<SectionTab>("browse");
   const [communities, setCommunities] = useState<CommunityCardData[]>([]);
   const [featuredCommunities, setFeaturedCommunities] = useState<CommunityCardData[]>([]);
@@ -49,7 +63,7 @@ export default function CommunitiesPage() {
   const [sectionLoading, setSectionLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [membershipType, setMembershipType] = useState("");
-  const [categoryId, setCategoryId] = useState("");
+  const [category, setCategory] = useState("");
   const [province, setProvince] = useState("");
   const [city, setCity] = useState("");
   const [sort, setSort] = useState("newest");
@@ -57,6 +71,28 @@ export default function CommunitiesPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  useEffect(() => {
+    if (urlInitialized.current) return;
+    urlInitialized.current = true;
+    const tabKey = TAB_ROUTE_TO_KEY[searchParams.get("tab") || ""];
+    if (tabKey) setActiveSection(tabKey);
+    if (searchParams.get("category")) setCategory(searchParams.get("category")!);
+    if (searchParams.get("province")) setProvince(searchParams.get("province")!);
+    if (searchParams.get("city")) setCity(searchParams.get("city")!);
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!urlInitialized.current) return;
+    const params = new URLSearchParams();
+    const tab = SECTION_TABS.find((t) => t.key === activeSection);
+    if (tab && tab.key !== "browse") params.set("tab", tab.routeValue);
+    if (category) params.set("category", category);
+    if (province) params.set("province", province);
+    if (city) params.set("city", city);
+    const qs = params.toString();
+    window.history.replaceState(null, "", qs ? `/communities?${qs}` : "/communities");
+  }, [activeSection, category, province, city]);
 
   useEffect(() => {
     const timeout = setTimeout(() => setDebouncedSearch(search), 300);
@@ -86,8 +122,10 @@ export default function CommunitiesPage() {
 
   const fetchProvinces = async () => {
     try {
-      const { data } = await api.get("/communities/meta/provinces");
-      setProvinces(data.data || []);
+      const { data } = await api.get("/master-data/provinces", { params: { country: "Indonesia" } });
+      const raw = data.data;
+      const list = Array.isArray(raw) ? raw : raw && typeof raw === "object" ? Object.values(raw).flat() : [];
+      setProvinces(Array.from(new Set(list as string[])).sort());
     } catch {}
   };
 
@@ -139,7 +177,7 @@ export default function CommunitiesPage() {
       const params: Record<string, string | number> = { page, limit: 12 };
       if (debouncedSearch) params.search = debouncedSearch;
       if (membershipType) params.membershipType = membershipType;
-      if (categoryId) params.categoryId = categoryId;
+      if (category) params.category = category;
       if (province) params.province = province;
       if (city) params.city = city;
 
@@ -166,7 +204,7 @@ export default function CommunitiesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, debouncedSearch, membershipType, categoryId, province, city, sort]);
+  }, [page, debouncedSearch, membershipType, category, province, city, sort]);
 
   useEffect(() => {
     if (activeSection === "browse") fetchCommunities();
@@ -174,12 +212,12 @@ export default function CommunitiesPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, membershipType, categoryId, province, city, sort]);
+  }, [debouncedSearch, membershipType, category, province, city, sort]);
 
   const activeFilters: Array<{ label: string; clear: () => void }> = [];
   if (search) activeFilters.push({ label: `Cari: ${search}`, clear: () => { setSearch(""); setDebouncedSearch(""); } });
   if (membershipType) activeFilters.push({ label: membershipType === "OPEN" ? "Terbuka" : "Terbatas", clear: () => setMembershipType("") });
-  if (categoryId) activeFilters.push({ label: categories.find((c) => c.id === categoryId)?.name || "Kategori", clear: () => setCategoryId("") });
+  if (category) activeFilters.push({ label: category, clear: () => setCategory("") });
   if (province) activeFilters.push({ label: province, clear: () => { setProvince(""); setCity(""); } });
   if (city) activeFilters.push({ label: city, clear: () => setCity("") });
 
@@ -187,7 +225,7 @@ export default function CommunitiesPage() {
     setSearch("");
     setDebouncedSearch("");
     setMembershipType("");
-    setCategoryId("");
+    setCategory("");
     setProvince("");
     setCity("");
   };
@@ -330,15 +368,15 @@ export default function CommunitiesPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wide text-komuna-dark/50 mb-2">Kategori</label>
+            <label className="block text-xs font-bold uppercase tracking-wide text-komuna-dark/50 mb-2">Jenis Kategori</label>
             <select
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
               className="w-full px-3 py-2 rounded-lg border border-komuna-forest/15 bg-white text-sm text-komuna-dark focus:outline-none focus:ring-2 focus:ring-komuna-forest/15"
             >
               <option value="">Semua Kategori</option>
               {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>{cat.name}</option>
+                <option key={cat.id} value={cat.name}>{cat.name}</option>
               ))}
             </select>
           </div>
