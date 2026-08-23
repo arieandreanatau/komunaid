@@ -4,7 +4,7 @@ export interface CommunityCardData {
   id: string;
   name: string;
   slug: string;
-  description: string;
+  description: string | null;
   coverImage: string | null;
   logo: string | null;
   banner: string | null;

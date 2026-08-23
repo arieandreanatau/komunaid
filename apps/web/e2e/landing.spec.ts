@@ -89,21 +89,28 @@ test.describe("Landing Page", () => {
 
   test("has CTA buttons in hero section", async ({ page }) => {
     await page.goto("/");
+    await expect(page.getByRole("link", { name: "Mulai Sekarang" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Temukan Event" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Jelajahi Komunitas" }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: "+ Buat Komunitas" }).first()).toBeVisible();
   });
 
-  test("CTA 'Jelajahi Komunitas' links to community directory", async ({ page }) => {
+  test("CTA 'Mulai Sekarang' links to register", async ({ page }) => {
     await page.goto("/");
-    const cta = page.getByRole("link", { name: "Jelajahi Komunitas" }).first();
-    await expect(cta).toHaveAttribute("href", "/communities");
+    const cta = page.getByRole("link", { name: "Mulai Sekarang" });
+    await expect(cta).toHaveAttribute("href", "/register");
   });
 
-  test("displays community discovery section", async ({ page }) => {
+  test("CTA counters follow links", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator("#komunitas h2")).toHaveText("Temukan Komunitas");
-    await expect(page.locator("#event h2")).toHaveText("Kegiatan Mendatang");
-    await expect(page.locator("#volunteer h2")).toHaveText("Temukan Kesempatan Volunteer");
+    await expect(page.getByRole("link", { name: "Temukan Event" })).toHaveAttribute("href", "/events");
+    await expect(page.getByRole("link", { name: "+ Buat Komunitas" }).first()).toHaveAttribute("href", "/communities/create");
+  });
+
+  test("displays discovery sections with final IA headings", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.locator("#komunitas h2")).toHaveText("Komunitas Populer");
+    await expect(page.locator("#event h2")).toHaveText("Event Mendatang");
+    await expect(page.locator("#volunteer h2")).toHaveText("Ambil Peran di Komunitas");
   });
 
   test("does not display fake statistics", async ({ page }) => {
@@ -113,14 +120,39 @@ test.describe("Landing Page", () => {
 
   test("displays volunteer discovery section", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Temukan Kesempatan Volunteer" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Lihat semua" }).last()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Ambil Peran di Komunitas" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Temukan Volunteer" }).first()).toBeVisible();
   });
 
-  test("displays CTA and how it works sections", async ({ page }) => {
+  test("displays minat, network, kolaborasi, and create-community sections", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByText("Cara Kerja KomunaID")).toBeVisible();
-    await expect(page.getByText("Siap menemukan komunitasmu?")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Mulai dari Minatmu" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Terhubung Lebih Luas" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Jelajahi Network" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Kolaborasi Komunitas" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Lihat Kolaborasi" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Punya Komunitas?" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "+ Buat Komunitas" }).first()).toBeVisible();
+  });
+
+  test("footer provides platform access without exposing admin label", async ({ page }) => {
+    await page.goto("/");
+    const platformLink = page.getByRole("link", { name: "Masuk ke Platform" });
+    await expect(platformLink).toBeVisible();
+    await expect(platformLink).toHaveAttribute("href", "/admin/login");
+    await expect(page.locator("footer").getByText("Login Admin")).toHaveCount(0);
+  });
+
+  test("section CTA links point to correct routes", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("link", { name: "Lihat Semua Komunitas" })).toHaveAttribute("href", "/communities");
+    await expect(page.getByRole("link", { name: "Lihat Semua Event" })).toHaveAttribute("href", "/events");
+    await expect(page.getByRole("link", { name: "Jelajahi Network" })).toHaveAttribute("href", "/network");
+    await expect(page.getByRole("link", { name: "Lihat Kolaborasi" })).toHaveAttribute("href", "/kolaborasi");
+    const spotlightCta = page.getByRole("link", { name: "Kenali Komunitas" });
+    if (await spotlightCta.count()) {
+      await expect(spotlightCta.first()).toHaveAttribute("href", /\/communities\//);
+    }
   });
 
   test("has header and footer", async ({ page }) => {
@@ -141,6 +173,6 @@ test.describe("Landing Page", () => {
     await page.setViewportSize({ width: 768, height: 1024 });
     await page.goto("/");
     await expect(page.locator("h1")).toBeVisible();
-    await expect(page.locator("#komunitas h2")).toHaveText("Temukan Komunitas");
+    await expect(page.locator("#komunitas h2")).toHaveText("Komunitas Populer");
   });
 });
