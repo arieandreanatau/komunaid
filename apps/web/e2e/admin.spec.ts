@@ -66,6 +66,9 @@ test.describe("Admin - Login", () => {
         }),
       });
     });
+    await page.route("**/api/v1/auth/me", async (route) => {
+      await route.fulfill({ status: 401, contentType: "application/json", body: "{}" });
+    });
 
     await page.goto("/admin/login");
     await page.getByLabel("Email atau Username").fill("user@example.com");
