@@ -1,7 +1,7 @@
 import { Context, Next } from "hono";
 
 const DORMANT_FLAGS: Record<string, string> = {
-  organization: process.env.ORGANIZATION_ENABLED || "false",
+  organization: process.env.ORGANIZATION_ENABLED || "true",
   brand: process.env.BRAND_ENABLED || "false",
   campaign: process.env.CAMPAIGN_ENABLED || "false",
   collaboration: process.env.COLLABORATION_ENABLED || "false",
@@ -17,7 +17,6 @@ const DORMANT_FLAGS: Record<string, string> = {
 };
 
 const MODULE_PATHS: Record<string, string[]> = {
-  organization: ["/organizations"],
   brand: ["/brands"],
   campaign: ["/campaigns"],
   collaboration: ["/collaborations"],
@@ -37,13 +36,26 @@ const DISABLED_RESPONSE = {
   message: "This feature is not available in the current MVP.",
 };
 
+function normalizeApiPath(path: string): string {
+  return path.startsWith("/api/v1") ? path.slice("/api/v1".length) : path;
+}
+
+function modulePathMatches(pathSegments: string[], modulePattern: string): boolean {
+  const patternSegments = modulePattern.split("/").filter(Boolean);
+  if (patternSegments.length === 0) return false;
+  if (pathSegments[0] !== patternSegments[0]) return false;
+  if (patternSegments.length > pathSegments.length) return false;
+  return pathSegments.slice(0, patternSegments.length).join("/") === patternSegments.join("/");
+}
+
 export function dormantFeatureGuard() {
   return async (c: Context, next: Next) => {
-    const path = c.req.path;
+    const pathSegments = normalizeApiPath(c.req.path).split("/").filter(Boolean);
 
-    for (const [module, paths] of Object.entries(MODULE_PATHS)) {
-      if (paths.some((p) => path.startsWith(p))) {
-        if (DORMANT_FLAGS[module] !== "true") {
+    for (const [module, patterns] of Object.entries(MODULE_PATHS)) {
+      if (DORMANT_FLAGS[module] !== "true") {
+        const matches = patterns.some((p) => modulePathMatches(pathSegments, p));
+        if (matches) {
           return c.json(DISABLED_RESPONSE, 403);
         }
       }
