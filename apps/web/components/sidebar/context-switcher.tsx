@@ -369,7 +369,6 @@ const ContextDropdown = forwardRef<HTMLDivElement, ContextDropdownProps>(
           {isSearching ? (
             <SearchResults
               results={searchResults}
-              search={search}
               isActive={isActive}
               onSelect={onSelect}
             />
@@ -476,12 +475,10 @@ function DefaultView({
 
 function SearchResults({
   results,
-  search,
   isActive,
   onSelect,
 }: {
   results: CommunityContext[];
-  search: string;
   isActive: (type: "personal" | "community", communityId?: string) => boolean;
   onSelect: (type: "personal" | "community", community?: CommunityContext) => void;
 }) {
