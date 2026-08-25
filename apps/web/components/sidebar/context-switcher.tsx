@@ -317,7 +317,7 @@ const ContextDropdown = forwardRef<HTMLDivElement, ContextDropdownProps>(
     return (
       <div
         ref={ref}
-        className={`absolute top-full z-50 mt-2 w-80 rounded-xl border border-slate-200 bg-white shadow-xl ${align === "right" ? "right-0" : "left-0"}`}
+        className={`absolute top-full z-50 mt-2 w-[min(20rem,calc(100vw-1.5rem))] max-w-[calc(100vw-1.5rem)] rounded-xl border border-slate-200 bg-white shadow-xl ${align === "right" ? "right-0" : "left-0"}`}
         role="dialog"
         aria-label="Switch Context"
         onClick={(e) => e.stopPropagation()}

@@ -124,7 +124,7 @@ export function getCommunityNavigation(communityId: string, role: string): NavSe
       label: "Community",
       items: [
         { href: `${base}/overview`, label: "Overview", icon: ICONS.overview },
-        { href: `${base}/overview`, label: "Profil Komunitas", icon: ICONS.communityProfile },
+        { href: `${base}/profile`, label: "Profil Komunitas", icon: ICONS.communityProfile },
         { href: `${base}/requests`, label: "Permintaan", icon: ICONS.submissions, permission: ["OWNER", "ADMIN", "OFFICER"] },
       ],
     },

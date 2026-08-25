@@ -11,7 +11,6 @@ const navigation = {
   event: [
     { href: "/events", label: "Event" },
     { href: "/volunteer", label: "Volunteer" },
-    { href: "/network", label: "Network" },
   ],
   tentang: [
     { href: "/about", label: "Tentang Kami" },
@@ -23,7 +22,7 @@ const navigation = {
 };
 
 function isEventActive(pathname: string) {
-  return pathname.startsWith("/events") || pathname.startsWith("/volunteer") || pathname.startsWith("/network");
+  return pathname.startsWith("/events") || pathname.startsWith("/volunteer");
 }
 
 function isTentangActive(pathname: string) {
@@ -160,7 +159,7 @@ export function Header() {
                 }}
               >
                 {navigation.event.map((item) => (
-                  <NavMenuItem key={item.href} href={item.href} label={item.label} active={pathname === item.href || (item.href === "/events" && pathname.startsWith("/events")) || (item.href === "/volunteer" && pathname.startsWith("/volunteer")) || (item.href === "/network" && pathname.startsWith("/network"))} onNavigate={() => setEventOpen(false)} />
+                  <NavMenuItem key={item.href} href={item.href} label={item.label} active={pathname === item.href || (item.href === "/events" && pathname.startsWith("/events")) || (item.href === "/volunteer" && pathname.startsWith("/volunteer"))} onNavigate={() => setEventOpen(false)} />
                 ))}
               </div>
             )}

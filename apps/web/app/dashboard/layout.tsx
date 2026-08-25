@@ -92,7 +92,7 @@ export default function DashboardLayout({
               id="mobile-global-sidebar"
               ref={sidebarRef}
               tabIndex={-1}
-              className="absolute left-0 top-0 bottom-0 flex w-72 flex-col bg-white shadow-2xl transition-transform"
+              className="absolute left-0 top-0 bottom-0 flex w-[min(92vw,22rem)] flex-col bg-white shadow-2xl transition-transform"
               role="dialog"
               aria-modal="true"
               aria-label="Navigasi global"
@@ -102,7 +102,7 @@ export default function DashboardLayout({
           </div>
         )}
 
-        <main ref={mainRef} className="flex-1 min-h-[calc(100vh-4rem)]">
+        <main ref={mainRef} className="min-w-0 flex-1 min-h-[calc(100vh-4rem)]">
           <div className="max-w-6xl mx-auto px-4 py-6">
             {children}
           </div>
