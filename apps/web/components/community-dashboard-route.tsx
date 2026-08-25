@@ -6,6 +6,7 @@ import Link from "next/link";
 import api from "@/lib/api";
 import { useAuth } from "@/components/auth-provider";
 import { CommunityEventTab } from "@/components/community-event-tab";
+import { AddressSelector, type AddressValue } from "@/components/address-selector";
 
 interface DashboardData {
   community: {
@@ -172,6 +173,12 @@ export function CommunityDashboardRoute({
     description: "",
     visibility: "PUBLIC",
     membershipType: "OPEN",
+    address: "",
+    province: "",
+    city: "",
+    district: "",
+    village: "",
+    postalCode: "",
   });
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsSuccess, setSettingsSuccess] = useState("");
@@ -205,7 +212,13 @@ export function CommunityDashboardRoute({
         name: comm.name,
         description: comm.description || "",
         visibility: comm.visibility,
-        membershipType: comm.membershipType,
+       membershipType: comm.membershipType,
+       address: comm.address || comm.address1 || "",
+       province: comm.province || "",
+       city: comm.city || "",
+       district: comm.district || "",
+       village: comm.village || "",
+       postalCode: comm.postalCode || "",
       });
     } catch (err: any) {
       if (err?.response?.status === 401) {
@@ -438,7 +451,7 @@ export function CommunityDashboardRoute({
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="flex">
-        <aside className="hidden lg:block w-64 border-r bg-white min-h-[calc(100vh-4rem)] sticky top-16">
+        {false && <aside aria-hidden="true" className="hidden">
           <nav className="p-4 space-y-1">
             <Link
               href="/dashboard"
@@ -516,7 +529,7 @@ export function CommunityDashboardRoute({
               </Link>
             ))}
           </nav>
-        </aside>
+        </aside>}
 
         <main className="flex-1 min-h-[calc(100vh-4rem)]">
           <div className="max-w-5xl mx-auto px-4 py-6">
@@ -531,11 +544,14 @@ export function CommunityDashboardRoute({
                 {community.name}
               </Link>
               <h1 className="text-2xl font-bold text-komuna-navy mt-1">
-                Dashboard Komunitas
+                {tab === "ringkasan" ? "Community Overview" : tabs.find((item) => item.key === tab)?.label || "Community Workspace"}
               </h1>
+              <p className="mt-1 text-sm text-slate-500">
+                {tab === "ringkasan" ? "Command center operasional untuk memahami kondisi dan pekerjaan komunitas." : `Kelola ${community.name} dalam satu Community Operating Workspace.`}
+              </p>
             </div>
 
-            <div className="flex lg:hidden overflow-x-auto gap-1 mb-6 border-b border-gray-200 pb-px">
+            <div className="hidden">
               {tabs.map((navTab) => (
                 <Link
                   key={navTab.key}
@@ -553,6 +569,7 @@ export function CommunityDashboardRoute({
 
             {tab === "ringkasan" && (
               <RingkasanTab
+                communityId={communityId}
                 community={community}
                 pendingRequests={pendingRequests}
                 activeEvents={activeEvents}
@@ -635,11 +652,13 @@ export function CommunityDashboardRoute({
 }
 
 function RingkasanTab({
+  communityId,
   community,
   pendingRequests,
   activeEvents,
   recentActivity,
 }: {
+  communityId: string;
   community: DashboardData["community"];
   pendingRequests: number;
   activeEvents: number;
@@ -647,62 +666,42 @@ function RingkasanTab({
 }) {
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl shadow-sm p-5">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-komuna-blue/10 flex items-center justify-center">
-              <svg className="h-5 w-5 text-komuna-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-komuna-navy">{community.memberCount}</p>
-              <p className="text-xs text-gray-500">Total Anggota</p>
-            </div>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+        {[
+          ["Anggota", community.memberCount],
+          ["Permintaan", pendingRequests],
+          ["Event", activeEvents],
+          ["Volunteer", 0],
+          ["Aktivitas", recentActivity.length],
+          ["Status", community.status === "ACTIVE" ? "Aktif" : community.status],
+        ].map(([label, value]) => (
+          <div key={label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="truncate text-xs font-medium text-slate-500">{label}</p>
+            <p className="mt-1 truncate text-xl font-bold text-komuna-navy">{value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-xl border border-amber-100 bg-amber-50/50 p-5">
+          <p className="text-xs font-bold uppercase tracking-wider text-amber-700">Perlu Tindakan</p>
+          <div className="mt-3 space-y-2 text-sm">
+            <Link href={`/dashboard/communities/${communityId}/requests`} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-slate-700 hover:text-komuna-blue">
+              Permintaan anggota <span className="font-bold text-amber-700">{pendingRequests}</span>
+            </Link>
+            <Link href="#" className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-slate-700 hover:text-komuna-blue">
+              Event menunggu review <span className="font-bold text-slate-500">0</span>
+            </Link>
+            <Link href="#" className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-slate-700 hover:text-komuna-blue">
+              Volunteer menunggu review <span className="font-bold text-slate-500">0</span>
+            </Link>
           </div>
         </div>
-
-        <div className="bg-white rounded-xl shadow-sm p-5">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-amber-100 flex items-center justify-center">
-              <svg className="h-5 w-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-komuna-navy">{pendingRequests}</p>
-              <p className="text-xs text-gray-500">Permintaan Pending</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm p-5">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-emerald-100 flex items-center justify-center">
-              <svg className="h-5 w-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-komuna-navy">{activeEvents}</p>
-              <p className="text-xs text-gray-500">Event Aktif</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm p-5">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center">
-              <svg className="h-5 w-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-lg font-bold text-komuna-navy">
-                {community.status === "ACTIVE" ? "Aktif" : community.status === "INACTIVE" ? "Nonaktif" : community.status}
-              </p>
-              <p className="text-xs text-gray-500">Status Komunitas</p>
-            </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Aktivitas Operasional</p>
+          <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+            <div className="rounded-lg bg-slate-50 p-3"><p className="text-xl font-bold text-komuna-navy">{activeEvents}</p><p className="text-xs text-slate-500">Event mendatang</p></div>
+            <div className="rounded-lg bg-slate-50 p-3"><p className="text-xl font-bold text-komuna-navy">0</p><p className="text-xs text-slate-500">Volunteer aktif</p></div>
           </div>
         </div>
       </div>
@@ -1142,7 +1141,7 @@ function PengaturanTab({
   error,
   isOwner,
 }: {
-  form: { name: string; description: string; visibility: string; membershipType: string };
+  form: { name: string; description: string; visibility: string; membershipType: string; address: string; province: string; city: string; district: string; village: string; postalCode: string };
   setForm: (v: typeof form) => void;
   onSave: () => void;
   saving: boolean;
@@ -1150,6 +1149,14 @@ function PengaturanTab({
   error: string;
   isOwner: boolean;
 }) {
+  const address: AddressValue = {
+    address: form.address,
+    province: form.province,
+    city: form.city,
+    district: form.district,
+    village: form.village,
+    postalCode: form.postalCode,
+  };
   return (
     <div className="bg-white rounded-xl shadow-sm p-6">
       <h3 className="text-lg font-semibold text-komuna-navy mb-6">Pengaturan Komunitas</h3>
@@ -1220,6 +1227,11 @@ function PengaturanTab({
               <option value="RESTRICTED">Terbatas</option>
             </select>
           </div>
+        </div>
+
+        <div>
+          <h4 className="mb-3 text-sm font-bold text-komuna-navy">Lokasi</h4>
+          <AddressSelector value={address} onChange={(next) => setForm({ ...form, ...next })} disabled={!isOwner} />
         </div>
 
         {isOwner && (

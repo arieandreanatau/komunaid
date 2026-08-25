@@ -39,7 +39,7 @@ export function GlobalSidebar({
   isMobile?: boolean;
 }) {
   const pathname = usePathname();
-  const { user, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
   const {
     activeContextType,
     activeCommunity,
@@ -57,6 +57,21 @@ export function GlobalSidebar({
       return response.data.data?.user || response.data.user;
     },
   });
+
+  useEffect(() => {
+    const match = pathname.match(/^\/dashboard\/communities\/([^/]+)/);
+    if (!match || !profile?.communities) return;
+    const community = profile.communities.find((item) => item.id === match[1]);
+    if (community && (activeContextType !== "community" || activeCommunity?.id !== community.id)) {
+      useContextStore.getState().setActiveContext("community", {
+        id: community.id,
+        name: community.name,
+        slug: community.slug,
+        logo: community.logo ?? null,
+        role: community.role,
+      });
+    }
+  }, [pathname, profile, activeContextType, activeCommunity?.id]);
 
   useEffect(() => {
     if (profile?.communities) {
