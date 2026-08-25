@@ -203,7 +203,7 @@ export function ContextSwitcher({ collapsed = false }: ContextSwitcherProps) {
         ref={triggerRef}
         type="button"
         onClick={() => isOpen ? handleClose() : handleOpen()}
-        className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-2.5 text-left transition-all hover:border-komuna-blue/30 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-komuna-blue"
+          className="flex min-h-[4.5rem] w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-left transition-all hover:border-komuna-blue/30 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-komuna-blue"
         aria-label="Ganti context"
         aria-expanded={isOpen}
         aria-haspopup="dialog"
@@ -214,8 +214,8 @@ export function ContextSwitcher({ collapsed = false }: ContextSwitcherProps) {
           <ContextLogo src={activeCommunity?.logo} name={activeCommunity?.name || "C"} size="md" />
         )}
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-bold text-komuna-navy leading-tight">{currentName}</p>
-          <p className="truncate text-xs text-slate-500 leading-tight mt-0.5">{currentRole}</p>
+          <p className="break-words text-[15px] font-bold leading-5 text-komuna-navy">{currentName}</p>
+          <p className="mt-1 break-words text-sm leading-4 text-slate-500">{currentRole}</p>
         </div>
         <ChevronIcon open={isOpen} />
       </button>
@@ -317,7 +317,7 @@ const ContextDropdown = forwardRef<HTMLDivElement, ContextDropdownProps>(
     return (
       <div
         ref={ref}
-        className={`absolute top-full z-50 mt-2 w-[min(20rem,calc(100vw-1.5rem))] max-w-[calc(100vw-1.5rem)] rounded-xl border border-slate-200 bg-white shadow-xl ${align === "right" ? "right-0" : "left-0"}`}
+        className={`absolute top-full z-50 mt-2 w-[min(24rem,calc(100vw-1.5rem))] max-w-[calc(100vw-1.5rem)] rounded-xl border border-slate-200 bg-white shadow-xl ${align === "right" ? "right-0" : "left-0"}`}
         role="dialog"
         aria-label="Switch Context"
         onClick={(e) => e.stopPropagation()}

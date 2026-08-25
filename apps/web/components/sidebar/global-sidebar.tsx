@@ -185,7 +185,7 @@ export function GlobalSidebar({
   if (isMobile) {
     return (
       <div className="flex h-full min-w-0 flex-col bg-white">
-        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <Link href="/" className="flex items-center gap-2" onClick={handleNavClick}>
             <img src="/icon_komuna.png" alt="KomunaID" className="h-6 w-6" />
             <span className="font-display text-base font-semibold text-komuna-dark">KomunaID</span>
@@ -202,7 +202,7 @@ export function GlobalSidebar({
           </button>
         </div>
 
-        <div className="border-b border-slate-100 p-3">
+        <div className="border-b border-slate-100 p-4">
           <ContextSwitcher />
         </div>
 
@@ -214,7 +214,7 @@ export function GlobalSidebar({
   return (
     <aside
       className={`sticky top-0 hidden h-screen shrink-0 flex-col border-r border-slate-200 bg-white transition-all duration-200 lg:flex ${
-        collapsed ? "w-[68px]" : "w-72 xl:w-80 2xl:w-[20rem]"
+        collapsed ? "w-[68px]" : "w-80 xl:w-[22rem] 2xl:w-[24rem]"
       }`}
       aria-label="Sidebar global"
     >
@@ -258,7 +258,7 @@ export function GlobalSidebar({
         )}
       </div>
 
-      <div className={`border-b border-slate-100 ${collapsed ? "px-2 py-2" : "px-4 py-4"}`}>
+      <div className={`border-b border-slate-100 ${collapsed ? "px-2 py-2" : "px-5 py-5"}`}>
         <ContextSwitcher collapsed={collapsed} />
       </div>
 
