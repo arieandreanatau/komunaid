@@ -70,7 +70,6 @@ export function ContextSwitcher({ collapsed = false }: ContextSwitcherProps) {
             search={search}
             onSearchChange={setSearch}
             onSelect={handleSelect}
-            onClose={() => { setIsOpen(false); setSearch(""); }}
             isActive={isActive}
             align="left"
           />
@@ -123,7 +122,6 @@ export function ContextSwitcher({ collapsed = false }: ContextSwitcherProps) {
           search={search}
           onSearchChange={setSearch}
           onSelect={handleSelect}
-          onClose={() => { setIsOpen(false); setSearch(""); }}
           isActive={isActive}
           align="right"
         />
@@ -140,13 +138,12 @@ interface ContextDropdownProps {
   search: string;
   onSearchChange: (v: string) => void;
   onSelect: (type: "personal" | "community", community?: CommunityContext) => void;
-  onClose: () => void;
   isActive: (type: "personal" | "community", communityId?: string) => boolean;
   align: "left" | "right";
 }
 
 const ContextDropdown = forwardRef<HTMLDivElement, ContextDropdownProps>(
-  function ContextDropdown({ user, managedCommunities, search, onSearchChange, onSelect, onClose, isActive, align }, ref) {
+  function ContextDropdown({ user, managedCommunities, search, onSearchChange, onSelect, isActive, align }, ref) {
     return (
       <div
         ref={ref}

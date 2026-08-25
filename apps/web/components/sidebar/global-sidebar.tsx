@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -42,18 +42,15 @@ export function GlobalSidebar({
   isMobile?: boolean;
 }) {
   const pathname = usePathname();
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const {
     activeContextType,
     activeCommunity,
-    managedCommunities,
     sidebarCollapsed,
     setManagedCommunities,
     toggleSidebarCollapsed,
     setSidebarCollapsed,
   } = useContextStore();
-
-  const [unreadCount, setUnreadCount] = useState(0);
 
   const { data: profile } = useQuery<UserProfile>({
     queryKey: ["profile"],
@@ -78,13 +75,6 @@ export function GlobalSidebar({
       setManagedCommunities(managed);
     }
   }, [profile, setManagedCommunities]);
-
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    api.get("/users/notifications?unread=true&page=1&limit=1")
-      .then((res) => setUnreadCount(res.data.pagination?.total ?? 0))
-      .catch(() => {});
-  }, [isAuthenticated]);
 
   useEffect(() => {
     if (isMobile) return;

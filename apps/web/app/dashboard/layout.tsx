@@ -3,7 +3,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
-import { useContextStore } from "@/components/sidebar";
 import { GlobalSidebar } from "@/components/sidebar/global-sidebar";
 import { Header } from "@/components/header";
 import { useDrawerDialog } from "@/components/ui/use-drawer-dialog";
@@ -20,7 +19,6 @@ export default function DashboardLayout({
   const sidebarRef = useRef<HTMLElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const mainRef = useRef<HTMLElement>(null);
-  const sidebarCollapsed = useContextStore((s) => s.sidebarCollapsed);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
