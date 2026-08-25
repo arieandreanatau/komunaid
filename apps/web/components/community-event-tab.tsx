@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
 
@@ -10,6 +10,7 @@ interface CommunityEvent {
   slug: string;
   status: string;
   eventDate: string;
+  endDate?: string | null;
   quota: number;
   registeredCount: number;
   community?: { id: string; name: string; slug: string } | null;
@@ -31,6 +32,11 @@ const STATUS_LABEL: Record<string, string> = {
   COMPLETED: "Selesai",
   CANCELLED: "Dibatalkan",
   ARCHIVED: "Diarsipkan",
+  SUBMITTED: "Menunggu review",
+  IN_REVIEW: "Menunggu review",
+  REVISION_REQUESTED: "Perlu revisi",
+  RESUBMITTED: "Dikirim ulang",
+  APPROVED: "Disetujui",
 };
 
 const STATUS_CLASS: Record<string, string> = {
@@ -42,7 +48,14 @@ const STATUS_CLASS: Record<string, string> = {
   COMPLETED: "bg-emerald-100 text-emerald-700",
   CANCELLED: "bg-red-100 text-red-700",
   ARCHIVED: "bg-gray-200 text-gray-700",
+  SUBMITTED: "bg-amber-100 text-amber-700",
+  IN_REVIEW: "bg-amber-100 text-amber-700",
+  REVISION_REQUESTED: "bg-orange-100 text-orange-700",
+  RESUBMITTED: "bg-amber-100 text-amber-700",
+  APPROVED: "bg-blue-100 text-blue-700",
 };
+
+type EventFilter = "all" | "current" | "upcoming" | "history" | "revision" | "rejected" | "cancelled";
 
 function formatDate(value: string): string {
   return new Date(value).toLocaleDateString("id-ID", {
@@ -59,6 +72,22 @@ export function CommunityEventTab({ communityId, communityName }: { communityId:
   const [canManage, setCanManage] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [filter, setFilter] = useState<EventFilter>("all");
+
+  const filteredEvents = useMemo(() => {
+    const now = Date.now();
+    return events.filter((event) => {
+      const start = new Date(event.eventDate).getTime();
+      const end = event.endDate ? new Date(event.endDate).getTime() : start;
+      if (filter === "current") return ["ONGOING", "REGISTRATION_OPEN", "REGISTRATION_CLOSED"].includes(event.status) || (start <= now && end >= now);
+      if (filter === "upcoming") return start > now && !["CANCELLED", "COMPLETED"].includes(event.status);
+      if (filter === "history") return ["COMPLETED", "ARCHIVED"].includes(event.status) || end < now;
+      if (filter === "revision") return event.status === "REVISION_REQUESTED";
+      if (filter === "rejected") return event.status === "REJECTED";
+      if (filter === "cancelled") return event.status === "CANCELLED";
+      return true;
+    });
+  }, [events, filter]);
 
   useEffect(() => {
     api
@@ -119,6 +148,17 @@ export function CommunityEventTab({ communityId, communityName }: { communityId:
         )}
       </div>
 
+      <div className="flex gap-1 overflow-x-auto border-b border-slate-200 pb-px" role="tablist" aria-label="Filter lifecycle event">
+        {[
+          ["all", "Semua"], ["current", "Sekarang"], ["upcoming", "Upcoming"], ["history", "History"],
+          ["revision", "Perlu revisi"], ["rejected", "Ditolak"], ["cancelled", "Dibatalkan"],
+        ].map(([value, label]) => (
+          <button key={value} type="button" role="tab" aria-selected={filter === value} onClick={() => setFilter(value as EventFilter)} className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-colors ${filter === value ? "border-komuna-blue text-komuna-blue" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
       {loading ? (
         <div className="space-y-3">
           {[0, 1, 2].map((i) => (
@@ -138,7 +178,7 @@ export function CommunityEventTab({ communityId, communityName }: { communityId:
             Coba Lagi
           </button>
         </div>
-      ) : events.length === 0 ? (
+      ) : filteredEvents.length === 0 ? (
         <div className="text-center py-14 bg-white rounded-xl border border-gray-100">
           <svg className="h-14 w-14 text-gray-200 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -160,7 +200,7 @@ export function CommunityEventTab({ communityId, communityName }: { communityId:
         </div>
       ) : (
         <div className="space-y-4">
-          {events.map((event) => {
+           {filteredEvents.map((event) => {
             const statusLabel = STATUS_LABEL[event.status] || event.status;
             const statusClass = STATUS_CLASS[event.status] || STATUS_CLASS.DRAFT;
             return (
