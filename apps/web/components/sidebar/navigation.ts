@@ -65,16 +65,10 @@ const ICONS = {
 export function getPersonalNavigation(): NavSection[] {
   return [
     {
-      id: "overview",
-      label: "Overview",
+      id: "personal",
+      label: "Personal",
       items: [
         { href: "/dashboard", label: "Overview", icon: ICONS.overview },
-      ],
-    },
-    {
-      id: "profil",
-      label: "Profil",
-      items: [
         { href: "/dashboard/profile", label: "Profil", icon: ICONS.profile },
         { href: "/dashboard/interests", label: "Minat", icon: ICONS.interests },
       ],
@@ -100,12 +94,29 @@ export function getPersonalNavigation(): NavSection[] {
       label: "Volunteer",
       items: [
         { href: "/dashboard/volunteers", label: "Volunteer Saya", icon: ICONS.volunteer },
+        { href: "/dashboard/volunteers/propose", label: "Ajukan Program", icon: ICONS.volunteerPropose },
       ],
     },
     {
       id: "network",
       items: [
-        { href: "/dashboard/network", label: "Network", icon: ICONS.network },
+        { href: "/network", label: "Network", icon: ICONS.network },
+      ],
+    },
+    {
+      id: "komunikasi",
+      label: "Komunikasi",
+      items: [
+        { href: "/dashboard/notifications", label: "Notifikasi", icon: ICONS.notification },
+      ],
+    },
+    {
+      id: "pengaturan",
+      label: "Pengaturan",
+      items: [
+        { href: "/dashboard/settings", label: "Akun", icon: ICONS.settings },
+        { href: "/dashboard/settings/privacy", label: "Privasi", icon: ICONS.privacy },
+        { href: "/dashboard/settings/preferences", label: "Preferensi", icon: ICONS.preferences },
       ],
     },
   ];
@@ -116,51 +127,47 @@ export function getCommunityNavigation(communityId: string, role: string): NavSe
 
   const sections: NavSection[] = [
     {
-      id: "community-overview",
+      id: "community",
+      label: "Community",
       items: [
         { href: `${base}/overview`, label: "Overview", icon: ICONS.overview },
-      ],
-    },
-    {
-      id: "community-profil",
-      label: "Profil",
-      items: [
         { href: `${base}/overview`, label: "Profil Komunitas", icon: ICONS.communityProfile },
+        { href: `${base}/requests`, label: "Permintaan", icon: ICONS.submissions, permission: ["OWNER", "ADMIN", "OFFICER"] },
       ],
     },
     {
-      id: "community-event",
-      label: "Event",
+      id: "activity-engine",
+      label: "Activity Engine",
       items: [
         { href: `${base}/events`, label: "Event", icon: ICONS.event },
-      ],
-    },
-    {
-      id: "community-volunteer",
-      label: "Volunteer",
-      items: [
         { href: `${base}/volunteer`, label: "Volunteer", icon: ICONS.volunteer },
       ],
     },
     {
-      id: "community-orang",
-      label: "Orang",
+      id: "people",
+      label: "People",
       items: [
         { href: `${base}/pengurus`, label: "Pengurus", icon: ICONS.people, permission: ["OWNER", "ADMIN", "OFFICER"] },
-        { href: `${base}/members`, label: "Members", icon: ICONS.members },
+        { href: `${base}/members`, label: "Anggota", icon: ICONS.members },
       ],
     },
     {
-      id: "community-aktivitas",
-      label: "Aktivitas",
+      id: "content",
+      label: "Content",
       items: [
         { href: `${base}/media`, label: "Media", icon: ICONS.media, permission: ["OWNER", "ADMIN", "OFFICER"] },
-        { href: `${base}/insights`, label: "Insight", icon: ICONS.insight, permission: ["OWNER", "ADMIN"] },
+        { href: `${base}/insights`, label: "Aktivitas", icon: ICONS.insight, permission: ["OWNER", "ADMIN"] },
       ],
     },
     {
-      id: "community-pengaturan",
-      label: "Pengaturan",
+      id: "communication",
+      items: [
+        { href: "/dashboard/notifications", label: "Notifikasi", icon: ICONS.notification },
+      ],
+    },
+    {
+      id: "management",
+      label: "Management",
       items: [
         { href: `${base}/settings`, label: "Pengaturan", icon: ICONS.settings, permission: ["OWNER", "ADMIN"] },
       ],
@@ -189,7 +196,6 @@ export function getCommunitySupportingNavigation(): NavSection[] {
   return [
     {
       id: "komunikasi",
-      label: "Komunikasi",
       items: [
         { href: "/dashboard/notifications", label: "Notifikasi", icon: ICONS.notification },
       ],

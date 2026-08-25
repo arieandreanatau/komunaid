@@ -5,13 +5,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/components/auth-provider";
-import { Avatar } from "@/components/ui/avatar";
 import { useContextStore, type CommunityContext } from "./context-store";
 import {
   getPersonalNavigation,
   getCommunityNavigation,
-  getSupportingNavigation,
-  getCommunitySupportingNavigation,
   type NavSection,
 } from "./navigation";
 import { ContextSwitcher } from "./context-switcher";
@@ -96,11 +93,7 @@ export function GlobalSidebar({
     ? getCommunityNavigation(activeCommunity.id, activeCommunity.role)
     : getPersonalNavigation();
 
-  const supportingSections: NavSection[] = activeContextType === "community"
-    ? getCommunitySupportingNavigation()
-    : getSupportingNavigation();
-
-  const allSections = [...navigationSections, ...supportingSections];
+  const allSections = [...navigationSections];
 
   const activeHref = allSections
     .flatMap((section) => section.items)
@@ -111,7 +104,6 @@ export function GlobalSidebar({
 
   const renderNavItem = (item: { href: string; label: string; icon: string; badge?: number }) => {
     const isActive = item.href === activeHref;
-    const isBackToPersonal = item.label === "Kembali ke Personal";
 
     return (
       <Link
@@ -129,9 +121,6 @@ export function GlobalSidebar({
         aria-label={collapsed ? item.label : undefined}
         aria-current={isActive ? "page" : undefined}
       >
-        {isBackToPersonal && !collapsed && (
-          <div className="absolute inset-x-3 -top-2 h-px bg-slate-200" aria-hidden="true" />
-        )}
         <SidebarIcon path={item.icon} className="h-5 w-5 shrink-0" />
         {!collapsed && <span className="truncate">{item.label}</span>}
         {!collapsed && typeof item.badge === "number" && item.badge > 0 && (
@@ -156,17 +145,17 @@ export function GlobalSidebar({
 
   const sidebarContent = (
     <>
-      <nav className={`flex-1 overflow-y-auto py-4 ${collapsed ? "px-2" : "px-3"}`} aria-label="Navigasi dashboard">
-        <div className="space-y-6">
+      <nav className={`flex-1 overflow-y-auto py-3 ${collapsed ? "px-2" : "px-3"}`} aria-label="Navigasi dashboard">
+        <div className="space-y-5">
           {allSections.map((section) => (
             <div key={section.id}>
               {section.label && !collapsed && (
-                <h3 className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                <h3 className="mb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                   {section.label}
                 </h3>
               )}
               {section.label && collapsed && (
-                <div className="mx-auto mb-1.5 h-px w-4 bg-slate-200" aria-hidden="true" />
+                <div className="mx-auto mb-1 h-px w-4 bg-slate-200" aria-hidden="true" />
               )}
               <div className="space-y-0.5">
                 {section.items.map((item) => renderNavItem({ href: item.href, label: item.label, icon: item.icon, badge: item.badge }))}
@@ -175,42 +164,6 @@ export function GlobalSidebar({
           ))}
         </div>
       </nav>
-
-      {!collapsed && (
-        <div className="border-t border-slate-100 p-4">
-          <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4 max-xl:hidden">
-            <p className="text-sm font-bold text-komuna-navy">
-              {activeContextType === "personal" ? "Mulai Berkontribusi" : activeCommunity?.name || "Komunitas"}
-            </p>
-            <p className="mt-1 text-xs leading-relaxed text-slate-500">
-              {activeContextType === "personal"
-                ? "Buat komunitas atau bergabung dengan komunitas yang sesuai dengan minatmu."
-                : activeCommunity?.role === "OWNER" || activeCommunity?.role === "ADMIN"
-                  ? "Kelola komunitas Anda dengan efektif."
-                  : "Berkontribusi untuk komunitas Anda."}
-            </p>
-            <div className="mt-3 flex flex-col gap-2">
-              {activeContextType === "personal" ? (
-                <Link
-                  href="/communities/create"
-                  className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-komuna-blue px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-komuna-navy"
-                  onClick={handleNavClick}
-                >
-                  Buat Komunitas
-                </Link>
-              ) : (
-                <Link
-                  href={`/communities/${activeCommunity?.slug || ""}`}
-                  className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-komuna-blue px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-komuna-navy"
-                  onClick={handleNavClick}
-                >
-                  Lihat Komunitas
-                </Link>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 
@@ -218,13 +171,10 @@ export function GlobalSidebar({
     return (
       <div className="flex h-full flex-col bg-white">
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-          <div className="flex items-center gap-3">
-            <Avatar src={user?.avatar} name={user?.name || ""} size="sm" />
-            <div className="min-w-0">
-              <p className="truncate text-sm font-bold text-komuna-navy">{user?.name || "Member"}</p>
-              <p className="truncate text-xs text-slate-500">Member</p>
-            </div>
-          </div>
+          <Link href="/" className="flex items-center gap-2" onClick={handleNavClick}>
+            <img src="/icon_komuna.png" alt="KomunaID" className="h-6 w-6" />
+            <span className="font-display text-base font-semibold text-komuna-dark">KomunaID</span>
+          </Link>
           <button
             type="button"
             aria-label="Tutup menu"
@@ -294,9 +244,6 @@ export function GlobalSidebar({
       </div>
 
       <div className={`border-b border-slate-100 ${collapsed ? "px-2 py-2" : "px-3 py-3"}`}>
-        {!collapsed && (
-          <p className="mb-2 px-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">Context</p>
-        )}
         <ContextSwitcher collapsed={collapsed} />
       </div>
 

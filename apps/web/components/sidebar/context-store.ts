@@ -12,12 +12,13 @@ export interface CommunityContext {
   role: string;
 }
 
-export type ContextTypeV2 = "personal" | "community";
+const MAX_RECENTLY_USED = 5;
 
 interface ContextState {
   activeContextType: ContextType;
   activeCommunity: CommunityContext | null;
   managedCommunities: CommunityContext[];
+  recentlyUsedIds: string[];
   sidebarCollapsed: boolean;
   setActiveContext: (type: ContextType, community?: CommunityContext) => void;
   setManagedCommunities: (communities: CommunityContext[]) => void;
@@ -27,6 +28,7 @@ interface ContextState {
 
 const STORAGE_KEY = "komuna-sidebar-context";
 const COLLAPSE_KEY = "komuna-sidebar-collapsed";
+const RECENTLY_USED_KEY = "komuna-recently-used-contexts";
 
 function getInitialCollapsed(): boolean {
   if (typeof window === "undefined") return false;
@@ -53,12 +55,31 @@ function getInitialContext(): { type: ContextType; community: CommunityContext |
   return { type: "personal", community: null };
 }
 
+function getInitialRecentlyUsed(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const stored = localStorage.getItem(RECENTLY_USED_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) return parsed.slice(0, MAX_RECENTLY_USED);
+    }
+  } catch {}
+  return [];
+}
+
+function saveRecentlyUsed(ids: string[]) {
+  try {
+    localStorage.setItem(RECENTLY_USED_KEY, JSON.stringify(ids));
+  } catch {}
+}
+
 export const useContextStore = create<ContextState>((set) => {
   const initial = getInitialContext();
   return {
     activeContextType: initial.type,
     activeCommunity: initial.community,
     managedCommunities: [],
+    recentlyUsedIds: getInitialRecentlyUsed(),
     sidebarCollapsed: getInitialCollapsed(),
 
     setActiveContext: (type, community) => {
@@ -66,6 +87,11 @@ export const useContextStore = create<ContextState>((set) => {
       try {
         if (type === "community" && community) {
           localStorage.setItem(STORAGE_KEY, JSON.stringify({ type, community }));
+          set((state) => {
+            const next = [community.id, ...state.recentlyUsedIds.filter((id) => id !== community.id)].slice(0, MAX_RECENTLY_USED);
+            saveRecentlyUsed(next);
+            return { recentlyUsedIds: next };
+          });
         } else {
           localStorage.setItem(STORAGE_KEY, JSON.stringify({ type: "personal", community: null }));
         }
