@@ -133,9 +133,11 @@ export function CommunityDashboardRoute({
 }) {
   const params = useParams();
   const router = useRouter();
-  const routeSlug = communitySlug || (params.slug as string | undefined);
+  const routeValue = communitySlug || (params.slug as string | undefined) || (params.communityId as string | undefined) || (params.idkomunitas as string | undefined);
+  const routeSlug = communitySlug || (params.slug as string | undefined) || (params.communityId as string | undefined);
   const [resolvedCommunityId, setResolvedCommunityId] = useState(communityIdOverride);
-  const communityId = resolvedCommunityId || (routeSlug ? "" : ((params.idkomunitas || params.communityId) as string));
+  const communityId = resolvedCommunityId || (routeValue?.startsWith("cmt") ? routeValue : "");
+  const communityPath = routeValue || communityId;
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
 
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
@@ -147,7 +149,7 @@ export function CommunityDashboardRoute({
   const [isOwner, setIsOwner] = useState(false);
 
   useEffect(() => {
-    if (!routeSlug || communityIdOverride) return;
+    if (!routeSlug || communityIdOverride || routeSlug.startsWith("cmt")) return;
     api.get(`/communities/${routeSlug}`).then(({ data }) => {
       const community = data.data || data;
       setResolvedCommunityId(community.id);
@@ -472,7 +474,7 @@ export function CommunityDashboardRoute({
             {tabs.map((navTab) => (
               <Link
                 key={navTab.key}
-                href={`/dashboard/communities/${communityId}/${canonicalTabPath[navTab.key]}`}
+                href={`/dashboard/communities/${communityPath}/${canonicalTabPath[navTab.key]}`}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left ${
                   navTab.key === tab
                     ? "bg-komuna-blue/10 text-komuna-blue"
@@ -557,7 +559,7 @@ export function CommunityDashboardRoute({
               {tabs.map((navTab) => (
                 <Link
                   key={navTab.key}
-                  href={`/dashboard/communities/${communityId}/${canonicalTabPath[navTab.key]}`}
+                  href={`/dashboard/communities/${communityPath}/${canonicalTabPath[navTab.key]}`}
                   className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                     navTab.key === tab
                       ? "border-komuna-blue text-komuna-blue"
@@ -572,6 +574,7 @@ export function CommunityDashboardRoute({
             {tab === "ringkasan" && (
               <RingkasanTab
                 communityId={communityId}
+                communityPath={communityPath}
                 community={community}
                 pendingRequests={pendingRequests}
                 activeEvents={activeEvents}
@@ -712,12 +715,14 @@ function ProfilKomunitasTab({ community }: { community: DashboardData["community
 
 function RingkasanTab({
   communityId,
+  communityPath,
   community,
   pendingRequests,
   activeEvents,
   recentActivity,
 }: {
   communityId: string;
+  communityPath: string;
   community: DashboardData["community"];
   pendingRequests: number;
   activeEvents: number;
@@ -745,7 +750,7 @@ function RingkasanTab({
         <div className="rounded-xl border border-amber-100 bg-amber-50/50 p-5">
           <p className="text-xs font-bold uppercase tracking-wider text-amber-700">Perlu Tindakan</p>
           <div className="mt-3 space-y-2 text-sm">
-            <Link href={`/dashboard/communities/${communityId}/requests`} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-slate-700 hover:text-komuna-blue">
+            <Link href={`/dashboard/communities/${communityPath}/requests`} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-slate-700 hover:text-komuna-blue">
               Permintaan anggota <span className="font-bold text-amber-700">{pendingRequests}</span>
             </Link>
             <Link href="#" className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-slate-700 hover:text-komuna-blue">

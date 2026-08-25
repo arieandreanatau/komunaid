@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { DashboardEmptyState, DashboardErrorState, DashboardLoadingState, DashboardPageHeader, DashboardSurface } from "@/components/member-dashboard-ui";
@@ -13,8 +13,13 @@ type Filter = "all" | "period" | "single" | "history" | "revision" | "rejected" 
 
 export default function CommunityVolunteerWorkspacePage() {
   const { communityId } = useParams<{ communityId: string }>();
+  const [resolvedCommunityId, setResolvedCommunityId] = useState(communityId);
+  useEffect(() => {
+    if (!communityId || communityId.startsWith("cmt")) return;
+    api.get(`/communities/${communityId}`).then(({ data }) => setResolvedCommunityId((data.data || data).id)).catch(() => {});
+  }, [communityId]);
   const [filter, setFilter] = useState<Filter>("all");
-  const query = useQuery<Program[]>({ queryKey: ["community-volunteer-programs", communityId], queryFn: async () => (await api.get(`/volunteer-programs/communities/${communityId}`)).data.data, enabled: Boolean(communityId) });
+  const query = useQuery<Program[]>({ queryKey: ["community-volunteer-programs", resolvedCommunityId], queryFn: async () => (await api.get(`/volunteer-programs/communities/${resolvedCommunityId}`)).data.data, enabled: Boolean(resolvedCommunityId) });
   const createAction = !query.isError ? <Link href={`/dashboard/communities/${communityId}/volunteer/create`} className="rounded-lg bg-komuna-blue px-4 py-2.5 text-sm font-bold text-white">Buat Program</Link> : undefined;
   const filtered = useMemo(() => (query.data || []).filter((program) => {
     if (filter === "history") return ["COMPLETED", "ARCHIVED"].includes(program.status);

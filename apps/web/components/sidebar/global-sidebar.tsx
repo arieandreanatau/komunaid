@@ -105,7 +105,7 @@ export function GlobalSidebar({
   }, [isMobile, onMobileClose]);
 
   const navigationSections: NavSection[] = activeContextType === "community" && activeCommunity
-    ? getCommunityNavigation(activeCommunity.id, activeCommunity.role)
+    ? getCommunityNavigation(activeCommunity.slug, activeCommunity.role)
     : getPersonalNavigation();
 
   const allSections = [...navigationSections];

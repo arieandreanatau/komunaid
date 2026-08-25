@@ -111,7 +111,7 @@ export function ContextSwitcher({ collapsed = false }: ContextSwitcherProps) {
     setIsOpen(false);
     setSearch("");
     if (type === "community" && community) {
-      router.push(`/dashboard/communities/${community.id}/overview`);
+      router.push(`/dashboard/communities/${community.slug}/overview`);
     } else if (type === "personal") {
       router.push("/dashboard");
     }
