@@ -44,6 +44,7 @@ export function GlobalSidebar({
     activeContextType,
     activeCommunity,
     sidebarCollapsed,
+    setActiveContext,
     setManagedCommunities,
     toggleSidebarCollapsed,
     setSidebarCollapsed,
@@ -60,10 +61,18 @@ export function GlobalSidebar({
 
   useEffect(() => {
     const match = pathname.match(/^\/dashboard\/communities\/([^/]+)/);
-    if (!match || !profile?.communities) return;
-    const community = profile.communities.find((item) => item.id === match[1]);
+
+    // Dashboard routes outside Community Context always belong to Personal.
+    // This keeps browser/back navigation from leaving stale community state in the switcher.
+    if (!match) {
+      if (activeContextType !== "personal") setActiveContext("personal");
+      return;
+    }
+
+    if (!profile?.communities) return;
+    const community = profile.communities.find((item) => item.id === match[1] || item.slug === match[1]);
     if (community && (activeContextType !== "community" || activeCommunity?.id !== community.id)) {
-      useContextStore.getState().setActiveContext("community", {
+      setActiveContext("community", {
         id: community.id,
         name: community.name,
         slug: community.slug,
@@ -71,7 +80,7 @@ export function GlobalSidebar({
         role: community.role,
       });
     }
-  }, [pathname, profile, activeContextType, activeCommunity?.id]);
+  }, [pathname, profile, activeContextType, activeCommunity?.id, setActiveContext]);
 
   useEffect(() => {
     if (profile?.communities) {
@@ -185,7 +194,7 @@ export function GlobalSidebar({
   if (isMobile) {
     return (
       <div className="flex h-full min-w-0 flex-col bg-white">
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
           <Link href="/" className="flex items-center gap-2" onClick={handleNavClick}>
             <img src="/icon_komuna.png" alt="KomunaID" className="h-6 w-6" />
             <span className="font-display text-base font-semibold text-komuna-dark">KomunaID</span>
@@ -202,7 +211,7 @@ export function GlobalSidebar({
           </button>
         </div>
 
-        <div className="border-b border-slate-100 p-4">
+        <div className="border-b border-slate-100 p-3">
           <ContextSwitcher />
         </div>
 
@@ -214,7 +223,7 @@ export function GlobalSidebar({
   return (
     <aside
       className={`sticky top-0 hidden h-screen shrink-0 flex-col border-r border-slate-200 bg-white transition-all duration-200 lg:flex ${
-        collapsed ? "w-[68px]" : "w-80 xl:w-[22rem] 2xl:w-[24rem]"
+        collapsed ? "w-[68px]" : "w-72 xl:w-[19rem] 2xl:w-80"
       }`}
       aria-label="Sidebar global"
     >
@@ -258,7 +267,7 @@ export function GlobalSidebar({
         )}
       </div>
 
-      <div className={`border-b border-slate-100 ${collapsed ? "px-2 py-2" : "px-5 py-5"}`}>
+      <div className={`border-b border-slate-100 ${collapsed ? "px-2 py-2" : "px-4 py-4"}`}>
         <ContextSwitcher collapsed={collapsed} />
       </div>
 

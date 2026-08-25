@@ -704,8 +704,8 @@ function CommunityActions({
   if (isAdmin) {
     return (
       <div className="flex flex-wrap gap-2">
-        <Link
-          href={`/dashboard/communities/${community.id}/overview`}
+          <Link
+            href={`/dashboard/communities/${community.slug}/overview`}
           className="inline-flex items-center gap-2 px-4 py-2.5 bg-komuna-blue text-white rounded-lg font-medium hover:bg-komuna-navy transition-colors text-sm"
         >
           Kelola

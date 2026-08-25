@@ -10,7 +10,7 @@ export default function CommunitySlugPage() {
   useEffect(() => {
     api.get(`/communities/${params.slug}`).then(({ data }) => {
       const community = data.data || data;
-      router.replace(`/dashboard/communities/${community.id}/overview`);
+      router.replace(`/dashboard/communities/${community.slug}/overview`);
     }).catch(() => router.replace("/dashboard/communities"));
   }, [params.slug, router]);
   return <div className="flex min-h-48 items-center justify-center text-sm text-slate-500">Membuka dashboard komunitas...</div>;

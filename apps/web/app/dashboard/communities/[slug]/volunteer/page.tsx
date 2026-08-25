@@ -12,15 +12,15 @@ const labels: Record<string, string> = { DRAFT: "Draft", SUBMITTED: "Menunggu re
 type Filter = "all" | "period" | "single" | "history" | "revision" | "rejected" | "cancelled";
 
 export default function CommunityVolunteerWorkspacePage() {
-  const { communityId } = useParams<{ communityId: string }>();
-  const [resolvedCommunityId, setResolvedCommunityId] = useState(communityId);
+  const { slug } = useParams<{ slug: string }>();
+  const [resolvedCommunityId, setResolvedCommunityId] = useState("");
   useEffect(() => {
-    if (!communityId || communityId.startsWith("cmt")) return;
-    api.get(`/communities/${communityId}`).then(({ data }) => setResolvedCommunityId((data.data || data).id)).catch(() => {});
-  }, [communityId]);
+    if (!slug) return;
+    api.get(`/communities/${slug}`).then(({ data }) => setResolvedCommunityId((data.data || data).id)).catch(() => {});
+  }, [slug]);
   const [filter, setFilter] = useState<Filter>("all");
   const query = useQuery<Program[]>({ queryKey: ["community-volunteer-programs", resolvedCommunityId], queryFn: async () => (await api.get(`/volunteer-programs/communities/${resolvedCommunityId}`)).data.data, enabled: Boolean(resolvedCommunityId) });
-  const createAction = !query.isError ? <Link href={`/dashboard/communities/${communityId}/volunteer/create`} className="rounded-lg bg-komuna-blue px-4 py-2.5 text-sm font-bold text-white">Buat Program</Link> : undefined;
+  const createAction = !query.isError ? <Link href={`/dashboard/communities/${slug}/volunteer/create`} className="rounded-lg bg-komuna-blue px-4 py-2.5 text-sm font-bold text-white">Buat Program</Link> : undefined;
   const filtered = useMemo(() => (query.data || []).filter((program) => {
     if (filter === "history") return ["COMPLETED", "ARCHIVED"].includes(program.status);
     if (filter === "revision") return program.status === "REVISION_REQUIRED";

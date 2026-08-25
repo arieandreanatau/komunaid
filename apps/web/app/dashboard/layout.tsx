@@ -92,7 +92,7 @@ export default function DashboardLayout({
               id="mobile-global-sidebar"
               ref={sidebarRef}
               tabIndex={-1}
-              className="absolute left-0 top-0 bottom-0 flex w-[min(94vw,24rem)] flex-col bg-white shadow-2xl transition-transform"
+              className="absolute left-0 top-0 bottom-0 flex w-[min(92vw,22rem)] flex-col bg-white shadow-2xl transition-transform"
               role="dialog"
               aria-modal="true"
               aria-label="Navigasi global"

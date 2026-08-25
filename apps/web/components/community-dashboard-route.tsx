@@ -707,7 +707,7 @@ function ProfilKomunitasTab({ community }: { community: DashboardData["community
 
       <div className="flex items-center justify-between rounded-xl border border-blue-100 bg-blue-50/60 p-5">
         <div><p className="font-bold text-komuna-navy">Perlu mengubah informasi?</p><p className="mt-1 text-sm text-slate-600">Edit profil komunitas melalui Pengaturan.</p></div>
-        <Link href={`/dashboard/communities/${community.id}/settings`} className="rounded-lg bg-komuna-blue px-4 py-2 text-sm font-bold text-white hover:bg-komuna-navy">Edit Profil</Link>
+        <Link href={`/dashboard/communities/${community.slug}/settings`} className="rounded-lg bg-komuna-blue px-4 py-2 text-sm font-bold text-white hover:bg-komuna-navy">Edit Profil</Link>
       </div>
     </div>
   );
