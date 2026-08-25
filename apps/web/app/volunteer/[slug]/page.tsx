@@ -42,6 +42,7 @@ interface VolunteerProgramDetail {
     reviewNote: string | null;
     createdAt: string;
   } | null;
+  isSaved: boolean;
 }
 
 interface VolunteerListItem {
@@ -120,6 +121,7 @@ export default function VolunteerDetailPage() {
   const [formError, setFormError] = useState("");
   const [related, setRelated] = useState<VolunteerListItem[]>([]);
   const [form, setForm] = useState({ motivation: "", agreement: false });
+  const [saveLoading, setSaveLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -179,6 +181,19 @@ export default function VolunteerDetailPage() {
       setFormError(error.response?.data?.message || "Gagal mendaftar");
     } finally {
       setApplying(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!opportunity) return;
+    setSaveLoading(true);
+    try {
+      await api[opportunity.isSaved ? "delete" : "post"](`/volunteer-programs/${opportunity.id}/save`);
+      setOpportunity((current) => current ? { ...current, isSaved: !current.isSaved } : current);
+    } catch (error: any) {
+      setFormError(error.response?.data?.message || "Gagal memperbarui volunteer tersimpan.");
+    } finally {
+      setSaveLoading(false);
     }
   };
 
@@ -383,6 +398,9 @@ export default function VolunteerDetailPage() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3">
+                <button type="button" onClick={handleSave} disabled={saveLoading} aria-pressed={opportunity.isSaved} className={`flex-1 py-3 rounded-lg border transition-colors font-medium disabled:opacity-50 ${opportunity.isSaved ? "border-komuna-blue bg-komuna-blue/5 text-komuna-blue" : "border-gray-300 text-gray-700 hover:bg-gray-50"}`}>
+                  {saveLoading ? "Memproses..." : opportunity.isSaved ? "Tersimpan" : "Simpan Volunteer"}
+                </button>
                 {canApply && (
                   <button
                     onClick={() => setShowApplyModal(true)}

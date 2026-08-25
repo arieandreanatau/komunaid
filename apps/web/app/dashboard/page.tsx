@@ -54,7 +54,19 @@ interface DashboardProfile {
   registeredEventsCount?: number;
   savedEvents?: EventSummary[];
   savedEventsCount?: number;
+  savedCommunitiesCount?: number;
+  savedVolunteerProgramsCount?: number;
   unreadNotifications?: number;
+}
+
+interface VolunteerApplicationSummary {
+  id: string;
+  status: string;
+  volunteerProgram: { id: string; title: string; startDate: string; endDate?: string; status: string };
+}
+
+interface VolunteerDashboardSummary {
+  applications: VolunteerApplicationSummary[];
 }
 
 interface NotificationItem {
@@ -114,6 +126,7 @@ function Icon({ name, className = "h-5 w-5" }: { name: string; className?: strin
     sparkles: "M5 3v4M3 5h4m11-2v4m-2-2h4M6 17v4m-2-2h4m7-8l1.5 3.5L20 16l-3.5 1.5L15 21l-1.5-3.5L10 16l3.5-1.5L15 11z",
     refresh: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15",
     alertCircle: "M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
+    volunteer: "M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z",
   };
 
   return (
@@ -279,6 +292,12 @@ export default function DashboardPage() {
     },
   });
 
+  const volunteerQuery = useQuery<VolunteerDashboardSummary>({
+    queryKey: ["volunteer-programs", "my", "dashboard"],
+    enabled: !!user,
+    queryFn: async () => (await api.get("/volunteer-programs/my")).data.data,
+  });
+
   const notificationsQuery = useQuery<NotificationItem[]>({
     queryKey: ["notifications", "dashboard"],
     enabled: !!user,
@@ -299,8 +318,15 @@ export default function DashboardPage() {
 
   const profile = profileQuery.data || (user as DashboardProfile | null) || {};
   const followedCommunities = profile.followedCommunities || profile.communities || [];
+  const createdCommunities = profile.createdCommunities || [];
   const registeredEvents = profile.events || [];
   const savedEventsCount = profile.savedEventsCount ?? profile.savedEvents?.length ?? 0;
+  const savedCommunitiesCount = profile.savedCommunitiesCount ?? 0;
+  const savedVolunteerProgramsCount = profile.savedVolunteerProgramsCount ?? 0;
+  const volunteerApplications = volunteerQuery.data?.applications || [];
+  const upcomingVolunteer = volunteerApplications
+    .filter((application) => new Date(application.volunteerProgram.startDate).getTime() >= Date.now() && !["CANCELLED", "REJECTED"].includes(application.status))
+    .sort((a, b) => new Date(a.volunteerProgram.startDate).getTime() - new Date(b.volunteerProgram.startDate).getTime());
   const upcomingRegisteredEvents = registeredEvents
     .filter((event) => new Date(event.eventDate).getTime() >= new Date().setHours(0, 0, 0, 0))
     .sort((a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime());
@@ -390,15 +416,13 @@ export default function DashboardPage() {
       </section>
 
       {/* Summary Cards */}
-      <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {isLoadingProfile ? (
           <>
-            <StatCardSkeleton />
-            <StatCardSkeleton />
-            <StatCardSkeleton />
+            {Array.from({ length: 7 }).map((_, index) => <StatCardSkeleton key={index} />)}
           </>
         ) : isErrorProfile ? (
-          <div className="col-span-full rounded-xl border border-red-200 bg-red-50 p-4 sm:col-span-3">
+          <div className="col-span-full rounded-xl border border-red-200 bg-red-50 p-4">
             <div className="flex items-start gap-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-500">
                 <Icon name="alertCircle" />
@@ -469,8 +493,28 @@ export default function DashboardPage() {
                 accent="bg-amber-50 text-amber-600"
               />
             )}
+            <StatCard icon="users" label="Komunitas Dibuat" value={createdCommunities.length} href="/dashboard/communities" accent="bg-purple-50 text-purple-600" />
+            <StatCard icon="bookmark" label="Komunitas Tersimpan" value={savedCommunitiesCount} href="/dashboard/communities?tab=saved" accent="bg-slate-100 text-slate-500" />
+            <StatCard icon="volunteer" label="Volunteer Terdaftar" value={volunteerApplications.length} href="/dashboard/volunteers" accent="bg-teal-50 text-teal-600" />
+            <StatCard icon="bookmark" label="Volunteer Tersimpan" value={savedVolunteerProgramsCount} href="/dashboard/volunteers?tab=saved" accent="bg-slate-100 text-slate-500" />
           </>
         )}
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <SectionHeader title="Volunteer Mendatang" subtitle="Kegiatan volunteer yang sudah kamu daftarkan" href="/dashboard/volunteers" />
+        {volunteerQuery.isLoading ? (
+          <div className="space-y-3"><SkeletonPulse className="h-16 w-full" /><SkeletonPulse className="h-16 w-full" /></div>
+        ) : upcomingVolunteer.length ? (
+          <div className="grid gap-3 md:grid-cols-2">
+            {upcomingVolunteer.slice(0, 4).map((application) => (
+              <Link key={application.id} href={`/dashboard/volunteer-programs/${application.volunteerProgram.id}`} className="flex items-center gap-3 rounded-xl border border-slate-100 p-3 transition-colors hover:border-komuna-blue/25 hover:bg-blue-50/40">
+                <span className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl bg-teal-50 text-teal-700"><span className="text-[9px] font-bold uppercase">{new Date(application.volunteerProgram.startDate).toLocaleDateString("id-ID", { month: "short" })}</span><span className="text-base font-extrabold leading-none">{new Date(application.volunteerProgram.startDate).getDate()}</span></span>
+                <span className="min-w-0"><span className="block truncate text-sm font-bold text-komuna-navy">{application.volunteerProgram.title}</span><span className="mt-1 block text-xs text-slate-500">{new Date(application.volunteerProgram.startDate).toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long" })}</span></span>
+              </Link>
+            ))}
+          </div>
+        ) : <p className="rounded-xl bg-slate-50 p-5 text-center text-sm text-slate-500">Belum ada volunteer mendatang. <Link href="/volunteer" className="font-bold text-komuna-blue">Jelajahi volunteer</Link></p>}
       </section>
 
       {/* Recommendations + Calendar */}

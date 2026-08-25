@@ -109,6 +109,10 @@ userRoutes.get("/profile", authMiddleware, async (c) => {
       where: { userId: authUser.id, event: { deletedAt: null } },
     }).catch(() => 0),
   ]);
+  const [savedCommunitiesCount, savedVolunteerProgramsCount] = await Promise.all([
+    prisma.communitySave.count({ where: { userId: authUser.id, community: { deletedAt: null } } }).catch(() => 0),
+    prisma.volunteerProgramSave.count({ where: { userId: authUser.id, volunteerProgram: { deletedAt: null } } }).catch(() => 0),
+  ]);
 
   const mapCommunity = (membership: (typeof user.joinedCommunities)[number]) => ({
     id: membership.community.id,
@@ -187,6 +191,8 @@ userRoutes.get("/profile", authMiddleware, async (c) => {
           savedAt: saved.createdAt,
         })),
         savedEventsCount,
+        savedCommunitiesCount,
+        savedVolunteerProgramsCount,
         unreadNotifications: unreadCount,
         createdAt: user.createdAt,
       },

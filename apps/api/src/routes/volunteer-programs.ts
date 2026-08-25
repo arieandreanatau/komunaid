@@ -361,6 +361,19 @@ volunteerProgramRoutes.post("/:programId/resubmit", authMiddleware, async (c) =>
   return c.json({ success: true, data: updated });
 });
 
+volunteerProgramRoutes.get("/my/saved", authMiddleware, async (c) => {
+  const user = c.get("user");
+  const url = new URL(c.req.url);
+  const page = Math.max(1, Number(url.searchParams.get("page") || 1));
+  const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") || 20)));
+  const where = { userId: user.id, volunteerProgram: { deletedAt: null } };
+  const [saved, total] = await Promise.all([
+    prisma.volunteerProgramSave.findMany({ where, include: { volunteerProgram: { select: { id: true, title: true, slug: true, description: true, status: true, startDate: true, endDate: true, location: true } } }, orderBy: { createdAt: "desc" }, skip: (page - 1) * limit, take: limit }),
+    prisma.volunteerProgramSave.count({ where }),
+  ]);
+  return c.json({ success: true, data: saved.map((item) => ({ ...item.volunteerProgram, savedAt: item.createdAt })), pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
+});
+
 volunteerProgramRoutes.get("/admin/review-queue", authMiddleware, requireSuperAdmin(), async (c) => {
   const programs = await prisma.volunteerProgram.findMany({
     where: { status: "UNDER_REVIEW", deletedAt: null },
@@ -499,9 +512,10 @@ volunteerProgramRoutes.get("/detail/:slug", optionalAuthMiddleware, async (c) =>
     include: { community: { select: { id: true, name: true, slug: true } }, organizerUser: { select: { id: true, name: true, avatar: true } }, _count: { select: { applications: true } } },
   });
   if (!program || program.deletedAt || !PUBLIC_STATUSES.includes(program.status)) return c.json({ success: false, message: "Program tidak ditemukan" }, 404);
-  const [userApplication, acceptedCount] = await Promise.all([
+  const [userApplication, acceptedCount, isSaved] = await Promise.all([
     user ? prisma.volunteerProgramApplication.findUnique({ where: { volunteerProgramId_userId: { volunteerProgramId: program.id, userId: user.id } } }) : Promise.resolve(null),
     prisma.volunteerProgramApplication.count({ where: { volunteerProgramId: program.id, status: "ACCEPTED" } }),
+    user ? prisma.volunteerProgramSave.findUnique({ where: { volunteerProgramId_userId: { volunteerProgramId: program.id, userId: user.id } }, select: { id: true } }).then(Boolean).catch(() => false) : Promise.resolve(false),
   ]);
   const applicationCount = program._count.applications;
   return c.json({ success: true, data: {
@@ -513,7 +527,23 @@ volunteerProgramRoutes.get("/detail/:slug", optionalAuthMiddleware, async (c) =>
     event: { id: program.id, title: program.title, slug: program.slug, eventDate: program.startDate, endDate: program.endDate, location: program.location, locationType: "OFFLINE", status: program.status, community: program.community, organization: null },
     capacity: program.capacity, applicationCount, acceptedCount, slotsLeft: Math.max(program.capacity - acceptedCount, 0),
     userApplication,
+    isSaved,
   } });
+});
+
+volunteerProgramRoutes.post("/:programId/save", authMiddleware, async (c) => {
+  const user = c.get("user");
+  const volunteerProgramId = c.req.param("programId") as string;
+  const program = await prisma.volunteerProgram.findFirst({ where: { id: volunteerProgramId, deletedAt: null }, select: { id: true } });
+  if (!program) return c.json({ success: false, message: "Program volunteer tidak ditemukan" }, 404);
+  await prisma.volunteerProgramSave.upsert({ where: { volunteerProgramId_userId: { volunteerProgramId, userId: user.id } }, create: { volunteerProgramId, userId: user.id }, update: {} });
+  return c.json({ success: true, message: "Volunteer berhasil disimpan" });
+});
+
+volunteerProgramRoutes.delete("/:programId/save", authMiddleware, async (c) => {
+  const user = c.get("user");
+  await prisma.volunteerProgramSave.deleteMany({ where: { volunteerProgramId: c.req.param("programId") as string, userId: user.id } });
+  return c.json({ success: true, message: "Volunteer dihapus dari daftar tersimpan" });
 });
 
 async function discoveryPrograms(where: any, orderBy: any, take: number) {

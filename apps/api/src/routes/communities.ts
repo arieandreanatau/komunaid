@@ -415,6 +415,18 @@ communityRoutes.get(
 // 2. GET COMMUNITY BY SLUG (Public)
 // ==========================================
 
+communityRoutes.get("/my/saved", authMiddleware, async (c) => {
+  const user = c.get("user");
+  const page = Math.max(1, Number(new URL(c.req.url).searchParams.get("page") || 1));
+  const limit = Math.min(100, Math.max(1, Number(new URL(c.req.url).searchParams.get("limit") || 20)));
+  const where = { userId: user.id, community: { deletedAt: null } };
+  const [saved, total] = await Promise.all([
+    prisma.communitySave.findMany({ where, include: { community: { select: { id: true, name: true, slug: true, logo: true, coverImage: true, description: true, _count: { select: { members: true } } } } }, orderBy: { createdAt: "desc" }, skip: (page - 1) * limit, take: limit }),
+    prisma.communitySave.count({ where }),
+  ]);
+  return c.json({ success: true, data: saved.map((item) => ({ ...item.community, memberCount: item.community._count.members, _count: undefined, savedAt: item.createdAt })), pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
+});
+
 communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
   const slug = c.req.param("slug") as string;
   const user = c.get("user");
@@ -484,6 +496,7 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
 
   let userMembership: { role: string; status: string } | null = null;
   let pendingJoinRequests = 0;
+  let isSaved = false;
   if (user) {
     const membership = await prisma.communityMember.findUnique({
       where: {
@@ -497,6 +510,12 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
     userMembership = membership
       ? { role: membership.role, status: membership.status }
       : null;
+    try {
+      isSaved = Boolean(await prisma.communitySave.findUnique({ where: { communityId_userId: { communityId: community.id, userId: user.id } }, select: { id: true } }));
+    } catch {
+      // Keep community detail compatible until bookmark tables are migrated.
+      isSaved = false;
+    }
     const canManage = user.id === community.ownerId || Boolean(membership && membership.status === "ACTIVE" && membership.deletedAt === null && ["OWNER", "ADMIN"].includes(membership.role));
     if (canManage) {
       pendingJoinRequests = await prisma.joinRequest.count({
@@ -541,6 +560,7 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
       contactEmail: community.contactEmail,
       contactPhone: community.contactPhone,
       pendingJoinRequests,
+      isSaved,
       membershipType: community.membershipType,
       status: community.status,
       visibility: community.visibility,
@@ -588,6 +608,21 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
       updatedAt: community.updatedAt,
     },
   });
+});
+
+communityRoutes.post("/:communityId/save", authMiddleware, async (c) => {
+  const user = c.get("user");
+  const communityId = c.req.param("communityId") as string;
+  const community = await prisma.community.findFirst({ where: { id: communityId, deletedAt: null }, select: { id: true } });
+  if (!community) return c.json({ success: false, message: "Komunitas tidak ditemukan" }, 404);
+  await prisma.communitySave.upsert({ where: { communityId_userId: { communityId, userId: user.id } }, create: { communityId, userId: user.id }, update: {} });
+  return c.json({ success: true, message: "Komunitas berhasil disimpan" });
+});
+
+communityRoutes.delete("/:communityId/save", authMiddleware, async (c) => {
+  const user = c.get("user");
+  await prisma.communitySave.deleteMany({ where: { communityId: c.req.param("communityId") as string, userId: user.id } });
+  return c.json({ success: true, message: "Komunitas dihapus dari daftar tersimpan" });
 });
 
 // ==========================================

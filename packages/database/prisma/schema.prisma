@@ -38,6 +38,8 @@ model User {
   organizationMembers   OrganizationMember[]
   registeredEvents      EventRegistration[]
   savedEvents           EventSave[]
+  savedCommunities      CommunitySave[]
+  savedVolunteerPrograms VolunteerProgramSave[]
   createdCommunities    Community[]
   createdOrganizations  Organization[]
   createdEvents         Event[]
@@ -146,6 +148,7 @@ model Community {
   media               CommunityMedia[]
   statistics          CommunityStatistic[]
   membershipHistories MembershipHistory[]
+  savedBy             CommunitySave[]
 
   @@index([ownerId])
   @@index([status])
@@ -634,6 +637,20 @@ model EventSave {
   @@map("event_saves")
 }
 
+model CommunitySave {
+  id          String   @id @default(cuid())
+  communityId String
+  userId      String
+  createdAt   DateTime @default(now())
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([communityId, userId])
+  @@index([userId, createdAt])
+  @@map("community_saves")
+}
+
 enum RegistrationStatus {
   PENDING
   CONFIRMED
@@ -840,6 +857,7 @@ model VolunteerProgram {
   accesses        VolunteerProgramOrganizerAccess[]
   applications    VolunteerProgramApplication[]
   statusHistory   VolunteerProgramStatusHistory[]
+  savedBy         VolunteerProgramSave[]
 
   @@unique([slug], map: "vp_slug_uq")
   @@unique([legacyOpportunityId], map: "vp_legacy_opportunity_uq")
@@ -850,6 +868,20 @@ model VolunteerProgram {
   @@index([eventId], map: "vp_event_idx")
   @@index([deletedAt], map: "vp_deleted_at_idx")
   @@map("volunteer_programs")
+}
+
+model VolunteerProgramSave {
+  id                 String   @id @default(cuid())
+  volunteerProgramId String
+  userId             String
+  createdAt          DateTime @default(now())
+
+  volunteerProgram VolunteerProgram @relation(fields: [volunteerProgramId], references: [id], onDelete: Cascade)
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([volunteerProgramId, userId])
+  @@index([userId, createdAt])
+  @@map("volunteer_program_saves")
 }
 
 enum VolunteerOrganizerType {

@@ -90,6 +90,7 @@ interface Community {
   settings: { showMemberList: boolean; showEventList: boolean } | null;
   userMembership: { role: string; status: string } | null;
   pendingJoinRequests: number;
+  isSaved: boolean;
   createdAt?: string;
 }
 
@@ -143,6 +144,7 @@ export default function CommunityDetailPage() {
   const [joinModalOpen, setJoinModalOpen] = useState(false);
   const [joinMessage, setJoinMessage] = useState("");
   const [joinLoading, setJoinLoading] = useState(false);
+  const [saveLoading, setSaveLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<CommunityTab>(
     (searchParams.get("tab") as CommunityTab) || "tentang"
   );
@@ -201,6 +203,22 @@ export default function CommunityDetailPage() {
       alert(err?.response?.data?.message || "Gagal mengirim permintaan.");
     } finally {
       setJoinLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!community || !isAuthenticated) {
+      window.location.href = `/login?redirect=${encodeURIComponent(`/communities/${slug}`)}`;
+      return;
+    }
+    setSaveLoading(true);
+    try {
+      await api[community.isSaved ? "delete" : "post"](`/communities/${community.id}/save`);
+      setCommunity((current) => current ? { ...current, isSaved: !current.isSaved } : current);
+    } catch (err: any) {
+      alert(err?.response?.data?.message || "Gagal memperbarui komunitas tersimpan.");
+    } finally {
+      setSaveLoading(false);
     }
   };
 
@@ -374,6 +392,16 @@ export default function CommunityDetailPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                   </svg>
                   <span className="hidden sm:inline">Bagikan</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saveLoading}
+                  aria-pressed={community.isSaved}
+                  className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-50 ${community.isSaved ? "border-komuna-blue bg-komuna-blue/5 text-komuna-blue" : "border-gray-300 text-gray-700 hover:bg-komuna-soft"}`}
+                >
+                  <svg className="h-4 w-4" fill={community.isSaved ? "currentColor" : "none"} viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-4-7 4V5z" /></svg>
+                  <span className="hidden sm:inline">{saveLoading ? "Memproses..." : community.isSaved ? "Tersimpan" : "Simpan"}</span>
                 </button>
                 <CommunityActions
                   community={community}
