@@ -451,9 +451,10 @@ export const eventQuerySchema = z.object({
         "REGISTRATION_OPEN",
         "REGISTRATION_CLOSED",
         "ONGOING",
-        "COMPLETED",
-        "CANCELLED",
-        "ARCHIVED",
+         "COMPLETED",
+         "CANCELLED",
+         "REJECTED",
+         "ARCHIVED",
       ])
       .optional()
   ),

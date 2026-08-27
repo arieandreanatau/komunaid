@@ -13,7 +13,7 @@ async function setAuthCookie(page: import("@playwright/test").Page) {
     .setSubject("user1")
     .setIssuedAt()
     .setExpirationTime("1h")
-    .sign(new TextEncoder().encode(process.env.JWT_SECRET || "test-playwright-jwt-secret"));
+     .sign(new TextEncoder().encode("test-playwright-jwt-secret-32-characters-minimum"));
   return page.context().addCookies([
     { name: "token", value: token, domain: "localhost", path: "/" },
   ]);

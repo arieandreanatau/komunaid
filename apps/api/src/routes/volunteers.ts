@@ -97,7 +97,7 @@ volunteerRoutes.get("/", optionalAuthMiddleware, validate(volunteerOpportunityQu
     event: {
       deletedAt: null,
       visibility: "PUBLIC",
-      status: { notIn: ["DRAFT", "CANCELLED", "ARCHIVED"] },
+      status: { in: ["PUBLISHED", "OPEN", "CLOSED"] },
     },
   };
 

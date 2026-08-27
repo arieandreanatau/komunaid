@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 const communityLinks = [
-  { href: "/communities", label: "Jelajahi Komunitas" },
+  { href: "/communities", label: "Komunitas" },
   { href: "/categories", label: "Kategori" },
   { href: "/communities/create", label: "Buat Komunitas" },
 ];

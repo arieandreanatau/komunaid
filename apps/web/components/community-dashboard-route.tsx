@@ -587,7 +587,7 @@ export function CommunityDashboardRoute({
             )}
 
             {tab === "event" && (
-              <CommunityEventTab communityId={communityId} communityName={community.name} />
+              <CommunityEventTab communityId={communityId} communitySlug={community.slug} communityName={community.name} />
             )}
 
             {tab === "anggota" && (

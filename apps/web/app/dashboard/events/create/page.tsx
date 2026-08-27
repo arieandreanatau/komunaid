@@ -9,6 +9,7 @@ import { z } from "zod";
 import { useMutation } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { useAuth } from "@/components/auth-provider";
+import { useContextStore } from "@/components/sidebar";
 import { eventOrganizers, type Organizer } from "@/lib/event-organizers";
 
 const eventSchema = z.object({
@@ -124,7 +125,10 @@ export default function CreateEventPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { activeContextType, activeCommunity } = useContextStore();
   const presetCommunityId = searchParams.get("communityId") || "";
+  const contextCommunityId = presetCommunityId || (activeContextType === "community" ? activeCommunity?.id || "" : "");
+  const contextCommunitySlug = activeContextType === "community" ? activeCommunity?.slug : undefined;
   const [step, setStep] = useState(1);
   const [categories, setCategories] = useState<Category[]>([]);
   const [organizers, setOrganizers] = useState<Organizer[]>([]);
@@ -236,12 +240,12 @@ export default function CreateEventPage() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      const redirect = presetCommunityId
-        ? `/dashboard/events/create?communityId=${encodeURIComponent(presetCommunityId)}`
+      const redirect = contextCommunitySlug
+        ? `/dashboard/communities/${contextCommunitySlug}/events/create`
         : "/dashboard/events/create";
       router.push(`/login?redirect=${encodeURIComponent(redirect)}`);
     }
-  }, [isAuthenticated, authLoading, router, presetCommunityId]);
+  }, [isAuthenticated, authLoading, router, contextCommunitySlug]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -255,18 +259,18 @@ export default function CreateEventPage() {
         const organizersList = eventOrganizers(profile);
         setOrganizers(organizersList);
 
-        if (presetCommunityId) {
-          const community = organizersList.find((o) => o.type === "community" && o.id === presetCommunityId);
+        if (contextCommunityId) {
+          const community = organizersList.find((o) => o.type === "community" && o.id === contextCommunityId);
           if (community) {
             setLockedCommunity({ id: community.id, name: community.name, authorized: true });
             setValue("communityId", community.id, { shouldValidate: true });
             setValue("organizationId", null, { shouldValidate: true });
           } else {
             const profileCommunities = profile?.communities || [];
-            const known = profileCommunities.find((c: { id: string }) => c.id === presetCommunityId);
+            const known = profileCommunities.find((c: { id: string }) => c.id === contextCommunityId);
             setLockedCommunity({
-              id: presetCommunityId,
-              name: known?.name || "Komunitas ini",
+              id: contextCommunityId,
+              name: known?.name || activeCommunity?.name || "Komunitas ini",
               authorized: false,
             });
           }
@@ -276,7 +280,7 @@ export default function CreateEventPage() {
       }
     };
     if (isAuthenticated) fetchData();
-  }, [isAuthenticated, presetCommunityId, setValue]);
+  }, [isAuthenticated, contextCommunityId, activeCommunity?.name, setValue]);
 
   const toggleCategory = (id: string) => {
     const current = formValues.categoryIds;

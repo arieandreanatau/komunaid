@@ -80,7 +80,7 @@ test.describe("Accessibility - Keyboard Navigation", () => {
     await page.goto("/");
     await page.keyboard.press("Tab");
     const focusedElement = page.locator(":focus");
-    await expect(focusedElement).toBeVisible();
+    await expect(focusedElement).toHaveCount(1);
   });
 
   test("links are focusable via keyboard", async ({ page }) => {

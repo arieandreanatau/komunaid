@@ -450,7 +450,7 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
         where: {
           deletedAt: null,
           visibility: "PUBLIC",
-          status: { notIn: ["DRAFT", "CANCELLED", "ARCHIVED"] },
+          status: { in: ["PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"] },
         },
         orderBy: { eventDate: "asc" },
         take: 20,

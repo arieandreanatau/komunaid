@@ -2,7 +2,7 @@ import { type Page, type Route } from "@playwright/test";
 import { SignJWT } from "jose";
 
 const API_BASE = "**/api/v1/**";
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "test-playwright-jwt-secret");
+const JWT_SECRET = new TextEncoder().encode("test-playwright-jwt-secret-32-characters-minimum");
 
 export async function testAccessToken(userId: string, roles: string[] = ["USER"]) {
   return new SignJWT({
@@ -94,9 +94,8 @@ export async function mockLoginSuccess(page: Page, userData?: object, roles: str
     ...userData,
   };
   const token = await testAccessToken(defaultUser.id, roles);
-  await page.context().addCookies([{ name: "token", value: token, domain: "localhost", path: "/" }]);
-
   await page.route("**/api/v1/auth/login", async (route) => {
+    await page.context().addCookies([{ name: "token", value: token, domain: "localhost", path: "/" }]);
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -109,6 +108,11 @@ export async function mockLoginSuccess(page: Page, userData?: object, roles: str
     });
   });
   await page.route("**/api/v1/auth/me", async (route) => {
+    const hasToken = (await page.context().cookies()).some((cookie) => cookie.name === "token" && cookie.value.length > 0);
+    if (!hasToken) {
+      await route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({}) });
+      return;
+    }
     await route.fulfill({
       status: 200,
       contentType: "application/json",

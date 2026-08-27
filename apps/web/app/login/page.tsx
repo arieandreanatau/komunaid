@@ -60,7 +60,7 @@ export default function LoginPage() {
             <img src="/icon_komuna.png" alt="KomunaID" className="h-10 w-10" />
             <span className="font-display text-2xl font-semibold text-komuna-dark">KomunaID</span>
           </Link>
-          <h2 className="font-display text-3xl font-semibold tracking-[-0.03em] text-komuna-dark">Masuk ke Akun</h2>
+          <h1 className="font-display text-3xl font-semibold tracking-[-0.03em] text-komuna-dark">Masuk ke Akun</h1>
           <p className="text-sm text-gray-600 mt-2">
             Belum punya akun?{" "}
             <Link href="/register" className="text-komuna-blue hover:underline font-medium">

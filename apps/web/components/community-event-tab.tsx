@@ -65,7 +65,7 @@ function formatDate(value: string): string {
   });
 }
 
-export function CommunityEventTab({ communityId, communityName }: { communityId: string; communityName: string }) {
+export function CommunityEventTab({ communityId, communitySlug, communityName }: { communityId: string; communitySlug: string; communityName: string }) {
   const [events, setEvents] = useState<CommunityEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -137,7 +137,7 @@ export function CommunityEventTab({ communityId, communityName }: { communityId:
         </div>
         {canManage && (
           <Link
-            href={`/dashboard/events/create?communityId=${encodeURIComponent(communityId)}`}
+            href={`/dashboard/communities/${communitySlug}/events/create`}
             className="inline-flex items-center gap-2 px-4 py-2.5 bg-komuna-blue text-white rounded-lg font-medium text-sm hover:bg-komuna-navy transition-colors"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -191,7 +191,7 @@ export function CommunityEventTab({ communityId, communityName }: { communityId:
           </p>
           {canManage && (
             <Link
-              href={`/dashboard/events/create?communityId=${encodeURIComponent(communityId)}`}
+              href={`/dashboard/communities/${communitySlug}/events/create`}
               className="inline-flex items-center gap-2 mt-5 px-5 py-2.5 bg-komuna-blue text-white rounded-lg text-sm font-medium hover:bg-komuna-navy transition-colors"
             >
               + Tambah Event

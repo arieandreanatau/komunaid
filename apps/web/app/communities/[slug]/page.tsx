@@ -502,7 +502,15 @@ export default function CommunityDetailPage() {
                   />
                 )}
 
-                {activeTab === "volunteer" && (
+                 {activeTab === "tentang" && (
+                   <VolunteerSection
+                     communityId={community.id}
+                     volunteers={volunteers}
+                     loading={volunteersLoading}
+                   />
+                 )}
+
+                 {activeTab === "volunteer" && (
                   <VolunteerSection
                     communityId={community.id}
                     volunteers={volunteers}
@@ -1265,7 +1273,7 @@ function OfficersCard({
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
-          Pengelola
+          Pengurus
         </h3>
         <Link
           href={`/communities/${communitySlug}/members`}

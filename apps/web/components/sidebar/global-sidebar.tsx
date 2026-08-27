@@ -50,6 +50,8 @@ export function GlobalSidebar({
     setSidebarCollapsed,
   } = useContextStore();
 
+  const activeCommunityPath = activeCommunity?.slug || activeCommunity?.id;
+
   const { data: profile } = useQuery<UserProfile>({
     queryKey: ["profile"],
     enabled: isAuthenticated,
@@ -114,7 +116,7 @@ export function GlobalSidebar({
   }, [isMobile, onMobileClose]);
 
   const navigationSections: NavSection[] = activeContextType === "community" && activeCommunity
-    ? getCommunityNavigation(activeCommunity.slug, activeCommunity.role)
+    ? getCommunityNavigation(activeCommunityPath || activeCommunity.id, activeCommunity.role)
     : getPersonalNavigation();
 
   const allSections = [...navigationSections];

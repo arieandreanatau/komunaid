@@ -40,13 +40,20 @@ async function setAuthCookie(page: Page) {
     .setSubject("test-user-id")
     .setIssuedAt()
     .setExpirationTime("1h")
-    .sign(new TextEncoder().encode(process.env.JWT_SECRET || "test-playwright-jwt-secret"));
+     .sign(new TextEncoder().encode("test-playwright-jwt-secret-32-characters-minimum"));
   return page.context().addCookies([
     { name: "token", value: token, domain: "localhost", path: "/" },
   ]);
 }
 
 async function mockDashboard(page: Page) {
+  await page.route(/\/api\/v1\/communities\/(tech-jakarta|comm-1)$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ data: dashboardPayload.communityInfo }),
+    });
+  });
   await page.route(`**/api/v1/communities/${COMMUNITY_ID}/dashboard`, async (route) => {
     await route.fulfill({
       status: 200,

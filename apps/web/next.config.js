@@ -42,7 +42,7 @@ const nextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   async headers() {
     return [

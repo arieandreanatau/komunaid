@@ -199,7 +199,7 @@ organizationRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
       },
       events: {
         where: {
-          status: "PUBLISHED",
+          status: { in: ["PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"] },
           visibility: "PUBLIC",
           deletedAt: null,
           eventDate: { gte: new Date() },

@@ -191,6 +191,7 @@ export function ContextSwitcher({ collapsed = false }: ContextSwitcherProps) {
             isActive={isActive}
             isSearching={isSearching}
             align="left"
+            side="right"
           />
         )}
       </div>
@@ -229,10 +230,11 @@ export function ContextSwitcher({ collapsed = false }: ContextSwitcherProps) {
           searchResults={searchResults}
           search={search}
           onSearchChange={setSearch}
-          onSelect={handleSelect}
-          isActive={isActive}
-          isSearching={isSearching}
-          align="right"
+           onSelect={handleSelect}
+           isActive={isActive}
+           isSearching={isSearching}
+           align="right"
+           side="bottom"
         />
       )}
     </div>
@@ -252,6 +254,7 @@ interface ContextDropdownProps {
   isActive: (type: "personal" | "community", communityId?: string) => boolean;
   isSearching: boolean;
   align: "left" | "right";
+  side: "right" | "bottom";
 }
 
 function CommunityRow({
@@ -313,11 +316,12 @@ const ContextDropdown = forwardRef<HTMLDivElement, ContextDropdownProps>(
     isActive,
     isSearching,
     align,
+    side,
   }, ref) {
     return (
       <div
         ref={ref}
-        className={`absolute top-full z-50 mt-2 w-[min(22rem,calc(100vw-1.5rem))] max-w-[calc(100vw-1.5rem)] rounded-xl border border-slate-200 bg-white shadow-xl ${align === "right" ? "right-0" : "left-0"}`}
+        className={`absolute z-50 w-[min(22rem,calc(100vw-1.5rem))] max-w-[calc(100vw-1.5rem)] rounded-xl border border-slate-200 bg-white shadow-xl ${side === "right" ? "left-full top-0 ml-3" : `top-full mt-2 ${align === "right" ? "right-0" : "left-0"}`}`}
         role="dialog"
         aria-label="Switch Context"
         onClick={(e) => e.stopPropagation()}

@@ -30,10 +30,13 @@ export default function CreateVolunteerProgramPage() {
 
   const save = useMutation({
     mutationFn: async () => {
+      if (form.organizerType === "COMMUNITY" && !form.communityId.trim()) {
+        throw new Error("Komunitas wajib dipilih.");
+      }
       const payload = {
         title: form.title.trim(),
         description: form.description.trim(),
-        location: form.location.trim() || null,
+        location: form.location.trim(),
         capacity: Number(form.capacity),
         startDate: new Date(form.startDate).toISOString(),
         endDate: new Date(form.endDate).toISOString(),
@@ -41,7 +44,10 @@ export default function CreateVolunteerProgramPage() {
       } as Record<string, unknown>;
       if (form.organizerType === "COMMUNITY" && form.communityId) payload.communityId = form.communityId;
       if (form.organizerType === "INDEPENDENT") payload.organizerType = "INDEPENDENT";
-      const response = await api.post("/volunteer-programs", payload);
+      const endpoint = form.organizerType === "COMMUNITY"
+        ? `/volunteer-programs/communities/${form.communityId}`
+        : "/volunteer-programs/independent-proposals";
+      const response = await api.post(endpoint, payload);
       const program = response.data.data;
       return api.post(`/volunteer-programs/${program.id}/submit`).then(() => program);
     },
@@ -52,8 +58,21 @@ export default function CreateVolunteerProgramPage() {
   const goNext = () => {
     setError(null);
     if (step === 0 && form.title.trim().length < 3) return setError("Judul minimal 3 karakter.");
-    if (step === 3 && (!form.startDate || !form.endDate || new Date(form.endDate) <= new Date(form.startDate))) return setError("Jadwal selesai harus setelah jadwal mulai.");
-    if (step === 5 && form.registrationDeadline && new Date(form.registrationDeadline) >= new Date(form.startDate)) return setError("Batas pendaftaran harus sebelum program dimulai.");
+    if (step === 0 && form.description.trim().length < 10) return setError("Deskripsi minimal 10 karakter.");
+    if (step === 1 && form.organizerType === "COMMUNITY" && !form.communityId.trim()) return setError("ID komunitas wajib diisi.");
+    if (step === 2 && form.location.trim().length < 2) return setError("Lokasi minimal 2 karakter.");
+    if (step === 3) {
+      if (!form.startDate || !form.endDate) return setError("Jadwal mulai dan selesai wajib diisi.");
+      const start = new Date(form.startDate);
+      const end = new Date(form.endDate);
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return setError("Format jadwal tidak valid.");
+      if (start <= new Date()) return setError("Jadwal mulai harus di masa depan.");
+      if (end <= start) return setError("Jadwal selesai harus setelah jadwal mulai.");
+    }
+    if (step === 5) {
+      if (!Number.isInteger(form.capacity) || form.capacity < 1) return setError("Kuota minimal 1.");
+      if (form.registrationDeadline && new Date(form.registrationDeadline) >= new Date(form.startDate)) return setError("Batas pendaftaran harus sebelum program dimulai.");
+    }
     setStep((previous) => Math.min(previous + 1, STEPS.length - 1));
   };
   const goBack = () => setStep((previous) => Math.max(previous - 1, 0));
