@@ -7,6 +7,7 @@ import { useAuth } from "@/components/auth-provider";
 interface AuditLog {
   id: string;
   user: { id: string; name: string; email: string };
+  actorRole?: string | null;
   actionType: string;
   resourceName: string;
   resourceId: string;
@@ -219,6 +220,7 @@ export default function AuditLogsPage() {
                         <div className="text-sm space-y-1">
                           <p><span className="text-gray-500">User:</span> {log.user.name} ({log.user.email})</p>
                           <p><span className="text-gray-500">Aksi:</span> {actionLabels[log.actionType] || log.actionType}</p>
+                          <p><span className="text-gray-500">Role:</span> {log.actorRole || "-"}</p>
                           <p><span className="text-gray-500">Resource:</span> {log.resourceName} ({log.resourceId})</p>
                           {log.ipAddress && <p><span className="text-gray-500">IP:</span> {log.ipAddress}</p>}
                         </div>

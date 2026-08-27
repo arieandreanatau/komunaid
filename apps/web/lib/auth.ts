@@ -9,6 +9,7 @@ export interface User {
   phone?: string | null;
   bio?: string | null;
   location?: string | null;
+  isProfilePublic?: boolean;
   roles: string[];
   interests?: string[];
   communitiesCount?: number;

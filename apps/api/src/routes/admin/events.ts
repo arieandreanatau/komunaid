@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { prisma } from "@komunaid/database";
 import { requireSuperAdmin } from "../../middleware/rbac";
 import { createAuditLog, AuditActions } from "../../services/audit";
+import { transitionEvent, EventTransitionError } from "../../services/event-transition";
 import type { AuthUser } from "../../middleware/auth";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
@@ -119,7 +120,7 @@ eventsRoutes.get("/events/:eventId", async (c) => {
   });
 });
 
-eventsRoutes.put("/events/:eventId/suspend", async (c) => {
+eventsRoutes.put("/events/:eventId/suspend", requireSuperAdmin(), async (c) => {
   const authUser = c.get("user");
   const eventId = c.req.param("eventId") as string;
 
@@ -128,71 +129,17 @@ eventsRoutes.put("/events/:eventId/suspend", async (c) => {
     return c.json({ success: false, message: "Event tidak ditemukan" }, 404);
   }
 
-  const before = { status: event.status };
-
-  await prisma.event.update({
-    where: { id: eventId },
-    data: { status: "CANCELLED" },
-  });
-
-  const notificationData: any = {
-    title: "Event Ditangguhkan",
-    message: `Event "${event.title}" telah ditangguhkan oleh admin.`,
-    type: "EVENT",
-    link: `/events/${event.slug}`,
-  };
-
-  if (event.communityId) {
-    const owner = await prisma.communityMember.findFirst({
-      where: { communityId: event.communityId, role: "OWNER" },
-    });
-    if (owner) {
-      notificationData.userId = owner.userId;
-      await prisma.notification.create({ data: notificationData });
-    }
-  }
-
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.EVENT_CANCEL,
-    resourceName: "Event",
-    resourceId: eventId,
-    beforeData: before,
-    afterData: { status: "CANCELLED" },
-  });
+  const updated = await transitionEvent({ eventId, expectedStatus: event.status, targetStatus: "CANCELLED", actorId: authUser.id, actorRole: "SUPER_ADMIN", reason: "Ditangguhkan oleh moderation" }).catch((error) => error instanceof EventTransitionError ? null : Promise.reject(error));
+  if (!updated) return c.json({ success: false, message: "Event tidak dapat ditangguhkan dari status saat ini" }, 409);
 
   return c.json({ success: true, message: "Event berhasil ditangguhkan" });
 });
 
-eventsRoutes.put("/events/:eventId/restore", async (c) => {
-  const authUser = c.get("user");
-  const eventId = c.req.param("eventId") as string;
-
-  const event = await prisma.event.findUnique({ where: { id: eventId } });
-  if (!event) {
-    return c.json({ success: false, message: "Event tidak ditemukan" }, 404);
-  }
-
-  const before = { status: event.status };
-
-  await prisma.event.update({
-    where: { id: eventId },
-    data: { status: "PUBLISHED" },
-  });
-
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.EVENT_RESTORE,
-    resourceName: "Event",
-    resourceId: eventId,
-    beforeData: before,
-    afterData: { status: "PUBLISHED" },
-  });
-
-  return c.json({ success: true, message: "Event berhasil dipulihkan" });
+eventsRoutes.put("/events/:eventId/restore", requireSuperAdmin(), async (c) => {
+  return c.json({ success: false, code: "EVENT_CANCELLATION_TERMINAL", message: "Event yang dibatalkan tidak dapat dipulihkan. Buat Event baru bila diperlukan." }, 409);
 });
 
-eventsRoutes.put("/events/:eventId/archive", async (c) => {
+eventsRoutes.put("/events/:eventId/archive", requireSuperAdmin(), async (c) => {
   const authUser = c.get("user");
   const eventId = c.req.param("eventId") as string;
 
@@ -201,26 +148,13 @@ eventsRoutes.put("/events/:eventId/archive", async (c) => {
     return c.json({ success: false, message: "Event tidak ditemukan" }, 404);
   }
 
-  const before = { status: event.status };
-
-  await prisma.event.update({
-    where: { id: eventId },
-    data: { status: "ARCHIVED" },
-  });
-
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.EVENT_ARCHIVE,
-    resourceName: "Event",
-    resourceId: eventId,
-    beforeData: before,
-    afterData: { status: "ARCHIVED" },
-  });
+  const updated = await transitionEvent({ eventId, expectedStatus: event.status, targetStatus: "ARCHIVED", actorId: authUser.id, actorRole: "SUPER_ADMIN", reason: "Diarsipkan oleh administrator" }).catch((error) => error instanceof EventTransitionError ? null : Promise.reject(error));
+  if (!updated) return c.json({ success: false, message: "Event hanya dapat diarsipkan setelah selesai" }, 409);
 
   return c.json({ success: true, message: "Event berhasil diarsipkan" });
 });
 
-eventsRoutes.put("/events/:eventId/publish", async (c) => {
+eventsRoutes.put("/events/:eventId/publish", requireSuperAdmin(), async (c) => {
   const authUser = c.get("user");
   const eventId = c.req.param("eventId") as string;
 
@@ -229,30 +163,13 @@ eventsRoutes.put("/events/:eventId/publish", async (c) => {
     return c.json({ success: false, message: "Event tidak ditemukan" }, 404);
   }
 
-  if (event.status !== "DRAFT") {
-    return c.json({ success: false, message: "Hanya event draft yang dapat dipublish" }, 400);
-  }
-
-  const before = { status: event.status };
-
-  await prisma.event.update({
-    where: { id: eventId },
-    data: { status: "PUBLISHED" },
-  });
-
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.EVENT_PUBLISH,
-    resourceName: "Event",
-    resourceId: eventId,
-    beforeData: before,
-    afterData: { status: "PUBLISHED" },
-  });
+  const updated = await transitionEvent({ eventId, expectedStatus: event.status, targetStatus: "PUBLISHED", actorId: authUser.id, actorRole: "SUPER_ADMIN", reason: "Dipublikasikan oleh administrator" }).catch((error) => error instanceof EventTransitionError ? null : Promise.reject(error));
+  if (!updated) return c.json({ success: false, message: "Event harus disetujui sebelum dipublikasikan" }, 409);
 
   return c.json({ success: true, message: "Event berhasil dipublish" });
 });
 
-eventsRoutes.put("/events/:eventId/cancel", async (c) => {
+eventsRoutes.put("/events/:eventId/cancel", requireSuperAdmin(), async (c) => {
   const authUser = c.get("user");
   const eventId = c.req.param("eventId") as string;
 
@@ -261,21 +178,8 @@ eventsRoutes.put("/events/:eventId/cancel", async (c) => {
     return c.json({ success: false, message: "Event tidak ditemukan" }, 404);
   }
 
-  const before = { status: event.status };
-
-  await prisma.event.update({
-    where: { id: eventId },
-    data: { status: "CANCELLED" },
-  });
-
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.EVENT_CANCEL,
-    resourceName: "Event",
-    resourceId: eventId,
-    beforeData: before,
-    afterData: { status: "CANCELLED" },
-  });
+  const updated = await transitionEvent({ eventId, expectedStatus: event.status, targetStatus: "CANCELLED", actorId: authUser.id, actorRole: "SUPER_ADMIN", reason: "Dibatalkan oleh administrator" }).catch((error) => error instanceof EventTransitionError ? null : Promise.reject(error));
+  if (!updated) return c.json({ success: false, message: "Event tidak dapat dibatalkan dari status saat ini" }, 409);
 
   return c.json({ success: true, message: "Event berhasil dibatalkan" });
 });

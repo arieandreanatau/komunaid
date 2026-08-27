@@ -1,14 +1,16 @@
-import { Hono } from "hono";
+﻿import { Hono } from "hono";
 import { prisma } from "@komunaid/database";
 import type { Prisma } from "@prisma/client";
-import { createEventSchema, updateEventSchema, eventQuerySchema } from "@komunaid/shared";
+import { createEventSchema, updateEventSchema, eventQuerySchema, reviewEventSchema } from "@komunaid/shared";
 import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth";
+import { requireSuperAdmin } from "../middleware/rbac";
 import { validate } from "../middleware/validate";
 import { createAuditLog, AuditActions } from "../services/audit";
 import { xssSanitize, sanitizeText } from "../lib/xss";
 import { createWithUniqueSlug } from "../lib/slug";
 import { slugify } from "@komunaid/utils";
 import type { AuthUser } from "../middleware/auth";
+import { sendEmail } from "../services/email";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
 
@@ -30,15 +32,25 @@ async function getEventOrganizerRole(userId: string, event: any): Promise<string
   return null;
 }
 
-function canManageEvent(role: string | null, userId: string, event: any): boolean {
+async function isSuperAdmin(userId: string): Promise<boolean> {
+  const roles = await prisma.userRole.findMany({ where: { userId }, select: { role: true } });
+  return roles.some((r) => r.role === "SUPER_ADMIN");
+}
+
+async function canManageEvent(role: string | null, userId: string, event: any): Promise<boolean> {
+  if (await isSuperAdmin(userId)) return true;
   if (!role) return false;
-  if (event.createdById === userId) return true;
   if (["OWNER", "ADMIN", "EVENT_MANAGER"].includes(role)) return true;
   return false;
 }
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
-  DRAFT: ["PUBLISHED", "CANCELLED"],
+  DRAFT: ["SUBMITTED", "CANCELLED"],
+  SUBMITTED: ["IN_REVIEW", "CANCELLED"],
+  IN_REVIEW: ["REVISION_REQUESTED", "REJECTED", "APPROVED", "CANCELLED"],
+  REVISION_REQUESTED: ["RESUBMITTED", "CANCELLED"],
+  RESUBMITTED: ["IN_REVIEW", "CANCELLED"],
+  APPROVED: ["PUBLISHED", "CANCELLED"],
   PUBLISHED: ["REGISTRATION_OPEN", "CANCELLED", "ARCHIVED"],
   REGISTRATION_OPEN: ["REGISTRATION_CLOSED", "CANCELLED"],
   REGISTRATION_CLOSED: ["ONGOING", "CANCELLED"],
@@ -50,6 +62,41 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
 
 function isValidTransition(from: string, to: string): boolean {
   return VALID_TRANSITIONS[from]?.includes(to) ?? false;
+}
+
+async function actorRole(userId: string, event: any): Promise<string> {
+  if (await isSuperAdmin(userId)) return "SUPER_ADMIN";
+  return (await getEventOrganizerRole(userId, event)) || "UNKNOWN";
+}
+
+async function transitionEvent(
+  event: any,
+  toStatus: string,
+  actorId: string,
+  options: { reason?: string; submittedAt?: Date | null; reviewedAt?: Date | null; reviewedById?: string | null; reviewNote?: string | null } = {}
+) {
+  const role = await actorRole(actorId, event);
+  const { reason, ...eventData } = options;
+  return prisma.$transaction(async (tx) => {
+    const changed = await tx.event.updateMany({
+      where: { id: event.id, status: event.status, deletedAt: null },
+      data: { status: toStatus as any, ...eventData },
+    });
+    if (changed.count !== 1) throw new Error("EVENT_STATUS_CHANGED");
+    await tx.eventStatusHistory.create({
+      data: {
+        eventId: event.id,
+        fromStatus: event.status as any,
+        toStatus: toStatus as any,
+        actorId,
+        actorRole: role,
+        reason: reason || null,
+      },
+    });
+    const updated = await tx.event.findUnique({ where: { id: event.id } });
+    if (!updated) throw new Error("EVENT_NOT_FOUND");
+    return updated;
+  });
 }
 
 // ==========================================
@@ -65,7 +112,7 @@ eventRoutes.get("/", optionalAuthMiddleware, validate(eventQuerySchema, "query")
   const where: any = {
     deletedAt: null,
     visibility: "PUBLIC",
-    status: { notIn: ["DRAFT", "CANCELLED", "ARCHIVED"] },
+    status: { in: ["SUBMITTED", "IN_REVIEW", "PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"] },
   };
 
   if (q.search) {
@@ -75,9 +122,11 @@ eventRoutes.get("/", optionalAuthMiddleware, validate(eventQuerySchema, "query")
     ];
   }
 
-  if (q.communityId) where.communityId = q.communityId;
+if (q.communityId) where.communityId = q.communityId;
   if (q.organizationId) where.organizationId = q.organizationId;
-  if (q.status && !["DRAFT", "CANCELLED", "ARCHIVED"].includes(q.status)) {
+  if (q.categoryId) where.categories = { some: { categoryId: q.categoryId } };
+  if (q.locationType) where.locationType = q.locationType;
+  if (q.status && ["SUBMITTED", "IN_REVIEW", "PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"].includes(q.status)) {
     where.status = q.status;
   }
 
@@ -125,7 +174,8 @@ eventRoutes.get("/", optionalAuthMiddleware, validate(eventQuerySchema, "query")
       allowWaitlist: e.allowWaitlist,
       status: e.status,
       visibility: e.visibility,
-      registeredCount: e._count.registrations,
+       registeredCount: e._count.registrations,
+       canRegister: e.status === "REGISTRATION_OPEN",
       community: e.community,
       organization: e.organization,
       createdBy: e.createdBy,
@@ -149,7 +199,7 @@ eventRoutes.get("/popular/upcoming", async (c) => {
   const eventWhere: Prisma.EventWhereInput = {
     deletedAt: null,
     visibility: "PUBLIC" as const,
-    status: { in: ["PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED"] },
+    status: { in: ["SUBMITTED", "IN_REVIEW", "PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED"] },
     eventDate: { gte: new Date() },
   };
   const ranked = await prisma.eventRegistration.groupBy({
@@ -253,6 +303,48 @@ eventRoutes.get("/my/saved", authMiddleware, async (c) => {
 });
 
 // ==========================================
+// FEATURED EVENTS (Public) - newest published
+// ==========================================
+
+eventRoutes.get("/featured", async (c) => {
+  const events = await prisma.event.findMany({
+    where: {
+      deletedAt: null,
+      visibility: "PUBLIC",
+    status: { in: ["SUBMITTED", "IN_REVIEW", "PUBLISHED", "REGISTRATION_OPEN"] },
+    },
+    include: {
+      community: { select: { id: true, name: true, slug: true, logo: true } },
+      organization: { select: { id: true, name: true, slug: true, logo: true } },
+      categories: { include: { category: true } },
+      _count: { select: { registrations: { where: { status: "CONFIRMED" } } } },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 6,
+  });
+  return c.json({
+    success: true,
+    data: events.map((event) => ({
+      id: event.id,
+      title: event.title,
+      slug: event.slug,
+      description: event.description,
+      coverImage: event.coverImage,
+      thumbnail: event.thumbnail,
+      location: event.location,
+      locationType: event.locationType,
+      eventDate: event.eventDate,
+      quota: event.quota,
+      status: event.status,
+      registeredCount: event._count.registrations,
+      community: event.community,
+      organization: event.organization,
+      categories: event.categories.map((item) => item.category),
+    })),
+  });
+});
+
+// ==========================================
 // 2. GET EVENT BY SLUG (Public)
 // ==========================================
 
@@ -272,6 +364,9 @@ eventRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
         take: 50,
       },
       categories: { include: { category: true } },
+      agendas: { orderBy: { startTime: "asc" as const } },
+      speakers: true,
+      tickets: { orderBy: { price: "asc" as const } },
       _count: { select: { registrations: { where: { status: "CONFIRMED" } } } },
     },
   });
@@ -281,23 +376,31 @@ eventRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
   }
 
   const role = user ? await getEventOrganizerRole(user.id, event) : null;
-  const isOrganizer = user ? canManageEvent(role, user.id, event) : false;
-  const isPublicEvent = event.visibility === "PUBLIC" && !["DRAFT", "CANCELLED", "ARCHIVED"].includes(event.status);
+  const isOrganizer = user ? await canManageEvent(role, user.id, event) : false;
+  const isPublicEvent = event.visibility === "PUBLIC" && ["SUBMITTED", "IN_REVIEW", "PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"].includes(event.status);
   if (!isPublicEvent && !isOrganizer) {
     return c.json({ success: false, message: "Event tidak ditemukan" }, 404);
   }
 
   let userRegistration = null;
   let isSaved = false;
+  let waitlistCount = 0;
   if (user) {
-    [userRegistration, isSaved] = await Promise.all([
+    [userRegistration, isSaved, waitlistCount] = await Promise.all([
       prisma.eventRegistration.findUnique({
         where: { eventId_userId: { eventId: event.id, userId: user.id } },
       }),
       prisma.eventSave.findUnique({
         where: { eventId_userId: { eventId: event.id, userId: user.id } },
       }).then(Boolean),
+      prisma.eventRegistration.count({
+        where: { eventId: event.id, status: "WAITLISTED" },
+      }),
     ]);
+  } else {
+    waitlistCount = await prisma.eventRegistration.count({
+      where: { eventId: event.id, status: "WAITLISTED" },
+    });
   }
 
   const galleryParsed = (() => {
@@ -315,6 +418,7 @@ eventRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
       registrations: undefined,
       gallery: galleryParsed,
       registeredCount: event._count.registrations,
+      waitlistCount,
       registeredUsers: isOrganizer
         ? event.registrations.map((r) => ({
             id: r.user.id,
@@ -390,7 +494,8 @@ eventRoutes.post("/", authMiddleware, validate(createEventSchema), async (c) => 
     const membership = await prisma.communityMember.findUnique({
       where: { communityId_userId: { communityId: data.communityId, userId: authUser.id } },
     });
-    if (!membership || membership.status !== "ACTIVE" || membership.deletedAt !== null || !["OWNER", "ADMIN", "EVENT_MANAGER"].includes(membership.role)) {
+    const isSA = await isSuperAdmin(authUser.id);
+    if (!isSA && (!membership || membership.status !== "ACTIVE" || membership.deletedAt !== null || !["OWNER", "ADMIN", "EVENT_MANAGER"].includes(membership.role))) {
       return c.json({ success: false, message: "Tidak memiliki akses membuat event di komunitas ini" }, 403);
     }
   }
@@ -399,12 +504,13 @@ eventRoutes.post("/", authMiddleware, validate(createEventSchema), async (c) => 
     const membership = await prisma.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId: data.organizationId, userId: authUser.id } },
     });
-    if (!membership || membership.status !== "ACTIVE" || membership.deletedAt !== null || !["OWNER", "ADMIN"].includes(membership.role)) {
+    const isSA = await isSuperAdmin(authUser.id);
+    if (!isSA && (!membership || membership.status !== "ACTIVE" || membership.deletedAt !== null || !["OWNER", "ADMIN"].includes(membership.role))) {
       return c.json({ success: false, message: "Tidak memiliki akses membuat event di organisasi ini" }, 403);
     }
   }
 
-  const { categoryIds, gallery, ...eventData } = data;
+  const { categoryIds, gallery, agendas, speakers, tickets, ...eventData } = data;
 
   const sanitizedEventData = {
     ...eventData,
@@ -418,24 +524,76 @@ eventRoutes.post("/", authMiddleware, validate(createEventSchema), async (c) => 
 
   const event = await createWithUniqueSlug(
     (slug) =>
-      prisma.event.create({
-      data: {
-        ...sanitizedEventData,
-        slug,
-        createdById: authUser.id,
-        eventDate: new Date(data.eventDate),
-        endDate: data.endDate ? new Date(data.endDate) : null,
-        gallery: gallery ? JSON.stringify(gallery) : null,
-        categories: categoryIds
-          ? { create: categoryIds.map((categoryId: string) => ({ categoryId })) }
-          : undefined,
-      },
-      include: {
-      community: { select: { id: true, name: true, slug: true } },
-      organization: { select: { id: true, name: true, slug: true } },
-      categories: { include: { category: true } },
-    },
-    }),
+      prisma.$transaction(async (tx) => {
+        const createdEvent = await tx.event.create({
+          data: {
+            ...sanitizedEventData,
+            slug,
+            createdById: authUser.id,
+            eventDate: new Date(data.eventDate),
+            endDate: data.endDate ? new Date(data.endDate) : null,
+            gallery: gallery ? JSON.stringify(gallery) : null,
+            categories: categoryIds
+              ? { create: categoryIds.map((categoryId: string) => ({ categoryId })) }
+              : undefined,
+          },
+          select: { id: true },
+        });
+
+        if (agendas?.length) {
+          await tx.eventAgenda.createMany({
+            data: agendas.map((agenda: { session: string; description?: string; startTime?: string; endTime?: string; room?: string; speakerName?: string }) => ({
+              eventId: createdEvent.id,
+              session: sanitizeText(agenda.session),
+              description: agenda.description ? sanitizeText(agenda.description) : null,
+              startTime: agenda.startTime ? new Date(agenda.startTime) : null,
+              endTime: agenda.endTime ? new Date(agenda.endTime) : null,
+              room: agenda.room ? sanitizeText(agenda.room) : null,
+              speakerName: agenda.speakerName ? sanitizeText(agenda.speakerName) : null,
+              createdById: authUser.id,
+            })),
+          });
+        }
+
+        if (speakers?.length) {
+          await tx.eventSpeaker.createMany({
+            data: speakers.map((speaker: { name: string; photo?: string; bio?: string; position?: string; institution?: string; socialMedia?: string; topic?: string; material?: string }) => ({
+              eventId: createdEvent.id,
+              name: sanitizeText(speaker.name),
+              photo: speaker.photo || null,
+              bio: speaker.bio ? sanitizeText(speaker.bio) : null,
+              position: speaker.position ? sanitizeText(speaker.position) : null,
+              institution: speaker.institution ? sanitizeText(speaker.institution) : null,
+              socialMedia: speaker.socialMedia || null,
+              topic: speaker.topic ? sanitizeText(speaker.topic) : null,
+              material: speaker.material || null,
+            })),
+          });
+        }
+
+        if (tickets?.length) {
+          await tx.eventTicket.createMany({
+            data: tickets.map((ticket: { name: string; description?: string; price: number; quota?: number | null }) => ({
+              eventId: createdEvent.id,
+              name: sanitizeText(ticket.name),
+              description: ticket.description ? sanitizeText(ticket.description) : null,
+              price: ticket.price,
+              quota: ticket.quota ?? null,
+            })),
+          });
+        }
+
+        const fetched = await tx.event.findUnique({
+          where: { id: createdEvent.id },
+          include: {
+            community: { select: { id: true, name: true, slug: true } },
+            organization: { select: { id: true, name: true, slug: true } },
+            categories: { include: { category: true } },
+          },
+        });
+        if (!fetched) throw new Error("Event creation failed");
+        return fetched;
+      }),
     data.title
   );
 
@@ -447,6 +605,16 @@ eventRoutes.post("/", authMiddleware, validate(createEventSchema), async (c) => 
     afterData: { title: event.title, slug: event.slug, status: event.status },
   });
 
+  const submitted = await transitionEvent(event, "SUBMITTED", authUser.id, { submittedAt: new Date() });
+  const queued = await transitionEvent(submitted, "IN_REVIEW", authUser.id, { reason: "Event masuk antrean review" });
+  const admins = await prisma.userRole.findMany({ where: { role: "SUPER_ADMIN" }, include: { user: { select: { email: true } } } });
+  if (admins.length) {
+    await prisma.notification.createMany({
+      data: admins.map((admin) => ({ userId: admin.userId, title: "Event Baru Menunggu Review", message: `Event "${event.title}" telah dikirim untuk review.`, type: "APPROVAL" as const, link: `/admin/events/events` })),
+    });
+    await sendEmail({ to: admins.map((admin) => admin.user.email), subject: `Event baru menunggu review: ${event.title}`, html: `<p>Event <strong>${event.title}</strong> telah dikirim untuk review.</p><p><a href="${process.env.APP_URL || "http://localhost:3000"}/admin/events/events">Buka antrean event</a></p>` });
+  }
+
   return c.json({
     success: true,
     message: "Event berhasil dibuat",
@@ -454,7 +622,8 @@ eventRoutes.post("/", authMiddleware, validate(createEventSchema), async (c) => 
       id: event.id,
       title: event.title,
       slug: event.slug,
-      status: event.status,
+        status: queued.status,
+        canRegister: false,
       community: event.community,
       organization: event.organization,
       categories: event.categories.map((c) => c.category),
@@ -477,7 +646,7 @@ eventRoutes.patch("/:eventId", authMiddleware, validate(updateEventSchema), asyn
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses mengubah event ini" }, 403);
   }
 
@@ -485,7 +654,7 @@ eventRoutes.patch("/:eventId", authMiddleware, validate(updateEventSchema), asyn
     return c.json({ success: false, message: "Event yang sudah selesai/dibatalkan/diarsipkan tidak dapat diubah" }, 400);
   }
 
-  const { categoryIds, gallery, ...updateData } = data;
+  const { categoryIds, gallery, agendas, speakers, tickets, ...updateData } = data;
 
   const updateDataAny = updateData as Record<string, unknown>;
   const hasCommunityChange = Object.hasOwn(updateDataAny, "communityId");
@@ -504,7 +673,8 @@ eventRoutes.patch("/:eventId", authMiddleware, validate(updateEventSchema), asyn
     const membership = await prisma.communityMember.findUnique({
       where: { communityId_userId: { communityId: targetCommunityId!, userId: authUser.id } },
     });
-    if (!membership || membership.status !== "ACTIVE" || membership.deletedAt !== null || !["OWNER", "ADMIN", "EVENT_MANAGER"].includes(membership.role)) {
+    const isSA = await isSuperAdmin(authUser.id);
+    if (!isSA && (!membership || membership.status !== "ACTIVE" || membership.deletedAt !== null || !["OWNER", "ADMIN", "EVENT_MANAGER"].includes(membership.role))) {
       return c.json({ success: false, message: "Tidak memiliki akses memindahkan event ke komunitas ini" }, 403);
     }
   }
@@ -513,7 +683,8 @@ eventRoutes.patch("/:eventId", authMiddleware, validate(updateEventSchema), asyn
     const membership = await prisma.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId: targetOrganizationId!, userId: authUser.id } },
     });
-    if (!membership || membership.status !== "ACTIVE" || membership.deletedAt !== null || !["OWNER", "ADMIN"].includes(membership.role)) {
+    const isSA = await isSuperAdmin(authUser.id);
+    if (!isSA && (!membership || membership.status !== "ACTIVE" || membership.deletedAt !== null || !["OWNER", "ADMIN"].includes(membership.role))) {
       return c.json({ success: false, message: "Tidak memiliki akses memindahkan event ke organisasi ini" }, 403);
     }
   }
@@ -528,31 +699,87 @@ eventRoutes.patch("/:eventId", authMiddleware, validate(updateEventSchema), asyn
     contactPhone: sanitizeText(updateData.contactPhone),
   };
 
-  const updated = await prisma.event.update({
-    where: { id: eventId },
-    data: {
-      ...sanitizedUpdateData,
-      communityId: hasCommunityChange || hasOrganizationChange ? targetCommunityId ?? null : undefined,
-      organizationId: hasCommunityChange || hasOrganizationChange ? targetOrganizationId ?? null : undefined,
-      eventDate: data.eventDate ? new Date(data.eventDate) : undefined,
-      endDate: data.endDate ? new Date(data.endDate) : undefined,
-      gallery: gallery !== undefined ? JSON.stringify(gallery) : undefined,
-    },
-    include: {
-      community: { select: { id: true, name: true, slug: true } },
-      organization: { select: { id: true, name: true, slug: true } },
-      categories: { include: { category: true } },
-    },
-  });
+  const updated = await prisma.$transaction(async (tx) => {
+    const updatedEvent = await tx.event.update({
+      where: { id: eventId },
+      data: {
+        ...sanitizedUpdateData,
+        communityId: hasCommunityChange || hasOrganizationChange ? targetCommunityId ?? null : undefined,
+        organizationId: hasCommunityChange || hasOrganizationChange ? targetOrganizationId ?? null : undefined,
+        eventDate: data.eventDate ? new Date(data.eventDate) : undefined,
+        endDate: data.endDate ? new Date(data.endDate) : undefined,
+        gallery: gallery !== undefined ? JSON.stringify(gallery) : undefined,
+      },
+      include: {
+        community: { select: { id: true, name: true, slug: true } },
+        organization: { select: { id: true, name: true, slug: true } },
+        categories: { include: { category: true } },
+      },
+    });
 
-  if (categoryIds) {
-    await prisma.eventCategory.deleteMany({ where: { eventId } });
-    if (categoryIds.length > 0) {
-      await prisma.eventCategory.createMany({
-        data: categoryIds.map((categoryId: string) => ({ eventId, categoryId })),
-      });
+    if (categoryIds) {
+      await tx.eventCategory.deleteMany({ where: { eventId } });
+      if (categoryIds.length > 0) {
+        await tx.eventCategory.createMany({
+          data: categoryIds.map((categoryId: string) => ({ eventId, categoryId })),
+        });
+      }
     }
-  }
+
+    if (agendas !== undefined) {
+      await tx.eventAgenda.deleteMany({ where: { eventId } });
+      if (agendas.length > 0) {
+        await tx.eventAgenda.createMany({
+          data: agendas.map((agenda: { session: string; description?: string; startTime?: string; endTime?: string; room?: string; speakerName?: string }) => ({
+            eventId,
+            session: sanitizeText(agenda.session),
+            description: agenda.description ? sanitizeText(agenda.description) : null,
+            startTime: agenda.startTime ? new Date(agenda.startTime) : null,
+            endTime: agenda.endTime ? new Date(agenda.endTime) : null,
+            room: agenda.room ? sanitizeText(agenda.room) : null,
+            speakerName: agenda.speakerName ? sanitizeText(agenda.speakerName) : null,
+            createdById: authUser.id,
+          })),
+        });
+      }
+    }
+
+    if (speakers !== undefined) {
+      await tx.eventSpeaker.deleteMany({ where: { eventId } });
+      if (speakers.length > 0) {
+        await tx.eventSpeaker.createMany({
+          data: speakers.map((speaker: { name: string; photo?: string; bio?: string; position?: string; institution?: string; socialMedia?: string; topic?: string; material?: string }) => ({
+            eventId,
+            name: sanitizeText(speaker.name),
+            photo: speaker.photo || null,
+            bio: speaker.bio ? sanitizeText(speaker.bio) : null,
+            position: speaker.position ? sanitizeText(speaker.position) : null,
+            institution: speaker.institution ? sanitizeText(speaker.institution) : null,
+            socialMedia: speaker.socialMedia || null,
+            topic: speaker.topic ? sanitizeText(speaker.topic) : null,
+            material: speaker.material || null,
+          })),
+        });
+      }
+    }
+
+    if (tickets !== undefined) {
+      await tx.eventTicket.deleteMany({ where: { eventId } });
+      if (tickets.length > 0) {
+        await tx.eventTicket.createMany({
+          data: tickets.map((ticket: { name: string; description?: string; price: number; quota?: number | null }) => ({
+            eventId,
+            name: sanitizeText(ticket.name),
+            description: ticket.description ? sanitizeText(ticket.description) : null,
+            price: ticket.price,
+            quota: ticket.quota ?? null,
+          })),
+        });
+      }
+    }
+
+    return updatedEvent;
+  });
 
   await createAuditLog({
     userId: authUser.id,
@@ -590,7 +817,7 @@ eventRoutes.delete("/:eventId", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses menghapus event ini" }, 403);
   }
 
@@ -615,10 +842,10 @@ eventRoutes.delete("/:eventId", authMiddleware, async (c) => {
 });
 
 // ==========================================
-// 6. PUBLISH EVENT
+// 6. SUBMIT EVENT FOR REVIEW
 // ==========================================
 
-eventRoutes.post("/:eventId/publish", authMiddleware, async (c) => {
+eventRoutes.post("/:eventId/submit", authMiddleware, async (c) => {
   const authUser = c.get("user");
   const eventId = c.req.param("eventId") as string;
 
@@ -628,23 +855,20 @@ eventRoutes.post("/:eventId/publish", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
-    return c.json({ success: false, message: "Tidak memiliki akses mempublikasikan event ini" }, 403);
+  if (!await canManageEvent(role, authUser.id, event)) {
+    return c.json({ success: false, message: "Tidak memiliki akses mengirim event ini" }, 403);
   }
 
-  const targetStatus = "PUBLISHED";
+  const targetStatus = event.status === "REVISION_REQUESTED" ? "RESUBMITTED" : "SUBMITTED";
   if (!isValidTransition(event.status, targetStatus)) {
-    return c.json({ success: false, message: `Tidak dapat publish dari status ${event.status}` }, 400);
+    return c.json({ success: false, message: `Tidak dapat mengirim event dari status ${event.status}` }, 400);
   }
 
-  const updated = await prisma.event.update({
-    where: { id: eventId },
-    data: { status: targetStatus },
-  });
+  const updated = await transitionEvent(event, targetStatus, authUser.id, { submittedAt: new Date(), reviewNote: null, reviewedAt: null, reviewedById: null });
 
   await createAuditLog({
     userId: authUser.id,
-    actionType: AuditActions.EVENT_PUBLISH,
+    actionType: AuditActions.EVENT_UPDATE,
     resourceName: "Event",
     resourceId: eventId,
     beforeData: { status: event.status },
@@ -653,13 +877,62 @@ eventRoutes.post("/:eventId/publish", authMiddleware, async (c) => {
 
   return c.json({
     success: true,
-    message: "Event berhasil dipublikasikan",
+    message: targetStatus === "RESUBMITTED" ? "Event berhasil dikirim ulang untuk ditinjau" : "Event berhasil dikirim untuk ditinjau",
     data: { id: updated.id, status: updated.status },
   });
 });
 
 // ==========================================
-// 7. OPEN REGISTRATION
+// 7. REVIEW EVENT
+// ==========================================
+
+eventRoutes.post("/:eventId/review", authMiddleware, requireSuperAdmin(), validate(reviewEventSchema), async (c) => {
+  const reviewer = c.get("user");
+  const event = await prisma.event.findUnique({ where: { id: c.req.param("eventId") as string } });
+  const { action, note } = c.get("validated");
+  if (!event || event.deletedAt) return c.json({ success: false, message: "Event tidak ditemukan" }, 404);
+  if (event.createdById === reviewer.id) return c.json({ success: false, message: "Reviewer tidak dapat mereview event miliknya sendiri" }, 403);
+
+  const targetStatus = action === "APPROVE" ? "APPROVED" : action === "REJECT" ? "REJECTED" : "REVISION_REQUESTED";
+  const allowed = event.status === "SUBMITTED" || event.status === "RESUBMITTED";
+  if (!allowed) return c.json({ success: false, message: "Event tidak dalam antrean review" }, 400);
+
+  const inReview = await transitionEvent(event, "IN_REVIEW", reviewer.id, { reviewedAt: new Date(), reviewedById: reviewer.id });
+  const updated = await transitionEvent(inReview, targetStatus, reviewer.id, {
+    reviewedAt: new Date(),
+    reviewedById: reviewer.id,
+    reviewNote: note || null,
+    reason: note,
+  });
+  await createAuditLog({
+    userId: reviewer.id,
+    actionType: AuditActions.EVENT_UPDATE,
+    resourceName: "Event",
+    resourceId: event.id,
+    beforeData: { status: event.status },
+    afterData: { status: targetStatus, action, note: note || null },
+  });
+
+  return c.json({ success: true, message: "Review event berhasil disimpan", data: { id: updated.id, status: updated.status } });
+});
+
+// ==========================================
+// 8. PUBLISH EVENT
+// ==========================================
+
+eventRoutes.post("/:eventId/publish", authMiddleware, requireSuperAdmin(), async (c) => {
+  const authUser = c.get("user");
+  const eventId = c.req.param("eventId") as string;
+  const event = await prisma.event.findUnique({ where: { id: eventId } });
+  if (!event || event.deletedAt) return c.json({ success: false, message: "Event tidak ditemukan" }, 404);
+  if (!isValidTransition(event.status, "PUBLISHED")) return c.json({ success: false, message: `Tidak dapat publish dari status ${event.status}` }, 400);
+  const updated = await transitionEvent(event, "PUBLISHED", authUser.id);
+  await createAuditLog({ userId: authUser.id, actionType: AuditActions.EVENT_PUBLISH, resourceName: "Event", resourceId: eventId, beforeData: { status: event.status }, afterData: { status: "PUBLISHED" } });
+  return c.json({ success: true, message: "Event berhasil dipublikasikan", data: { id: updated.id, status: updated.status } });
+});
+
+// ==========================================
+// 9. OPEN REGISTRATION
 // ==========================================
 
 eventRoutes.post("/:eventId/open-registration", authMiddleware, async (c) => {
@@ -672,7 +945,7 @@ eventRoutes.post("/:eventId/open-registration", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
   }
 
@@ -680,10 +953,7 @@ eventRoutes.post("/:eventId/open-registration", authMiddleware, async (c) => {
     return c.json({ success: false, message: `Tidak dapat membuka registrasi dari status ${event.status}` }, 400);
   }
 
-  const updated = await prisma.event.update({
-    where: { id: eventId },
-    data: { status: "REGISTRATION_OPEN" },
-  });
+  const updated = await transitionEvent(event, "REGISTRATION_OPEN", authUser.id);
 
   await createAuditLog({
     userId: authUser.id,
@@ -715,7 +985,7 @@ eventRoutes.post("/:eventId/close-registration", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
   }
 
@@ -723,10 +993,7 @@ eventRoutes.post("/:eventId/close-registration", authMiddleware, async (c) => {
     return c.json({ success: false, message: `Tidak dapat menutup registrasi dari status ${event.status}` }, 400);
   }
 
-  const updated = await prisma.event.update({
-    where: { id: eventId },
-    data: { status: "REGISTRATION_CLOSED" },
-  });
+  const updated = await transitionEvent(event, "REGISTRATION_CLOSED", authUser.id);
 
   await createAuditLog({
     userId: authUser.id,
@@ -758,7 +1025,7 @@ eventRoutes.post("/:eventId/start", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
   }
 
@@ -766,10 +1033,7 @@ eventRoutes.post("/:eventId/start", authMiddleware, async (c) => {
     return c.json({ success: false, message: `Tidak dapat memulai event dari status ${event.status}` }, 400);
   }
 
-  const updated = await prisma.event.update({
-    where: { id: eventId },
-    data: { status: "ONGOING" },
-  });
+  const updated = await transitionEvent(event, "ONGOING", authUser.id);
 
   await createAuditLog({
     userId: authUser.id,
@@ -801,7 +1065,7 @@ eventRoutes.post("/:eventId/complete", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
   }
 
@@ -809,10 +1073,7 @@ eventRoutes.post("/:eventId/complete", authMiddleware, async (c) => {
     return c.json({ success: false, message: `Tidak dapat menyelesaikan event dari status ${event.status}` }, 400);
   }
 
-  const updated = await prisma.event.update({
-    where: { id: eventId },
-    data: { status: "COMPLETED" },
-  });
+  const updated = await transitionEvent(event, "COMPLETED", authUser.id);
 
   await createAuditLog({
     userId: authUser.id,
@@ -844,7 +1105,7 @@ eventRoutes.post("/:eventId/cancel", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses membatalkan event ini" }, 403);
   }
 
@@ -852,10 +1113,7 @@ eventRoutes.post("/:eventId/cancel", authMiddleware, async (c) => {
     return c.json({ success: false, message: `Tidak dapat membatalkan event dari status ${event.status}` }, 400);
   }
 
-  const updated = await prisma.event.update({
-    where: { id: eventId },
-    data: { status: "CANCELLED" },
-  });
+  const updated = await transitionEvent(event, "CANCELLED", authUser.id, { reason: "Event dibatalkan" });
 
   const registrations = await prisma.eventRegistration.findMany({
     where: { eventId, status: { in: ["CONFIRMED", "PENDING", "WAITLISTED"] } },
@@ -948,7 +1206,7 @@ eventRoutes.post("/:eventId/archive", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses mengarsipkan event ini" }, 403);
   }
 
@@ -956,10 +1214,7 @@ eventRoutes.post("/:eventId/archive", authMiddleware, async (c) => {
     return c.json({ success: false, message: `Tidak dapat mengarsipkan event dari status ${event.status}` }, 400);
   }
 
-  const updated = await prisma.event.update({
-    where: { id: eventId },
-    data: { status: "ARCHIVED" },
-  });
+  const updated = await transitionEvent(event, "ARCHIVED", authUser.id);
 
   await createAuditLog({
     userId: authUser.id,
@@ -995,7 +1250,7 @@ eventRoutes.post("/:eventId/duplicate", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses menduplikasi event ini" }, 403);
   }
 
@@ -1075,31 +1330,21 @@ eventRoutes.post("/:eventId/register", authMiddleware, async (c) => {
     return c.json({ success: false, message: "Event tidak ditemukan" }, 404);
   }
 
-  if (event.status !== "REGISTRATION_OPEN") {
-    return c.json({ success: false, message: "Registrasi event belum dibuka" }, 400);
-  }
-
-  const existing = await prisma.eventRegistration.findUnique({
-    where: { eventId_userId: { eventId, userId: authUser.id } },
-  });
-
-  if (existing && ["CONFIRMED", "PENDING", "WAITLISTED"].includes(existing.status)) {
-    return c.json({ success: false, message: "Sudah terdaftar di event ini" }, 409);
-  }
-
   const registration = await prisma.$transaction(async (tx) => {
-    const lockedRows = await tx.$queryRaw<{ quota: number }[]>`
-      SELECT \`quota\` FROM \`events\` WHERE \`id\` = ${eventId} FOR UPDATE
+    const lockedRows = await tx.$queryRaw<Array<{ quota: number; status: string; allowWaitlist: boolean; registrationOpensAt: Date | null; registrationDeadline: Date | null; deletedAt: Date | null }>>`
+      SELECT \`quota\`, \`status\`, \`allowWaitlist\`, \`registrationOpensAt\`, \`registrationDeadline\`, \`deletedAt\`
+      FROM \`events\` WHERE \`id\` = ${eventId} FOR UPDATE
     `;
     const lockedEvent = lockedRows[0];
+    if (!lockedEvent || lockedEvent.deletedAt) return { code: "EVENT_NOT_FOUND" };
+    if (lockedEvent.status !== "REGISTRATION_OPEN") return { code: "REGISTRATION_NOT_OPEN" };
+    const now = new Date();
+    if (lockedEvent.registrationOpensAt && lockedEvent.registrationOpensAt > now) return { code: "REGISTRATION_NOT_OPEN" };
+    if (lockedEvent.registrationDeadline && lockedEvent.registrationDeadline < now) return { code: "REGISTRATION_DEADLINE_PASSED" };
 
-    if (!lockedEvent) {
-      return null;
-    }
-
-    if (existing && existing.status === "CANCELLED") {
-      await tx.eventRegistration.delete({ where: { id: existing.id } });
-    }
+    const existing = await tx.eventRegistration.findUnique({ where: { eventId_userId: { eventId, userId: authUser.id } } });
+    if (existing && ["CONFIRMED", "PENDING", "WAITLISTED"].includes(existing.status)) return { code: "EVENT_ALREADY_REGISTERED" };
+    if (existing?.status === "CANCELLED") await tx.eventRegistration.delete({ where: { id: existing.id } });
 
     const confirmedCount = await tx.eventRegistration.count({
       where: { eventId, status: "CONFIRMED" },
@@ -1110,23 +1355,31 @@ eventRoutes.post("/:eventId/register", authMiddleware, async (c) => {
     let registrationStatus = "CONFIRMED";
 
     if (isFull) {
-      if (!event.allowWaitlist) {
-        return null;
-      }
+      if (!lockedEvent.allowWaitlist) return { code: "QUOTA_FULL" };
       registrationStatus = "WAITLISTED";
     }
 
-    return tx.eventRegistration.create({
+    const created = await tx.eventRegistration.create({
       data: {
         eventId,
         userId: authUser.id,
         status: registrationStatus as any,
       },
     });
-  });
+    return { registration: created };
+  }).catch((error: any) => error?.code === "P2002" ? { code: "EVENT_ALREADY_REGISTERED" } : Promise.reject(error));
 
-  if (!registration) {
-    return c.json({ success: false, message: "Kuota event penuh" }, 400);
+  if ("code" in registration) {
+    const messages: Record<string, string> = {
+      EVENT_NOT_FOUND: "Event tidak ditemukan",
+      REGISTRATION_NOT_OPEN: "Registrasi event belum dibuka",
+      REGISTRATION_DEADLINE_PASSED: "Batas registrasi event sudah lewat",
+      EVENT_ALREADY_REGISTERED: "Sudah terdaftar di event ini",
+      QUOTA_FULL: "Kuota event penuh",
+    };
+    const code = (registration as { code: string }).code;
+    const status = ["EVENT_ALREADY_REGISTERED", "QUOTA_FULL"].includes(code) ? 409 : code === "EVENT_NOT_FOUND" ? 404 : 400;
+    return c.json({ success: false, code, message: messages[code] || "Registrasi tidak dapat diproses" }, status);
   }
 
   await prisma.notification.create({
@@ -1144,7 +1397,7 @@ eventRoutes.post("/:eventId/register", authMiddleware, async (c) => {
     actionType: AuditActions.EVENT_REGISTER,
     resourceName: "Event",
     resourceId: eventId,
-    afterData: { status: registration.status },
+    afterData: { status: registration.registration.status },
   });
 
   try {
@@ -1152,7 +1405,7 @@ eventRoutes.post("/:eventId/register", authMiddleware, async (c) => {
       data: {
         userId: authUser.id,
         action: "EVENT_REGISTER",
-        details: { eventId, eventTitle: event.title, status: registration.status },
+        details: { eventId, eventTitle: event.title, status: registration.registration.status },
       },
     });
   } catch {
@@ -1161,12 +1414,12 @@ eventRoutes.post("/:eventId/register", authMiddleware, async (c) => {
 
   return c.json({
     success: true,
-    message: registration.status === "WAITLISTED"
+    message: registration.registration.status === "WAITLISTED"
       ? "Berhasil masuk waiting list"
       : "Berhasil mendaftar event",
     data: {
-      registrationId: registration.id,
-      status: registration.status,
+      registrationId: registration.registration.id,
+      status: registration.registration.status,
     },
   }, 201);
 });
@@ -1270,7 +1523,7 @@ eventRoutes.get("/:eventId/participants", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses melihat peserta" }, 403);
   }
 
@@ -1328,7 +1581,45 @@ eventRoutes.get("/:eventId/participants", authMiddleware, async (c) => {
 });
 
 // ==========================================
-// 17. CHECK IN PARTICIPANT
+// 17. BULK CHECK IN PARTICIPANTS
+// ==========================================
+
+eventRoutes.post("/:eventId/participants/bulk-check-in", authMiddleware, async (c) => {
+  const authUser = c.get("user");
+  const eventId = c.req.param("eventId") as string;
+  const body = await c.req.json().catch(() => null) as { participantIds?: unknown } | null;
+  const participantIds = body?.participantIds;
+  if (!Array.isArray(participantIds) || participantIds.length === 0 || participantIds.length > 100 || participantIds.some((id) => typeof id !== "string" || !id)) {
+    return c.json({ success: false, code: "INVALID_PARTICIPANT_IDS", message: "Pilih 1 sampai 100 peserta yang valid" }, 400);
+  }
+  const ids = [...new Set(participantIds)];
+  const event = await prisma.event.findUnique({ where: { id: eventId } });
+  if (!event || event.deletedAt) return c.json({ success: false, message: "Event tidak ditemukan" }, 404);
+  const role = await getEventOrganizerRole(authUser.id, event);
+  if (!await canManageEvent(role, authUser.id, event)) return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
+  if (event.status !== "ONGOING") return c.json({ success: false, code: "EVENT_NOT_ONGOING", message: "Check-in hanya dapat dilakukan saat event berlangsung" }, 400);
+
+  const result = await prisma.$transaction(async (tx) => {
+    const registrations = await tx.eventRegistration.findMany({ where: { id: { in: ids }, eventId }, select: { id: true, status: true, attendance: true, userId: true } });
+    const byId = new Map(registrations.map((registration) => [registration.id, registration]));
+    const checkInIds = registrations.filter((registration) => registration.status === "CONFIRMED" && registration.attendance === "NOT_CHECKED_IN").map((registration) => registration.id);
+    if (checkInIds.length) {
+      await tx.eventRegistration.updateMany({ where: { id: { in: checkInIds }, eventId, status: "CONFIRMED", attendance: "NOT_CHECKED_IN" }, data: { attendance: "CHECKED_IN", checkedInAt: new Date() } });
+      await tx.auditLog.createMany({ data: checkInIds.map((id) => ({ userId: authUser.id, actionType: AuditActions.EVENT_CHECK_IN, resourceName: "EventRegistration", resourceId: id, afterData: { bulk: true, eventId } as any })) });
+    }
+    return ids.map((id) => {
+      const registration = byId.get(id);
+      if (!registration) return { id, status: "NOT_FOUND" };
+      if (registration.status !== "CONFIRMED") return { id, status: "SKIPPED", reason: "REGISTRATION_NOT_CONFIRMED" };
+      if (registration.attendance !== "NOT_CHECKED_IN") return { id, status: "UNCHANGED", reason: "ALREADY_CHECKED_IN" };
+      return { id, status: "CHECKED_IN" };
+    });
+  });
+  return c.json({ success: true, data: { results: result, checkedIn: result.filter((entry) => entry.status === "CHECKED_IN").length } });
+});
+
+// ==========================================
+// 18. CHECK IN PARTICIPANT
 // ==========================================
 
 eventRoutes.post("/:eventId/participants/:participantId/check-in", authMiddleware, async (c) => {
@@ -1342,7 +1633,7 @@ eventRoutes.post("/:eventId/participants/:participantId/check-in", authMiddlewar
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
   }
 
@@ -1380,7 +1671,7 @@ eventRoutes.post("/:eventId/participants/:participantId/check-in", authMiddlewar
 });
 
 // ==========================================
-// 18. CHECK OUT PARTICIPANT
+// 19. CHECK OUT PARTICIPANT
 // ==========================================
 
 eventRoutes.post("/:eventId/participants/:participantId/check-out", authMiddleware, async (c) => {
@@ -1394,7 +1685,7 @@ eventRoutes.post("/:eventId/participants/:participantId/check-out", authMiddlewa
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
   }
 
@@ -1446,7 +1737,7 @@ eventRoutes.patch("/:eventId/participants/:participantId/approve", authMiddlewar
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
   }
 
@@ -1543,7 +1834,7 @@ eventRoutes.patch("/:eventId/participants/:participantId/reject", authMiddleware
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
   }
 
@@ -1604,7 +1895,7 @@ eventRoutes.get("/:eventId/participants/export", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
   }
 
@@ -1644,7 +1935,7 @@ eventRoutes.get("/:eventId/dashboard", authMiddleware, async (c) => {
   }
 
   const role = await getEventOrganizerRole(authUser.id, event);
-  if (!canManageEvent(role, authUser.id, event)) {
+  if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses" }, 403);
   }
 

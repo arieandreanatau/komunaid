@@ -10,7 +10,7 @@ export default function MembersPage() {
   useEffect(() => {
     api.get(`/communities/${params.slug}`).then(({ data }) => {
       const community = data.data || data;
-      router.replace(`/dashboard/communities/${community.id}/members`);
+      router.replace(`/dashboard/communities/${community.slug}/members`);
     }).catch(() => router.replace("/dashboard/communities"));
   }, [params.slug, router]);
   return <div className="flex min-h-48 items-center justify-center text-sm text-slate-500">Membuka anggota komunitas...</div>;

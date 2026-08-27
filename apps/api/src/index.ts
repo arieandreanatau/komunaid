@@ -4,6 +4,7 @@ import app from "./app";
 import { createChildLogger } from "./lib/logger";
 import { cleanupExpiredKeys, closeRedisConnection } from "./services/rate-limiter";
 import { cleanupExpiredTokens } from "./services/refresh-token";
+import { rolloverStaleEvents } from "./services/event-rollover";
 
 const log = createChildLogger("server");
 
@@ -23,6 +24,14 @@ const cleanupId = setInterval(async () => {
     await cleanupExpiredTokens();
   } catch (err) {
     log.error({ err }, "cleanup job failed");
+  }
+  try {
+    const result = await rolloverStaleEvents();
+    if (result.ongoing > 0 || result.completed > 0) {
+      log.info(result, "event rollover applied");
+    }
+  } catch (err) {
+    log.error({ err }, "event rollover job failed");
   }
 }, CLEANUP_INTERVAL);
 

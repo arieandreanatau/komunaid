@@ -9,7 +9,7 @@ vi.mock("@komunaid/database", () => {
   const prisma: any = {
     user: { findUnique: vi.fn() },
     organization: { findUnique: vi.fn() },
-    organizationMember: { findUnique: vi.fn() },
+    organizationMember: { findUnique: vi.fn(), findFirst: vi.fn(), findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
     joinRequest: { findUnique: vi.fn(), update: vi.fn() },
   };
   return { prisma };
@@ -81,9 +81,71 @@ describe("Private organization access", () => {
     expect(prisma.organization.findUnique).toHaveBeenCalledWith(expect.objectContaining({
       include: expect.objectContaining({
         events: expect.objectContaining({
-          where: expect.objectContaining({ status: "PUBLISHED", visibility: "PUBLIC", deletedAt: null }),
+          where: expect.objectContaining({ status: { in: ["PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"] }, visibility: "PUBLIC", deletedAt: null }),
         }),
       }),
     }));
+  });
+
+  describe("GET /:organizationId/members authorization", () => {
+    function membersApp() {
+      const app = new Hono();
+      app.route("/api/v1/organizations", organizationRoutes);
+      return app;
+    }
+
+    it("denies non-member on PRIVATE organization with hidden member list", async () => {
+      (prisma.organization.findUnique as any).mockResolvedValue({
+        id: "org-1", ownerId: "user-1", deletedAt: null, visibility: "PRIVATE",
+        settings: { showMemberList: true },
+      });
+      (prisma.organizationMember.findFirst as any).mockResolvedValue(null);
+
+      const response = await membersApp().request("/api/v1/organizations/org-1/members", {
+        headers: { Authorization: `Bearer ${await token()}` },
+      });
+
+      expect(response.status).toBe(403);
+    });
+
+    it("denies non-member when showMemberList is false on PUBLIC organization", async () => {
+      (prisma.organization.findUnique as any).mockResolvedValue({
+        id: "org-1", ownerId: "user-1", deletedAt: null, visibility: "PUBLIC",
+        settings: { showMemberList: false },
+      });
+      (prisma.organizationMember.findFirst as any).mockResolvedValue(null);
+
+      const response = await membersApp().request("/api/v1/organizations/org-1/members", {
+        headers: { Authorization: `Bearer ${await token()}` },
+      });
+
+      expect(response.status).toBe(403);
+    });
+
+    it("allows member on PRIVATE organization", async () => {
+      (prisma.organization.findUnique as any).mockResolvedValue({
+        id: "org-1", ownerId: "user-1", deletedAt: null, visibility: "PRIVATE",
+        settings: { showMemberList: true },
+      });
+      (prisma.organizationMember.findFirst as any).mockResolvedValue({ id: "m1" });
+      (prisma.organizationMember.findMany as any).mockResolvedValue([]);
+      (prisma.organizationMember.count as any).mockResolvedValue(0);
+
+      const response = await membersApp().request("/api/v1/organizations/org-1/members", {
+        headers: { Authorization: `Bearer ${await token()}` },
+      });
+
+      expect(response.status).toBe(200);
+    });
+
+    it("returns 404 for unknown organization", async () => {
+      (prisma.organization.findUnique as any).mockResolvedValue(null);
+
+      const response = await membersApp().request("/api/v1/organizations/org-404/members", {
+        headers: { Authorization: `Bearer ${await token()}` },
+      });
+
+      expect(response.status).toBe(404);
+    });
   });
 });

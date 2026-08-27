@@ -3,8 +3,8 @@ import { test, expect } from "@playwright/test";
 test.describe("Error Pages - 404 Not Found", () => {
   test("displays 404 page for unknown routes", async ({ page }) => {
     await page.goto("/nonexistent-page-xyz");
-    await expect(page.getByText("404")).toBeVisible();
-    await expect(page.getByText("Halaman Tidak Ditemukan")).toBeVisible();
+    await expect(page.getByText("404").first()).toBeVisible();
+    await expect(page.getByText("Halaman Tidak Ditemukan").first()).toBeVisible();
   });
 
   test("404 page has back to home link", async ({ page }) => {
@@ -23,10 +23,10 @@ test.describe("Error Pages - 404 Not Found", () => {
 
   test("404 page shows quick navigation links", async ({ page }) => {
     await page.goto("/nonexistent-page-xyz");
-    await expect(page.getByRole("link", { name: "Event" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Volunteer" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "FAQ" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Kontak" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Event" }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: "Volunteer" }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: "FAQ" }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: "Kontak" }).first()).toBeVisible();
   });
 
   test("404 page has footer", async ({ page }) => {
@@ -90,7 +90,7 @@ test.describe("Error Pages - 500 Server Error", () => {
 test.describe("Error Pages - Maintenance", () => {
   test("maintenance page displays correctly", async ({ page }) => {
     await page.goto("/maintenance");
-    await expect(page.getByText("Sedang Dalam Pemeliharaan")).toBeVisible();
+    await expect(page.getByText("Sedang Dalam Pemeliharaan").first()).toBeVisible();
   });
 
   test("maintenance page shows contact email", async ({ page }) => {
@@ -112,12 +112,12 @@ test.describe("Error Pages - Maintenance", () => {
   test("maintenance page is responsive on mobile", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/maintenance");
-    await expect(page.getByText("Sedang Dalam Pemeliharaan")).toBeVisible();
+    await expect(page.getByText("Sedang Dalam Pemeliharaan").first()).toBeVisible();
   });
 
   test("maintenance page shows estimated time info", async ({ page }) => {
     await page.goto("/maintenance");
-    await expect(page.getByText(/estimasi|pemeliharaan/i)).toBeVisible();
+    await expect(page.getByText(/estimasi|pemeliharaan/i).first()).toBeVisible();
   });
 });
 

@@ -13,7 +13,7 @@ async function setAuthCookie(page: import("@playwright/test").Page) {
     .setSubject("user1")
     .setIssuedAt()
     .setExpirationTime("1h")
-    .sign(new TextEncoder().encode(process.env.JWT_SECRET || "test-playwright-jwt-secret"));
+     .sign(new TextEncoder().encode("test-playwright-jwt-secret-32-characters-minimum"));
   return page.context().addCookies([
     { name: "token", value: token, domain: "localhost", path: "/" },
   ]);
@@ -176,13 +176,13 @@ test.describe("Dashboard - Komunitas Saya", () => {
     await expect(page.getByRole("tab", { name: "Dibuat oleh Saya" })).toBeVisible();
     await expect(page.getByRole("tab", { name: "Diikuti", exact: true })).toBeVisible();
     await expect(page.getByRole("tab", { name: "Pernah Diikuti" })).toBeVisible();
-    await expect(page.getByText("Komunitas Buatan")).toBeVisible();
+    await expect(page.getByText("Komunitas Buatan").first()).toBeVisible();
 
     await page.getByRole("tab", { name: "Diikuti", exact: true }).click();
-    await expect(page.getByText("Komunitas Aktif")).toBeVisible();
+    await expect(page.getByText("Komunitas Aktif").first()).toBeVisible();
 
     await page.getByRole("tab", { name: "Pernah Diikuti" }).click();
-    await expect(page.getByText("Komunitas Lama")).toBeVisible();
-    await expect(page.getByText("Pernah bergabung")).toBeVisible();
+    await expect(page.getByText("Komunitas Lama").first()).toBeVisible();
+    await expect(page.getByText("Pernah bergabung").first()).toBeVisible();
   });
 });

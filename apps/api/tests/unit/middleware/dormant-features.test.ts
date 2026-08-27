@@ -41,7 +41,7 @@ describe("Dormant Features Middleware", () => {
   describe("isFeatureEnabled", () => {
     it("should return false for all features when env vars not set", async () => {
       const { isFeatureEnabled } = await import("../../../src/middleware/dormant-features");
-      expect(isFeatureEnabled("organization")).toBe(false);
+      expect(isFeatureEnabled("organization")).toBe(true); // org in-scope V1
       expect(isFeatureEnabled("brand")).toBe(false);
       expect(isFeatureEnabled("campaign")).toBe(false);
       expect(isFeatureEnabled("collaboration")).toBe(false);
@@ -84,10 +84,10 @@ describe("Dormant Features Middleware", () => {
       expect(isFeatureEnabled("campaign")).toBe(false);
     });
 
-    it("should treat empty string as not 'true'", async () => {
+    it("should treat empty string as fallback enabled for organization (org in-scope V1)", async () => {
       process.env.ORGANIZATION_ENABLED = "";
       const { isFeatureEnabled } = await import("../../../src/middleware/dormant-features");
-      expect(isFeatureEnabled("organization")).toBe(false);
+      expect(isFeatureEnabled("organization")).toBe(true);
     });
 
     it("should treat 'TRUE' as not 'true' (case-sensitive)", async () => {
@@ -98,17 +98,18 @@ describe("Dormant Features Middleware", () => {
   });
 
   describe("dormantFeatureGuard", () => {
-    it("should block /organizations when ORGANIZATION_ENABLED not set", async () => {
+    it("should allow /organizations by default (org in-scope V1, canonical §5.1)", async () => {
       const { dormantFeatureGuard } = await import("../../../src/middleware/dormant-features");
       const app = new Hono();
       app.use("*", dormantFeatureGuard());
       app.get("/organizations", (c) => c.json({ ok: true }));
+      app.get("/organizations/123/members", (c) => c.json({ ok: true }));
 
       const res = await app.request("/organizations");
-      expect(res.status).toBe(403);
-      const body = await res.json();
-      expect(body.success).toBe(false);
-      expect(body.code).toBe("FEATURE_DISABLED");
+      expect(res.status).toBe(200);
+
+      const nested = await app.request("/organizations/123/members");
+      expect(nested.status).toBe(200);
     });
 
     it("should block /brands when BRAND_ENABLED not set", async () => {
@@ -310,19 +311,55 @@ describe("Dormant Features Middleware", () => {
       const { dormantFeatureGuard } = await import("../../../src/middleware/dormant-features");
       const app = new Hono();
       app.use("*", dormantFeatureGuard());
-      app.get("/organizations/123/members", (c) => c.json({ ok: true }));
+      app.get("/brands/123/members", (c) => c.json({ ok: true }));
 
-      const res = await app.request("/organizations/123/members");
+      const res = await app.request("/brands/123/members");
       expect(res.status).toBe(403);
+    });
+
+    it("should block dormant module under /api/v1 prefix (real app mount)", async () => {
+      const { dormantFeatureGuard } = await import("../../../src/middleware/dormant-features");
+      const app = new Hono();
+      app.use("/api/v1/*", dormantFeatureGuard());
+      app.get("/api/v1/brands", (c) => c.json({ ok: true }));
+      app.get("/api/v1/social-feed/feed", (c) => c.json({ ok: true }));
+
+      const brandRes = await app.request("/api/v1/brands");
+      expect(brandRes.status).toBe(403);
+
+      const feedRes = await app.request("/api/v1/feed");
+      expect(feedRes.status).toBe(403);
+    });
+
+    it("should allow enabled module under /api/v1 prefix", async () => {
+      process.env.BRAND_ENABLED = "true";
+      const { dormantFeatureGuard } = await import("../../../src/middleware/dormant-features");
+      const app = new Hono();
+      app.use("/api/v1/*", dormantFeatureGuard());
+      app.get("/api/v1/brands", (c) => c.json({ ok: true }));
+
+      const res = await app.request("/api/v1/brands");
+      expect(res.status).toBe(200);
+    });
+
+    it("should not false-match similar path prefixes (/organizations-evil)", async () => {
+      const { dormantFeatureGuard } = await import("../../../src/middleware/dormant-features");
+      const app = new Hono();
+      app.use("*", dormantFeatureGuard());
+      app.get("/organizations-evil", (c) => c.json({ ok: true }));
+      app.get("/feeders", (c) => c.json({ ok: true }));
+
+      expect((await app.request("/organizations-evil")).status).toBe(200);
+      expect((await app.request("/feeders")).status).toBe(200);
     });
 
     it("should return FEATURE_DISABLED response body", async () => {
       const { dormantFeatureGuard } = await import("../../../src/middleware/dormant-features");
       const app = new Hono();
       app.use("*", dormantFeatureGuard());
-      app.get("/organizations", (c) => c.json({ ok: true }));
+      app.get("/brands", (c) => c.json({ ok: true }));
 
-      const res = await app.request("/organizations");
+      const res = await app.request("/brands");
       expect(res.status).toBe(403);
       const body = await res.json();
       expect(body).toEqual({

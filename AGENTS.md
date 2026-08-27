@@ -66,10 +66,12 @@ vercel --prod
 Environment variables diset di Vercel dashboard untuk project, BUKAN di file `.env` yang di-commit:
 
 - `NEXT_PUBLIC_API_URL` (web → API)
-- `DATABASE_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `REDIS_URL` (API)
-- `CSRF_SECRET` (API)
-- `RESEND_API_KEY` (email)
-- `ADMIN_BOOTSTRAP_SECRET` (jika ada)
+- `DATABASE_URL`, `JWT_SECRET`, `REDIS_URL` (API — diwajibkan; `JWT_SECRET` ≥32 char di production, dipakai juga utk refresh-token signing: access & refresh memakai secret yang sama)
+- `JWT_EXPIRES_IN`, `REFRESH_TOKEN_EXPIRES_IN` (opsional, default 15m/30d)
+- `BCRYPT_ROUNDS`, `NODE_ENV`, `APP_URL`, `API_URL`, `COOKIE_DOMAIN`, `CORS_ORIGIN`, `TRUSTED_PROXIES` (API)
+- `RESEND_API_KEY` ATAU `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS` (email; tanpa keduanya email tidak terkirim)
+- Upload: `UPLOAD_DIR` (local) atau `S3_ENDPOINT`/`S3_BUCKET`/`S3_ACCESS_KEY`/`S3_SECRET_KEY`/`S3_REGION` (object storage)
+- Catatan audit: `CSRF_SECRET`, `JWT_REFRESH_SECRET`, `COOKIE_SECRET` TIDAK dibaca oleh kode saat ini (CSRF memakai double-submit random token; refresh-token memakai `JWT_SECRET`) — jangan set sekadar ikut dokumen lama.
 
 ## 6. Deploy API
 

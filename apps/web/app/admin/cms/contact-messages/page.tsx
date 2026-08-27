@@ -23,7 +23,7 @@ export default function CmsContactMessagesPage() {
   const fetchMessages = async () => {
     setLoading(true);
     try {
-      const { data } = await api.get("/admin/cms/contact-messages");
+      const { data } = await api.get("/contact-messages/admin");
       setMessages(data.data || []);
     } catch { /* empty */ }
     finally { setLoading(false); }
@@ -31,7 +31,7 @@ export default function CmsContactMessagesPage() {
 
   const handleMarkRead = async (id: string) => {
     try {
-      await api.put(`/admin/cms/contact-messages/${id}/read`);
+      await api.put(`/contact-messages/admin/${id}`, { status: "READ" });
       setMessages((prev) => prev.map((m) => m.id === id ? { ...m, isRead: true } : m));
     } catch { /* empty */ }
   };
@@ -39,7 +39,7 @@ export default function CmsContactMessagesPage() {
   const handleDelete = async (id: string) => {
     if (!confirm("Hapus pesan ini?")) return;
     try {
-      await api.delete(`/admin/cms/contact-messages/${id}`);
+      await api.delete(`/contact-messages/admin/${id}`);
       setMessages((prev) => prev.filter((m) => m.id !== id));
       if (selectedMessage?.id === id) setSelectedMessage(null);
     } catch { /* empty */ }

@@ -40,7 +40,11 @@ export default function AdminLoginPage() {
       const userData = res.data.data?.user || res.data.user;
 
       if (!userData?.roles?.some((r: string) => ["SUPER_ADMIN", "PLATFORM_ADMIN"].includes(r))) {
-        await logout();
+        try {
+          await logout();
+        } catch {
+          // Best-effort cleanup; the role error below is authoritative.
+        }
         setError("Akun Anda tidak memiliki akses ke panel administrasi.");
         setCheckingRole(false);
         return;

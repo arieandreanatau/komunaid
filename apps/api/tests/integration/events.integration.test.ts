@@ -47,6 +47,13 @@ vi.mock("@komunaid/database", () => {
         Object.assign(e, data);
         return e;
       }),
+      updateMany: vi.fn(async ({ where, data }: any) => {
+        const e = events.get(where.id);
+        // Handler-specific tests override findUnique and do not share a DB fixture.
+        // Treat conditional writes as successful; race behavior has dedicated tests.
+        if (e) Object.assign(e, data);
+        return { count: 1 };
+      }),
       count: vi.fn(async () => events.size),
       findFirst: vi.fn(async ({ where }: any) => events.get(where.id) || null),
     },
@@ -96,6 +103,7 @@ vi.mock("@komunaid/database", () => {
     volunteerOpportunity: { findMany: vi.fn(async () => []), updateMany: vi.fn(async () => ({ count: 0 })) },
     volunteerApplication: { findMany: vi.fn(async () => []), updateMany: vi.fn(async () => ({ count: 0 })) },
     eventCategory: { deleteMany: vi.fn(async () => ({ count: 0 })), createMany: vi.fn(async () => ({ count: 0 })) },
+    eventStatusHistory: { create: vi.fn(async ({ data }: any) => ({ id: `history-${Date.now()}`, ...data })) },
     user: { findUnique: vi.fn(async () => null) },
     $transaction: vi.fn(async (fn: any) => { if (typeof fn === "function") return fn(prisma); return Promise.all(fn); }),
     $queryRaw: vi.fn(async () => []),
@@ -128,6 +136,7 @@ describe("Events Integration Tests", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    (prisma.userRole.findMany as any).mockResolvedValue([]);
     app = new Hono();
     app.onError((err, c) => {
       if (err.message === "Unauthorized") {
@@ -211,6 +220,10 @@ describe("Events Integration Tests", () => {
         deletedAt: null, quota: 100, allowWaitlist: false, createdById: "user-2",
         _count: { registrations: 0 },
       });
+      (prisma.$queryRaw as any).mockResolvedValue([{
+        quota: 100, status: "REGISTRATION_OPEN", allowWaitlist: false,
+        registrationOpensAt: null, registrationDeadline: null, deletedAt: null,
+      }]);
       (prisma.eventRegistration.findUnique as any).mockResolvedValue({
         id: "reg-1", userId: "user-1", eventId: "event-1", status: "CONFIRMED",
       });
@@ -245,6 +258,33 @@ describe("Events Integration Tests", () => {
       // Membership is null in this mock, so role resolves to null and
       // canManageEvent() returns false → 403 Forbidden.
       expect(res.status).toBe(403);
+    });
+
+    it("allows SUPER_ADMIN to cancel an event they do not own", async () => {
+      const token = await generateToken({ sub: "user-2", email: "u2@test.com", name: "U2", username: "u2", type: "access" });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
+      (prisma.event.findUnique as any).mockResolvedValue({
+        id: "event-1", status: "PUBLISHED", deletedAt: null, createdById: "user-1",
+        title: "Test", slug: "test", communityId: "comm-1", organizationId: null,
+      });
+      (prisma.communityMember.findUnique as any).mockResolvedValue(null);
+      (prisma.organizationMember.findUnique as any).mockResolvedValue(null);
+      // SUPER_ADMIN platform role → canManageEvent bypass applies.
+      (prisma.userRole.findMany as any).mockResolvedValue([{ role: "SUPER_ADMIN" }]);
+      (prisma.eventRegistration.findMany as any).mockResolvedValue([]);
+      (prisma.event.update as any).mockResolvedValue({ id: "event-1", status: "CANCELLED" });
+      (prisma.volunteerOpportunity.findMany as any).mockResolvedValue([]);
+      (prisma.volunteerApplication.findMany as any).mockResolvedValue([]);
+      (prisma.volunteerOpportunity.updateMany as any).mockResolvedValue({ count: 0 });
+      (prisma.volunteerApplication.updateMany as any).mockResolvedValue({ count: 0 });
+
+      const res = await app.request("/api/v1/events/event-1/cancel", {
+        method: "POST", headers: { Authorization: `Bearer ${token}` },
+      });
+
+      expect(res.status).toBe(200);
+      // Restore default (non-superadmin) role lookup so later tests are unaffected.
+      (prisma.userRole.findMany as any).mockResolvedValue([]);
     });
 
     it("should return 403 when not authorized", async () => {

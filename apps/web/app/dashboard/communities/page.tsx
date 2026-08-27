@@ -537,7 +537,7 @@ function CommunityCard({
         )}
         <div className="min-w-0 flex-1">
           <Link
-              href={tab === "created" ? `/dashboard/communities/${community.id}/overview` : `/communities/${community.slug}`}
+              href={tab === "created" ? `/dashboard/communities/${community.slug}/overview` : `/communities/${community.slug}`}
             className="font-semibold text-komuna-navy truncate hover:text-komuna-blue transition-colors block"
           >
             {community.name}
@@ -597,8 +597,8 @@ function CommunityCard({
       <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2">
         {tab === "created" ? (
           <>
-            <Link
-               href={`/dashboard/communities/${community.id}/overview`}
+               <Link
+                href={`/dashboard/communities/${community.slug}/overview`}
               className="px-3 py-1.5 text-xs font-medium text-komuna-blue bg-komuna-blue/10 rounded-lg hover:bg-komuna-blue/20 transition-colors"
             >
               Kelola

@@ -1,6 +1,22 @@
 import { type Page, type Route } from "@playwright/test";
+import { SignJWT } from "jose";
 
 const API_BASE = "**/api/v1/**";
+const JWT_SECRET = new TextEncoder().encode("test-playwright-jwt-secret-32-characters-minimum");
+
+export async function testAccessToken(userId: string, roles: string[] = ["USER"]) {
+  return new SignJWT({
+    email: "test@example.com",
+    name: "Test User",
+    type: "access",
+    roles,
+  })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(userId)
+    .setIssuedAt()
+    .setExpirationTime("15m")
+    .sign(JWT_SECRET);
+}
 
 export async function mockCommunities(page: Page, data: unknown[] = []) {
   await page.route("**/api/v1/communities*", async (route) => {
@@ -68,29 +84,35 @@ export async function mockCategories(page: Page, data: unknown[] = []) {
   });
 }
 
-export async function mockLoginSuccess(page: Page, userData?: object) {
+export async function mockLoginSuccess(page: Page, userData?: object, roles: string[] = ["USER"]) {
   const defaultUser = {
     id: "test-user-id",
     name: "Test User",
     username: "testuser",
     email: "test@example.com",
-    roles: ["USER"],
+    roles,
     ...userData,
   };
-
+  const token = await testAccessToken(defaultUser.id, roles);
   await page.route("**/api/v1/auth/login", async (route) => {
+    await page.context().addCookies([{ name: "token", value: token, domain: "localhost", path: "/" }]);
     await route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
         data: {
           user: defaultUser,
-          token: "mock.jwt.token",
+          token,
         },
       }),
     });
   });
   await page.route("**/api/v1/auth/me", async (route) => {
+    const hasToken = (await page.context().cookies()).some((cookie) => cookie.name === "token" && cookie.value.length > 0);
+    if (!hasToken) {
+      await route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({}) });
+      return;
+    }
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -109,15 +131,17 @@ export async function mockLoginFailure(page: Page, message = "Login gagal") {
   });
 }
 
-export async function mockRegisterSuccess(page: Page, userData?: object) {
+export async function mockRegisterSuccess(page: Page, userData?: object, roles: string[] = ["USER"]) {
   const defaultUser = {
     id: "new-user-id",
     name: "New User",
     username: "newuser",
     email: "new@example.com",
-    roles: ["USER"],
+    roles,
     ...userData,
   };
+  const token = await testAccessToken(defaultUser.id, roles);
+  await page.context().addCookies([{ name: "token", value: token, domain: "localhost", path: "/" }]);
 
   await page.route("**/api/v1/auth/register", async (route) => {
     await route.fulfill({
@@ -126,7 +150,7 @@ export async function mockRegisterSuccess(page: Page, userData?: object) {
       body: JSON.stringify({
         data: {
           user: defaultUser,
-          token: "mock.jwt.token",
+          token,
         },
       }),
     });

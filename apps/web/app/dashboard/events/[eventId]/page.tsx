@@ -55,6 +55,12 @@ interface Participant {
 
 const EVENT_STATUS_MAP: Record<string, { label: string; className: string }> = {
   DRAFT: { label: "Draft", className: "bg-gray-100 text-gray-600" },
+  SUBMITTED: { label: "Dikirim", className: "bg-blue-100 text-blue-700" },
+  IN_REVIEW: { label: "Sedang Ditinjau", className: "bg-blue-100 text-blue-700" },
+  REVISION_REQUESTED: { label: "Perlu Revisi", className: "bg-yellow-100 text-yellow-700" },
+  REJECTED: { label: "Ditolak", className: "bg-red-100 text-red-700" },
+  RESUBMITTED: { label: "Dikirim Ulang", className: "bg-blue-100 text-blue-700" },
+  APPROVED: { label: "Disetujui", className: "bg-green-100 text-green-700" },
   PUBLISHED: { label: "Diterbitkan", className: "bg-blue-100 text-blue-700" },
   REGISTRATION_OPEN: { label: "Pendaftaran Buka", className: "bg-green-100 text-green-700" },
   REGISTRATION_CLOSED: { label: "Pendaftaran Tutup", className: "bg-yellow-100 text-yellow-700" },
@@ -65,20 +71,35 @@ const EVENT_STATUS_MAP: Record<string, { label: string; className: string }> = {
 };
 
 const STATUS_TRANSITIONS: Record<string, string[]> = {
-  DRAFT: ["PUBLISHED", "CANCELLED"],
+  DRAFT: ["SUBMITTED", "CANCELLED"],
+  REVISION_REQUESTED: ["SUBMITTED", "CANCELLED"],
   PUBLISHED: ["REGISTRATION_OPEN", "CANCELLED"],
-  REGISTRATION_OPEN: ["REGISTRATION_CLOSED", "ONGOING", "CANCELLED"],
-  REGISTRATION_CLOSED: ["REGISTRATION_OPEN", "ONGOING", "CANCELLED"],
+  REGISTRATION_OPEN: ["REGISTRATION_CLOSED", "CANCELLED"],
+  REGISTRATION_CLOSED: ["ONGOING", "CANCELLED"],
   ONGOING: ["COMPLETED", "CANCELLED"],
+  COMPLETED: ["ARCHIVED"],
 };
 
 const STATUS_LABELS: Record<string, string> = {
+  SUBMITTED: "Kirim untuk Review",
   PUBLISHED: "Terbitkan",
   REGISTRATION_OPEN: "Buka Pendaftaran",
   REGISTRATION_CLOSED: "Tutup Pendaftaran",
   ONGOING: "Mulai Event",
   COMPLETED: "Selesai",
   CANCELLED: "Batalkan",
+  ARCHIVED: "Arsipkan",
+};
+
+const STATUS_ENDPOINTS: Record<string, string> = {
+  SUBMITTED: "submit",
+  PUBLISHED: "publish",
+  REGISTRATION_OPEN: "open-registration",
+  REGISTRATION_CLOSED: "close-registration",
+  ONGOING: "start",
+  COMPLETED: "complete",
+  CANCELLED: "cancel",
+  ARCHIVED: "archive",
 };
 
 export default function EventDashboardPage() {
@@ -115,7 +136,9 @@ export default function EventDashboardPage() {
 
   const statusMutation = useMutation({
     mutationFn: async (newStatus: string) => {
-      return api.patch(`/events/${eventId}/status`, { status: newStatus });
+      const endpoint = STATUS_ENDPOINTS[newStatus];
+      if (!endpoint) throw new Error("Transisi status tidak didukung");
+      return api.post(`/events/${eventId}/${endpoint}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["eventDashboard", eventId] });

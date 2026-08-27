@@ -11,6 +11,33 @@ export interface AuditLogEntry {
   beforeData?: Record<string, unknown> | null;
   afterData?: Record<string, unknown> | null;
   ipAddress?: string;
+  actorRole?: string;
+}
+
+const roleCache = new Map<string, { role: string; expiresAt: number }>();
+const ROLE_CACHE_TTL_MS = 120_000;
+
+export function invalidateActorRoleCache(userId: string) {
+  roleCache.delete(userId);
+}
+
+async function resolveActorRole(userId: string): Promise<string> {
+  const cached = roleCache.get(userId);
+  if (cached && cached.expiresAt > Date.now()) return cached.role;
+  try {
+    const roles = await prisma.userRole.findMany({ where: { userId }, select: { role: true } });
+    const role = roles.some((r) => r.role === "SUPER_ADMIN")
+      ? "SUPER_ADMIN"
+      : roles.some((r) => r.role === "PLATFORM_ADMIN")
+        ? "PLATFORM_ADMIN"
+        : roles.length > 0
+          ? "MEMBER"
+          : "UNKNOWN";
+    roleCache.set(userId, { role, expiresAt: Date.now() + ROLE_CACHE_TTL_MS });
+    return role;
+  } catch {
+    return "UNKNOWN";
+  }
 }
 
 /**
@@ -20,9 +47,11 @@ export interface AuditLogEntry {
  */
 export async function createAuditLog(entry: AuditLogEntry): Promise<void> {
   try {
+    const actorRole = entry.actorRole || (await resolveActorRole(entry.userId));
     await prisma.auditLog.create({
       data: {
         userId: entry.userId,
+        actorRole,
         actionType: entry.actionType,
         resourceName: entry.resourceName,
         resourceId: entry.resourceId,
@@ -105,6 +134,7 @@ export const AuditActions = {
   COMMUNITY_MEMBER_LEAVE: "COMMUNITY_MEMBER_LEAVE",
   COMMUNITY_ROLE_CHANGE: "COMMUNITY_ROLE_CHANGE",
   COMMUNITY_ARCHIVE: "COMMUNITY_ARCHIVE",
+  COMMUNITY_DELETE: "COMMUNITY_DELETE",
   COMMUNITY_MEMBER_REMOVE: "COMMUNITY_MEMBER_REMOVE",
   COMMUNITY_SUBMITTED: "COMMUNITY_SUBMITTED",
 

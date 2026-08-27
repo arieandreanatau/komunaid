@@ -4,6 +4,7 @@ import {
   loginSchema,
   createCommunitySchema,
   createEventSchema,
+  eventQuerySchema,
   createVolunteerOpportunitySchema,
   createReportSchema,
   paginationSchema,
@@ -65,6 +66,12 @@ function expectInvalid(schema: any, data: any) {
   expect(result.success).toBe(false);
   return result;
 }
+
+describe("eventQuerySchema", () => {
+  it("accepts REJECTED event status", () => {
+    expectValid(eventQuerySchema, { status: "REJECTED" });
+  });
+});
 
 const VALID_USER = {
   name: "John Doe",

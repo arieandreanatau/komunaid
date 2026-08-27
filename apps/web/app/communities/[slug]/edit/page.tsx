@@ -26,7 +26,7 @@ interface CommunityDetail {
   address1: string | null;
   address2: string | null;
   postalCode: string | null;
-  kelurahan: string | null;
+  village: string | null;
   district: string | null;
   country: string | null;
   province: string | null;
@@ -48,7 +48,7 @@ interface EditCommunityForm {
   address1: string;
   address2: string;
   postalCode: string;
-  kelurahan: string;
+  village: string;
   district: string;
   country: string;
   province: string;
@@ -81,6 +81,10 @@ export default function EditCommunityPage() {
   const [cities, setCities] = useState<string[]>([]);
   const [districts, setDistricts] = useState<string[]>([]);
   const [kelurahanList, setKelurahanList] = useState<string[]>([]);
+  const [loadingCities, setLoadingCities] = useState(false);
+  const [loadingDistricts, setLoadingDistricts] = useState(false);
+  const [loadingKelurahan, setLoadingKelurahan] = useState(false);
+  const [loadingPostalCode, setLoadingPostalCode] = useState(false);
 
   const {
     register,
@@ -97,7 +101,7 @@ export default function EditCommunityPage() {
       address1: "",
       address2: "",
       postalCode: "",
-      kelurahan: "",
+      village: "",
       district: "",
       country: "",
       province: "",
@@ -123,14 +127,11 @@ export default function EditCommunityPage() {
 
     const fetchData = async () => {
       try {
-        const [communityRes, categoriesRes, countryRes, provinceRes, cityRes, districtRes, kelurahanRes] = await Promise.all([
+        const [communityRes, categoriesRes, countryRes, provinceRes] = await Promise.all([
           api.get(`/communities/${slug}`),
           api.get("/categories"),
           api.get("/master-data/countries"),
           api.get("/master-data/provinces"),
-          api.get("/master-data/cities"),
-          api.get("/master-data/districts"),
-          api.get("/master-data/kelurahan"),
         ]);
 
         const comm = unwrapApiData<CommunityDetail>(communityRes);
@@ -138,13 +139,12 @@ export default function EditCommunityPage() {
         setCategories(categoriesRes.data.data || []);
         setCountries(countryRes.data.data || []);
         setProvinces(provinceRes.data.data || []);
-        const cityData = cityRes.data.data;
-        setCities(Array.isArray(cityData) ? cityData : []);
-        setDistricts(districtRes.data.data || []);
-        setKelurahanList(kelurahanRes.data.data || []);
+        setCities([]);
+        setDistricts([]);
+        setKelurahanList([]);
 
         if (user && comm.owner.id !== user.id) {
-          const hasAdminRole = user.roles?.includes("admin") || user.roles?.includes("SUPER_ADMIN");
+          const hasAdminRole = user.roles?.includes("PLATFORM_ADMIN") || user.roles?.includes("SUPER_ADMIN");
           if (!hasAdminRole) {
             setNotAuthorized(true);
             return;
@@ -158,7 +158,7 @@ export default function EditCommunityPage() {
           address1: comm.address1 || "",
           address2: comm.address2 || "",
           postalCode: comm.postalCode || "",
-          kelurahan: comm.kelurahan || "",
+          village: comm.village || "",
           district: comm.district || "",
           country: comm.country || "",
           province: comm.province || "",
@@ -185,6 +185,85 @@ export default function EditCommunityPage() {
   }, [slug, isAuthenticated, user, reset]);
 
   const selectedCategories = watch("categoryIds");
+  const selectedProvince = watch("province");
+  const selectedCity = watch("city");
+  const selectedDistrict = watch("district");
+  const selectedVillage = watch("village");
+
+  useEffect(() => {
+    if (!selectedProvince) {
+      setCities([]);
+      setDistricts([]);
+      setKelurahanList([]);
+      return;
+    }
+    const controller = new AbortController();
+    setLoadingCities(true);
+    api
+      .get(`/master-data/cities?province=${encodeURIComponent(selectedProvince)}`, { signal: controller.signal })
+      .then((res) => setCities(res.data.data || []))
+      .catch(() => setCities([]))
+      .finally(() => setLoadingCities(false));
+    return () => controller.abort();
+  }, [selectedProvince]);
+
+  useEffect(() => {
+    if (!selectedCity) {
+      setDistricts([]);
+      setKelurahanList([]);
+      return;
+    }
+    const controller = new AbortController();
+    setLoadingDistricts(true);
+    api
+      .get(`/master-data/districts?city=${encodeURIComponent(selectedCity)}`, { signal: controller.signal })
+      .then((res) => setDistricts(res.data.data || []))
+      .catch(() => setDistricts([]))
+      .finally(() => setLoadingDistricts(false));
+    return () => controller.abort();
+  }, [selectedCity]);
+
+  useEffect(() => {
+    if (!selectedDistrict) {
+      setKelurahanList([]);
+      return;
+    }
+    const controller = new AbortController();
+    setLoadingKelurahan(true);
+    api
+      .get(`/master-data/kelurahan?district=${encodeURIComponent(selectedDistrict)}`, { signal: controller.signal })
+      .then((res) => setKelurahanList(res.data.data || []))
+      .catch(() => setKelurahanList([]))
+      .finally(() => setLoadingKelurahan(false));
+    return () => controller.abort();
+  }, [selectedDistrict]);
+
+  useEffect(() => {
+    if (!selectedVillage) {
+      return;
+    }
+    const controller = new AbortController();
+    setLoadingPostalCode(true);
+    const params = new URLSearchParams({ village: selectedVillage });
+    if (selectedDistrict) params.set("district", selectedDistrict);
+    api
+      .get(`/master-data/postal-codes?${params.toString()}`, { signal: controller.signal })
+      .then((res) => {
+        const list = res.data?.data || [];
+        if (list.length > 0) {
+          const matched =
+            list.find(
+              (item: any) =>
+                item.village?.toLowerCase() === selectedVillage.toLowerCase() &&
+                (!selectedDistrict || item.district?.toLowerCase() === selectedDistrict.toLowerCase())
+            ) || list[0];
+          setValue("postalCode", matched.code || "");
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingPostalCode(false));
+    return () => controller.abort();
+  }, [selectedVillage, selectedDistrict, setValue]);
 
   const toggleCategory = (id: string) => {
     const current = selectedCategories || [];
@@ -219,7 +298,7 @@ export default function EditCommunityPage() {
         address1: data.address1 || undefined,
         address2: data.address2 || undefined,
         postalCode: data.postalCode || undefined,
-        kelurahan: data.kelurahan || undefined,
+        village: data.village || undefined,
         district: data.district || undefined,
         country: data.country || undefined,
         province: data.province || undefined,
@@ -487,10 +566,15 @@ export default function EditCommunityPage() {
                 </label>
                 <select
                   id="kelurahan"
-                  {...register("kelurahan")}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white"
+                  value={selectedVillage}
+                  onChange={(e) => {
+                    setValue("village", e.target.value);
+                    setValue("postalCode", "");
+                  }}
+                  disabled={!selectedDistrict || loadingKelurahan}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white disabled:bg-gray-50"
                 >
-                  <option value="">-- Pilih Kelurahan --</option>
+                  <option value="">{loadingKelurahan ? "Memuat kelurahan..." : "-- Pilih Kelurahan --"}</option>
                   {kelurahanList.map((k) => (
                     <option key={k} value={k}>{k}</option>
                   ))}
@@ -506,10 +590,17 @@ export default function EditCommunityPage() {
                 </label>
                 <select
                   id="district"
-                  {...register("district")}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white"
+                  value={selectedDistrict}
+                  onChange={(e) => {
+                    setValue("district", e.target.value);
+                    setValue("village", "");
+                    setValue("postalCode", "");
+                    setKelurahanList([]);
+                  }}
+                  disabled={!selectedCity || loadingDistricts}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white disabled:bg-gray-50"
                 >
-                  <option value="">-- Pilih Kecamatan --</option>
+                  <option value="">{loadingDistricts ? "Memuat kecamatan..." : "-- Pilih Kecamatan --"}</option>
                   {districts.map((d) => (
                     <option key={d} value={d}>{d}</option>
                   ))}
@@ -526,10 +617,19 @@ export default function EditCommunityPage() {
                   </label>
                   <select
                     id="city"
-                    {...register("city")}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white"
+                    value={selectedCity}
+                    onChange={(e) => {
+                      setValue("city", e.target.value);
+                      setValue("district", "");
+                      setValue("village", "");
+                      setValue("postalCode", "");
+                      setDistricts([]);
+                      setKelurahanList([]);
+                    }}
+                    disabled={!selectedProvince || loadingCities}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white disabled:bg-gray-50"
                   >
-                    <option value="">-- Pilih Kota/Kabupaten --</option>
+                    <option value="">{loadingCities ? "Memuat kota..." : "-- Pilih Kota/Kabupaten --"}</option>
                     {cities.map((c) => (
                       <option key={c} value={c}>{c}</option>
                     ))}
@@ -544,7 +644,17 @@ export default function EditCommunityPage() {
                   </label>
                   <select
                     id="province"
-                    {...register("province")}
+                    value={selectedProvince}
+                    onChange={(e) => {
+                      setValue("province", e.target.value);
+                      setValue("city", "");
+                      setValue("district", "");
+                      setValue("village", "");
+                      setValue("postalCode", "");
+                      setCities([]);
+                      setDistricts([]);
+                      setKelurahanList([]);
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-white"
                   >
                     <option value="">-- Pilih Provinsi --</option>
@@ -585,8 +695,10 @@ export default function EditCommunityPage() {
                   type="text"
                   {...register("postalCode")}
                   maxLength={5}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-gray-50"
-                  placeholder="Otomatis terisi saat memilih kelurahan"
+                  readOnly
+                  disabled={loadingPostalCode}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm bg-gray-50 disabled:opacity-60"
+                  placeholder={loadingPostalCode ? "Mencari kode pos..." : "Otomatis terisi saat memilih kelurahan"}
                 />
               </div>
 

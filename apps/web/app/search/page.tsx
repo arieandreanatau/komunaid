@@ -105,7 +105,7 @@ function SearchResultsInner() {
         api.get("/categories", { params: { type: "COMMUNITY" } }),
         api.get("/communities", { params: { limit: 100, orderBy: "memberCount", sort: "desc" } }),
         api.get("/events/popular/upcoming"),
-        api.get("/volunteer", { params: { limit: 50, status: "OPEN" } }),
+        api.get("/volunteer-programs", { params: { limit: 50, status: "REGISTRATION_OPEN" } }),
       ]);
       if (cancelled) return;
       const read = (r: PromiseSettledResult<{ data: { data?: unknown } }>) => (r.status === "fulfilled" ? (r.value.data.data ?? []) : []);
@@ -200,7 +200,7 @@ function SearchResultsInner() {
         {list.map((volunteer) => (
           <Link key={volunteer.id} href={`/volunteer/${volunteer.slug}`} className="group rounded-2xl border border-komuna-forest/10 bg-white p-6 transition hover:-translate-y-1 hover:shadow-xl">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-komuna-soft text-2xl text-komuna-coral" aria-hidden="true">+</div>
-            <p className="mt-6 text-sm font-bold text-komuna-coral">{volunteer.status === "OPEN" ? "Pendaftaran terbuka" : volunteer.status}</p>
+            <p className="mt-6 text-sm font-bold text-komuna-coral">{volunteer.status === "REGISTRATION_OPEN" ? "Pendaftaran Dibuka" : volunteer.status === "ONGOING" ? "Berlangsung" : volunteer.status === "REGISTRATION_CLOSED" ? "Pendaftaran Ditutup" : volunteer.status}</p>
             <h3 className="mt-2 line-clamp-1 text-xl font-bold text-komuna-dark">{volunteer.title}</h3>
             <p className="mt-2 line-clamp-1 text-sm text-komuna-forest">{volunteer.event?.title || "Komunitas"}</p>
             <p className="mt-4 line-clamp-2 min-h-10 text-sm leading-5 text-komuna-dark/65">{volunteer.description || "Kesempatan untuk berkontribusi bersama komunitas."}</p>

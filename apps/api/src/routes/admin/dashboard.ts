@@ -29,6 +29,7 @@ dashboardRoutes.get("/dashboard", async (c) => {
     recentReports,
     pendingCommunityList,
     pendingOrganizationList,
+    totalVolunteers,
   ] = await Promise.all([
     prisma.user.count({ where: { deletedAt: null } }),
     prisma.community.count({ where: { deletedAt: null } }),
@@ -70,6 +71,7 @@ dashboardRoutes.get("/dashboard", async (c) => {
       orderBy: { submittedAt: "asc" },
       include: { owner: { select: { id: true, name: true, avatar: true } } },
     }),
+    prisma.volunteerProgramParticipation.count(),
   ]);
 
   return c.json({
@@ -88,6 +90,7 @@ dashboardRoutes.get("/dashboard", async (c) => {
         newUsersLast30d,
         newCommunitiesLast30d,
         newEventsLast30d,
+        totalVolunteers,
       },
       recentActivity: recentActivity.map((a) => ({
         id: a.id,

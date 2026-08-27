@@ -4,7 +4,7 @@ import { prisma } from "@komunaid/database";
 import { requireSuperAdmin, invalidateRoleCache } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
 import { assignRoleSchema, adminResetPasswordSchema } from "@komunaid/shared";
-import { createAuditLog, AuditActions } from "../../services/audit";
+import { createAuditLog, AuditActions, invalidateActorRoleCache } from "../../services/audit";
 import type { AuthUser } from "../../middleware/auth";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
@@ -350,10 +350,20 @@ usersRoutes.put("/users/:userId/role", requireSuperAdmin(), validate(assignRoleS
 
   const before = user.roles.map((r) => r.role);
 
+  const wasSuperAdmin = before.includes("SUPER_ADMIN");
+  const isDowngradingSuperAdmin = wasSuperAdmin && role !== "SUPER_ADMIN";
+  if (isDowngradingSuperAdmin) {
+    const superAdminCount = await prisma.userRole.count({ where: { role: "SUPER_ADMIN" } });
+    if (superAdminCount <= 1) {
+      return c.json({ success: false, message: "Tidak dapat menghapus Superadmin terakhir" }, 409);
+    }
+  }
+
   await prisma.userRole.deleteMany({ where: { userId } });
   await prisma.userRole.create({ data: { userId, role } });
 
   invalidateRoleCache(userId);
+  invalidateActorRoleCache(userId);
 
   await createAuditLog({
     userId: authUser.id,

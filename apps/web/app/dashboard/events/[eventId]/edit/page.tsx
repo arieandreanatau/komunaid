@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import { useForm } from "react-hook-form";
+import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -27,6 +27,40 @@ const eventSchema = z.object({
   allowWaitlist: z.boolean(),
   coverImage: z.string().optional().nullable(),
   thumbnail: z.string().optional().nullable(),
+  agendas: z
+    .array(
+      z.object({
+        session: z.string().min(1, "Nama sesi wajib"),
+        description: z.string().optional(),
+        startTime: z.string().optional(),
+        endTime: z.string().optional(),
+        room: z.string().optional(),
+        speakerName: z.string().optional(),
+      })
+    )
+    .optional(),
+  speakers: z
+    .array(
+      z.object({
+        name: z.string().min(1, "Nama pembicara wajib"),
+        photo: z.string().optional(),
+        bio: z.string().optional(),
+        position: z.string().optional(),
+        institution: z.string().optional(),
+        topic: z.string().optional(),
+      })
+    )
+    .optional(),
+  tickets: z
+    .array(
+      z.object({
+        name: z.string().min(1, "Nama tiket wajib"),
+        description: z.string().optional(),
+        price: z.coerce.number().min(0, "Harga tidak boleh negatif"),
+        quota: z.coerce.number().min(1).optional().nullable(),
+      })
+    )
+    .optional(),
 });
 
 type EventFormData = z.infer<typeof eventSchema>;
@@ -56,6 +90,31 @@ interface EventData {
   categories: Array<{ id: string; name: string }>;
   community: { id: string; name: string } | null;
   organization: { id: string; name: string } | null;
+  agendas?: Array<{
+    id: string;
+    session: string;
+    description: string | null;
+    startTime: string | null;
+    endTime: string | null;
+    room: string | null;
+    speakerName: string | null;
+  }>;
+  speakers?: Array<{
+    id: string;
+    name: string;
+    photo: string | null;
+    bio: string | null;
+    position: string | null;
+    institution: string | null;
+    topic: string | null;
+  }>;
+  tickets?: Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    price: number | string;
+    quota: number | null;
+  }>;
 }
 
 const TIMEZONES = [
@@ -64,6 +123,29 @@ const TIMEZONES = [
   "Asia/Jayapura",
   "UTC",
 ];
+
+const TIMEZONE_OFFSETS: Record<string, number> = {
+  "Asia/Jakarta": 7,
+  "Asia/Makassar": 8,
+  "Asia/Jayapura": 9,
+  UTC: 0,
+};
+
+function localDateTimeToIso(value: string, timezone: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(value);
+  const offset = TIMEZONE_OFFSETS[timezone];
+  if (!match || offset === undefined) throw new Error("Format tanggal atau timezone tidak valid");
+
+  const [, year, month, day, hour, minute, second = "0"] = match;
+  return new Date(Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour) - offset,
+    Number(minute),
+    Number(second)
+  )).toISOString();
+}
 
 export default function EditEventPage() {
   const router = useRouter();
@@ -78,6 +160,7 @@ export default function EditEventPage() {
     handleSubmit,
     watch,
     setValue,
+    control,
     reset,
     formState: { errors },
   } = useForm<EventFormData>({
@@ -99,8 +182,15 @@ export default function EditEventPage() {
       allowWaitlist: false,
       coverImage: "",
       thumbnail: "",
+      agendas: [],
+      speakers: [],
+      tickets: [],
     },
   });
+
+  const agendaFields = useFieldArray({ control, name: "agendas" });
+  const speakerFields = useFieldArray({ control, name: "speakers" });
+  const ticketFields = useFieldArray({ control, name: "tickets" });
 
   const formValues = watch();
 
@@ -119,8 +209,8 @@ export default function EditEventPage() {
         title: data.title.trim(),
         description: data.description.trim(),
         categoryIds: data.categoryIds,
-        eventDate: data.eventDate,
-        endDate: data.endDate || undefined,
+        eventDate: localDateTimeToIso(data.eventDate, data.timezone),
+        endDate: data.endDate ? localDateTimeToIso(data.endDate, data.timezone) : undefined,
         timezone: data.timezone,
         locationType: data.locationType,
         location: data.location || undefined,
@@ -133,6 +223,44 @@ export default function EditEventPage() {
       };
       if (data.communityId) payload.communityId = data.communityId;
       if (data.organizationId) payload.organizationId = data.organizationId;
+
+      if (data.agendas && data.agendas.length > 0) {
+        payload.agendas = data.agendas.map((agenda) => ({
+          session: agenda.session.trim(),
+          description: agenda.description?.trim() || undefined,
+          startTime: agenda.startTime || undefined,
+          endTime: agenda.endTime || undefined,
+          room: agenda.room?.trim() || undefined,
+          speakerName: agenda.speakerName?.trim() || undefined,
+        }));
+      } else {
+        payload.agendas = [];
+      }
+
+      if (data.speakers && data.speakers.length > 0) {
+        payload.speakers = data.speakers.map((speaker) => ({
+          name: speaker.name.trim(),
+          photo: speaker.photo?.trim() || undefined,
+          bio: speaker.bio?.trim() || undefined,
+          position: speaker.position?.trim() || undefined,
+          institution: speaker.institution?.trim() || undefined,
+          topic: speaker.topic?.trim() || undefined,
+        }));
+      } else {
+        payload.speakers = [];
+      }
+
+      if (data.tickets && data.tickets.length > 0) {
+        payload.tickets = data.tickets.map((ticket) => ({
+          name: ticket.name.trim(),
+          description: ticket.description?.trim() || undefined,
+          price: Number(ticket.price),
+          quota: ticket.quota ? Number(ticket.quota) : undefined,
+        }));
+      } else {
+        payload.tickets = [];
+      }
+
       return api.patch(`/events/${eventId}`, payload);
     },
     onSuccess: () => {
@@ -182,6 +310,28 @@ export default function EditEventPage() {
         allowWaitlist: eventData.allowWaitlist || false,
         coverImage: eventData.coverImage || "",
         thumbnail: eventData.thumbnail || "",
+        agendas: (eventData.agendas || []).map((a) => ({
+          session: a.session,
+          description: a.description || "",
+          startTime: a.startTime ? toLocalDatetime(a.startTime) : "",
+          endTime: a.endTime ? toLocalDatetime(a.endTime) : "",
+          room: a.room || "",
+          speakerName: a.speakerName || "",
+        })),
+        speakers: (eventData.speakers || []).map((s) => ({
+          name: s.name,
+          photo: s.photo || "",
+          bio: s.bio || "",
+          position: s.position || "",
+          institution: s.institution || "",
+          topic: s.topic || "",
+        })),
+        tickets: (eventData.tickets || []).map((t) => ({
+          name: t.name,
+          description: t.description || "",
+          price: Number(t.price),
+          quota: t.quota,
+        })),
       });
       setLoadingEvent(false);
     }
@@ -455,6 +605,186 @@ export default function EditEventPage() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue text-sm"
               />
             </div>
+          </div>
+
+          {/* Agendas */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-komuna-navy">Agenda</h2>
+              <button
+                type="button"
+                onClick={() => agendaFields.append({ session: "", description: "", startTime: "", endTime: "", room: "", speakerName: "" })}
+                className="px-3 py-1.5 text-sm font-medium text-komuna-blue border border-komuna-blue/30 rounded-lg hover:bg-komuna-blue/5 transition-colors"
+              >
+                + Tambah Sesi
+              </button>
+            </div>
+            {agendaFields.fields.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-4 border border-dashed border-gray-200 rounded-lg">
+                Belum ada agenda. Tambahkan sesi acara.
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {agendaFields.fields.map((field, index) => (
+                  <div key={field.id} className="border border-gray-200 rounded-lg p-4 space-y-3 bg-gray-50/50">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Nama Sesi</label>
+                        <input
+                          type="text"
+                          {...register(`agendas.${index}.session`)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm"
+                        />
+                        {errors.agendas?.[index]?.session && (
+                          <p className="mt-1 text-xs text-red-500">{errors.agendas?.[index]?.session?.message}</p>
+                        )}
+                      </div>
+                      <button type="button" onClick={() => agendaFields.remove(index)} className="mt-5 text-gray-400 hover:text-red-500 transition-colors" aria-label="Hapus sesi">
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Mulai</label>
+                        <input type="datetime-local" {...register(`agendas.${index}.startTime`)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Selesai</label>
+                        <input type="datetime-local" {...register(`agendas.${index}.endTime`)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Ruang / Lokasi Sesi</label>
+                        <input type="text" {...register(`agendas.${index}.room`)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Pembicara</label>
+                        <input type="text" {...register(`agendas.${index}.speakerName`)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Deskripsi Sesi</label>
+                      <textarea rows={2} {...register(`agendas.${index}.description`)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm resize-none" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Speakers */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-komuna-navy">Pembicara</h2>
+              <button
+                type="button"
+                onClick={() => speakerFields.append({ name: "", photo: "", bio: "", position: "", institution: "", topic: "" })}
+                className="px-3 py-1.5 text-sm font-medium text-komuna-blue border border-komuna-blue/30 rounded-lg hover:bg-komuna-blue/5 transition-colors"
+              >
+                + Tambah Pembicara
+              </button>
+            </div>
+            {speakerFields.fields.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-4 border border-dashed border-gray-200 rounded-lg">Belum ada pembicara.</p>
+            ) : (
+              <div className="space-y-4">
+                {speakerFields.fields.map((field, index) => (
+                  <div key={field.id} className="border border-gray-200 rounded-lg p-4 space-y-3 bg-gray-50/50">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Nama</label>
+                        <input
+                          type="text"
+                          {...register(`speakers.${index}.name`)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm"
+                        />
+                        {errors.speakers?.[index]?.name && (
+                          <p className="mt-1 text-xs text-red-500">{errors.speakers?.[index]?.name?.message}</p>
+                        )}
+                      </div>
+                      <button type="button" onClick={() => speakerFields.remove(index)} className="mt-5 text-gray-400 hover:text-red-500 transition-colors" aria-label="Hapus pembicara">
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Jabatan</label>
+                        <input type="text" {...register(`speakers.${index}.position`)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Institusi</label>
+                        <input type="text" {...register(`speakers.${index}.institution`)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Topik</label>
+                        <input type="text" {...register(`speakers.${index}.topic`)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm" />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Foto (URL)</label>
+                        <input type="text" {...register(`speakers.${index}.photo`)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm" placeholder="https://..." />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Bio</label>
+                        <textarea rows={2} {...register(`speakers.${index}.bio`)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm resize-none" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Tickets */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-komuna-navy">Tiket</h2>
+              <button
+                type="button"
+                onClick={() => ticketFields.append({ name: "", description: "", price: 0, quota: null })}
+                className="px-3 py-1.5 text-sm font-medium text-komuna-blue border border-komuna-blue/30 rounded-lg hover:bg-komuna-blue/5 transition-colors"
+              >
+                + Tambah Tiket
+              </button>
+            </div>
+            {ticketFields.fields.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-4 border border-dashed border-gray-200 rounded-lg">Belum ada tiket. Event gratis jika tidak ada tiket berbayar.</p>
+            ) : (
+              <div className="space-y-4">
+                {ticketFields.fields.map((field, index) => (
+                  <div key={field.id} className="border border-gray-200 rounded-lg p-4 space-y-3 bg-gray-50/50">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Nama Tiket</label>
+                        <input
+                          type="text"
+                          {...register(`tickets.${index}.name`)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm"
+                        />
+                        {errors.tickets?.[index]?.name && (
+                          <p className="mt-1 text-xs text-red-500">{errors.tickets?.[index]?.name?.message}</p>
+                        )}
+                      </div>
+                      <button type="button" onClick={() => ticketFields.remove(index)} className="mt-5 text-gray-400 hover:text-red-500 transition-colors" aria-label="Hapus tiket">
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Harga (Rp)</label>
+                        <input type="number" min={0} {...register(`tickets.${index}.price`)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Kuota (Opsional)</label>
+                        <input type="number" min={1} {...register(`tickets.${index}.quota`)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm" placeholder="Kosongkan jika tanpa batas" />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Deskripsi</label>
+                        <input type="text" {...register(`tickets.${index}.description`)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-komuna-blue text-sm" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-3 pt-4">

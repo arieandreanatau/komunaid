@@ -35,7 +35,7 @@ export class AuthHelper {
     await this.page.getByLabel("Email").fill(data.email);
     await this.page.getByLabel("Password", { exact: true }).fill(data.password);
     await this.page.getByLabel("Konfirmasi Password").fill(data.password);
-    await this.page.getByLabel("terms").check();
+    await this.page.getByRole("checkbox", { name: /Saya menyetujui/ }).check();
     await this.page.getByRole("button", { name: "Daftar" }).click();
     await this.page.waitForURL("**/dashboard");
   }
@@ -62,3 +62,4 @@ export class AuthHelper {
     ]);
   }
 }
+

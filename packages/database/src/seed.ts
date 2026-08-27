@@ -128,7 +128,11 @@ async function main() {
 
   const techCommunity = await prisma.community.upsert({
     where: { slug: "komunitas-teknologi-jakarta" },
-    update: {},
+    update: {
+      status: "APPROVED",
+      submittedAt: new Date("2026-07-01T09:00:00Z"),
+      reviewedAt: new Date("2026-07-02T09:00:00Z"),
+    },
     create: {
       name: "Komunitas Teknologi Jakarta",
       slug: "komunitas-teknologi-jakarta",
@@ -136,6 +140,8 @@ async function main() {
       location: "Jakarta",
       membershipType: "OPEN",
       status: "APPROVED",
+      submittedAt: new Date("2026-07-01T09:00:00Z"),
+      reviewedAt: new Date("2026-07-02T09:00:00Z"),
       ownerId: member.id,
       members: {
         create: {
@@ -192,17 +198,27 @@ async function main() {
 
   const event = await prisma.event.upsert({
     where: { slug: "meetup-teknologi-juli-2026" },
-    update: {},
+    update: {
+      status: "PUBLISHED",
+      submittedAt: new Date("2026-09-20T09:00:00+07:00"),
+      reviewedAt: new Date("2026-09-21T09:00:00+07:00"),
+      reviewedById: superAdmin.id,
+      eventDate: new Date("2026-10-25T19:00:00+07:00"),
+      endDate: new Date("2026-10-25T22:00:00+07:00"),
+    },
     create: {
       title: "Meetup Teknologi Juli 2026",
       slug: "meetup-teknologi-juli-2026",
       description: "Meetup bulanan komunitas teknologi Jakarta. Topik: AI dan Machine Learning.",
       location: "Jakarta",
       isOnline: false,
-      eventDate: new Date("2026-07-25T19:00:00+07:00"),
-      endDate: new Date("2026-07-25T22:00:00+07:00"),
+      eventDate: new Date("2026-10-25T19:00:00+07:00"),
+      endDate: new Date("2026-10-25T22:00:00+07:00"),
       quota: 50,
       status: "PUBLISHED",
+      submittedAt: new Date("2026-09-20T09:00:00+07:00"),
+      reviewedAt: new Date("2026-09-21T09:00:00+07:00"),
+      reviewedById: superAdmin.id,
       communityId: techCommunity.id,
       createdById: member.id,
       registrations: {
@@ -227,7 +243,11 @@ async function main() {
 
   const org = await prisma.organization.upsert({
     where: { slug: "pt-teknologi-nusantara" },
-    update: {},
+    update: {
+      status: "APPROVED",
+      submittedAt: new Date("2026-07-01T09:00:00Z"),
+      reviewedAt: new Date("2026-07-02T09:00:00Z"),
+    },
     create: {
       name: "PT Teknologi Nusantara",
       slug: "pt-teknologi-nusantara",
@@ -235,6 +255,8 @@ async function main() {
       location: "Jakarta",
       industry: "Teknologi",
       status: "APPROVED",
+      submittedAt: new Date("2026-07-01T09:00:00Z"),
+      reviewedAt: new Date("2026-07-02T09:00:00Z"),
       ownerId: member.id,
       members: {
         create: {

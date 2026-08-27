@@ -2,21 +2,88 @@
 
 import Link from "next/link";
 import { useState, useRef, useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "./auth-provider";
-import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
+
+const navigation = {
+  event: [
+    { href: "/events", label: "Event" },
+    { href: "/volunteer", label: "Volunteer" },
+  ],
+  tentang: [
+    { href: "/about", label: "Tentang Kami" },
+    { href: "/organization-structure", label: "Struktur Organisasi" },
+    { href: "/contact", label: "Kontak" },
+    { href: "/saran", label: "Saran" },
+    { href: "/admin/login", label: "Platform Access" },
+  ],
+};
+
+function isEventActive(pathname: string) {
+  return pathname.startsWith("/events") || pathname.startsWith("/volunteer");
+}
+
+function isTentangActive(pathname: string) {
+  return (
+    pathname.startsWith("/about") ||
+    pathname.startsWith("/organization-structure") ||
+    pathname.startsWith("/contact") ||
+    pathname.startsWith("/saran") ||
+    pathname.startsWith("/faq") ||
+    pathname.startsWith("/admin")
+  );
+}
+
+function navLinkClass(active: boolean) {
+  return `relative transition-colors ${
+    active ? "text-komuna-forest" : "text-komuna-dark/70 hover:text-komuna-forest"
+  }`;
+}
+
+function NavMenuItem({
+  href,
+  label,
+  onNavigate,
+  active,
+}: {
+  href: string;
+  label: string;
+  onNavigate?: () => void;
+  active?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      role="menuitem"
+      className={`block px-4 py-2 text-sm transition-colors ${
+        active ? "bg-komuna-soft font-semibold text-komuna-forest" : "text-gray-700 hover:bg-gray-50 hover:text-komuna-blue"
+      }`}
+      aria-current={active ? "page" : undefined}
+      onClick={onNavigate}
+    >
+      {label}
+    </Link>
+  );
+}
 
 export function Header() {
   const { user, isAuthenticated, isLoading, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [kegiatanOpen, setKegiatanOpen] = useState(false);
+  const [eventOpen, setEventOpen] = useState(false);
   const [tentangOpen, setTentangOpen] = useState(false);
-  const kegiatanRef = useRef<HTMLDivElement>(null);
+  const eventRef = useRef<HTMLDivElement>(null);
   const tentangRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const pathname = usePathname();
+
+  const berandaActive = pathname === "/";
+  const komunitasActive = pathname.startsWith("/communities") || pathname.startsWith("/categories");
+  const eventActive = isEventActive(pathname);
+  const tentangActive = isTentangActive(pathname);
 
   const { data: unreadNotifications = 0 } = useQuery({
     queryKey: ["notifications", "unread-count"],
@@ -29,8 +96,8 @@ export function Header() {
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (kegiatanRef.current && !kegiatanRef.current.contains(e.target as Node)) {
-        setKegiatanOpen(false);
+      if (eventRef.current && !eventRef.current.contains(e.target as Node)) {
+        setEventOpen(false);
       }
       if (tentangRef.current && !tentangRef.current.contains(e.target as Node)) {
         setTentangOpen(false);
@@ -49,19 +116,6 @@ export function Header() {
     router.push("/");
   };
 
-  const kegiatanItems = [
-    { href: "/events", label: "Event" },
-    { href: "/volunteer", label: "Volunteer" },
-  ];
-
-  const tentangItems = [
-    { href: "/about", label: "Tentang Kami" },
-    { href: "/organization-structure", label: "Struktur Organisasi" },
-    { href: "/contact", label: "Kontak" },
-    { href: "/saran", label: "Saran" },
-    { href: "/faq", label: "FAQ" },
-  ];
-
   return (
     <header className="sticky top-0 z-50 w-full border-b border-komuna-forest/10 bg-komuna-cream/95 backdrop-blur supports-[backdrop-filter]:bg-komuna-cream/80">
       <div className="mx-auto flex h-[4.5rem] max-w-7xl items-center justify-between px-4">
@@ -72,43 +126,40 @@ export function Header() {
 
         {/* Desktop Nav */}
         <nav className="hidden lg:flex items-center gap-6 text-sm font-bold" aria-label="Navigasi utama">
-          <Link href="/" className="text-komuna-dark/70 hover:text-komuna-forest transition-colors">
+          <Link href="/" aria-current={berandaActive ? "page" : undefined} className={navLinkClass(berandaActive)}>
             Beranda
           </Link>
-          <Link href="/communities" className="text-komuna-dark/70 hover:text-komuna-forest transition-colors">
+          <Link
+            href="/communities"
+            aria-current={komunitasActive ? "page" : undefined}
+            className={navLinkClass(komunitasActive)}
+          >
             Komunitas
           </Link>
-          <div className="relative" ref={kegiatanRef}>
+          <div className="relative" ref={eventRef}>
             <button
-              onClick={() => setKegiatanOpen(!kegiatanOpen)}
-              className="flex items-center gap-1 text-komuna-dark/70 hover:text-komuna-forest transition-colors"
-              aria-expanded={kegiatanOpen}
+              onClick={() => setEventOpen(!eventOpen)}
+              className={`flex items-center gap-1 transition-colors ${eventActive || eventOpen ? "text-komuna-forest" : "text-komuna-dark/70 hover:text-komuna-forest"}`}
+              aria-expanded={eventOpen}
               aria-haspopup="true"
+              aria-label="Menu Event"
             >
-              Kegiatan
-              <svg className={`h-4 w-4 transition-transform ${kegiatanOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              Event
+              <svg className={`h-4 w-4 transition-transform ${eventOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </button>
-            {kegiatanOpen && (
+            {eventOpen && (
               <div
-                className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50"
+                className="absolute right-0 mt-2 w-52 rounded-xl border border-gray-100 bg-white py-2 shadow-lg z-50"
                 role="menu"
-                aria-label="Menu Kegiatan"
+                aria-label="Menu Event"
                 onKeyDown={(e) => {
-                  if (e.key === "Escape") { setKegiatanOpen(false); }
+                  if (e.key === "Escape") { setEventOpen(false); }
                 }}
               >
-                {kegiatanItems.map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    role="menuitem"
-                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-komuna-blue transition-colors"
-                    onClick={() => setKegiatanOpen(false)}
-                  >
-                    {item.label}
-                  </Link>
+                {navigation.event.map((item) => (
+                  <NavMenuItem key={item.href} href={item.href} label={item.label} active={pathname === item.href || (item.href === "/events" && pathname.startsWith("/events")) || (item.href === "/volunteer" && pathname.startsWith("/volunteer"))} onNavigate={() => setEventOpen(false)} />
                 ))}
               </div>
             )}
@@ -116,9 +167,10 @@ export function Header() {
           <div className="relative" ref={tentangRef}>
             <button
               onClick={() => setTentangOpen(!tentangOpen)}
-              className="flex items-center gap-1 text-komuna-dark/70 hover:text-komuna-forest transition-colors"
+              className={`flex items-center gap-1 transition-colors ${tentangActive || tentangOpen ? "text-komuna-forest" : "text-komuna-dark/70 hover:text-komuna-forest"}`}
               aria-expanded={tentangOpen}
               aria-haspopup="true"
+              aria-label="Menu Tentang"
             >
               Tentang
               <svg className={`h-4 w-4 transition-transform ${tentangOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -127,23 +179,15 @@ export function Header() {
             </button>
             {tentangOpen && (
               <div
-                className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50"
+                className="absolute right-0 mt-2 w-56 rounded-xl border border-gray-100 bg-white py-2 shadow-lg z-50"
                 role="menu"
                 aria-label="Menu Tentang"
                 onKeyDown={(e) => {
                   if (e.key === "Escape") { setTentangOpen(false); }
                 }}
               >
-                {tentangItems.map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    role="menuitem"
-                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-komuna-blue transition-colors"
-                    onClick={() => setTentangOpen(false)}
-                  >
-                    {item.label}
-                  </Link>
+                {navigation.tentang.map((item) => (
+                  <NavMenuItem key={item.href} href={item.href} label={item.label} active={pathname === item.href || pathname.startsWith(item.href)} onNavigate={() => setTentangOpen(false)} />
                 ))}
               </div>
             )}
@@ -307,14 +351,6 @@ export function Header() {
               >
                 Daftar
               </Link>
-              <Link
-                href="/admin/login"
-                className="hidden md:inline-flex items-center gap-1.5 rounded-xl border border-komuna-blue/30 px-3 py-2 text-sm font-bold text-komuna-blue hover:bg-komuna-blue/5 transition-colors"
-                title="Login Super Admin"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
-                Admin
-              </Link>
             </>
           )}
 
@@ -339,19 +375,20 @@ export function Header() {
       {/* Mobile Nav */}
       {menuOpen && (
         <nav className="lg:hidden border-t border-komuna-forest/10 bg-komuna-cream px-4 py-3 space-y-2" aria-label="Navigasi mobile">
-          <Link href="/" className="block py-2 text-sm font-semibold text-komuna-dark/70 hover:text-komuna-forest" onClick={() => setMenuOpen(false)}>
+          <Link href="/" className={`block py-2 text-sm font-semibold transition-colors ${berandaActive ? "text-komuna-forest" : "text-komuna-dark/70 hover:text-komuna-forest"}`} aria-current={berandaActive ? "page" : undefined} onClick={() => setMenuOpen(false)}>
             Beranda
           </Link>
-          <Link href="/communities" className="block py-2 text-sm text-gray-600 hover:text-komuna-blue" onClick={() => setMenuOpen(false)}>
+          <Link href="/communities" className={`block py-2 text-sm transition-colors ${komunitasActive ? "text-komuna-forest font-semibold" : "text-gray-600 hover:text-komuna-blue"}`} aria-current={komunitasActive ? "page" : undefined} onClick={() => setMenuOpen(false)}>
             Komunitas
           </Link>
           <div className="border-t pt-1">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1 px-2">Kegiatan</p>
-            {kegiatanItems.map((item) => (
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1 px-2">Event</p>
+            {navigation.event.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className="block py-2 text-sm text-gray-600 hover:text-komuna-blue pl-4"
+                className={`block py-2 text-sm pl-4 transition-colors ${pathname === item.href || (item.href !== "/events" && pathname.startsWith(item.href)) || (item.href === "/events" && pathname.startsWith("/events")) ? "text-komuna-forest font-semibold" : "text-gray-600 hover:text-komuna-blue"}`}
+                aria-current={pathname === item.href ? "page" : undefined}
                 onClick={() => setMenuOpen(false)}
               >
                 {item.label}
@@ -363,11 +400,16 @@ export function Header() {
           </Link>
           <div className="border-t pt-2 mt-2">
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1 px-2">Tentang</p>
-            {tentangItems.map((item) => (
+            {navigation.tentang.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className="block py-2 text-sm text-gray-600 hover:text-komuna-blue pl-4"
+                className={`block py-2 text-sm pl-4 transition-colors ${
+                  pathname === item.href || (item.href !== "/about" && pathname.startsWith(item.href)) || (item.href === "/about" && pathname.startsWith("/about"))
+                    ? "text-komuna-forest font-semibold"
+                    : "text-gray-600 hover:text-komuna-blue"
+                }`}
+                aria-current={pathname === item.href ? "page" : undefined}
                 onClick={() => setMenuOpen(false)}
               >
                 {item.label}
@@ -413,13 +455,6 @@ export function Header() {
                 onClick={() => setMenuOpen(false)}
               >
                 Daftar
-              </Link>
-              <Link
-                href="/admin/login"
-                className="block py-2 text-sm text-komuna-blue hover:text-komuna-dark"
-                onClick={() => setMenuOpen(false)}
-              >
-                Login Admin
               </Link>
             </>
           )}

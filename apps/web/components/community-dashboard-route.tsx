@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import api from "@/lib/api";
 import { useAuth } from "@/components/auth-provider";
+import { CommunityEventTab } from "@/components/community-event-tab";
+import { AddressSelector, type AddressValue } from "@/components/address-selector";
 
 interface DashboardData {
   community: {
@@ -41,6 +43,7 @@ interface Member {
   username: string;
   avatar: string | null;
   role: string;
+  status?: string;
   joinedAt: string;
 }
 
@@ -53,6 +56,7 @@ interface MemberResponseItem {
     avatar: string | null;
   };
   role: string;
+  status: string;
   joinedAt: string;
 }
 
@@ -75,10 +79,13 @@ interface InsightData {
   topMembers: { role: string; count: number }[];
 }
 
-type Tab = "ringkasan" | "anggota" | "permintaan" | "media" | "pengaturan" | "insight";
+type Tab = "ringkasan" | "profil" | "pengurus" | "anggota" | "permintaan" | "media" | "pengaturan" | "insight" | "event";
 
 const tabs: { key: Tab; label: string }[] = [
   { key: "ringkasan", label: "Ringkasan" },
+  { key: "profil", label: "Profil Komunitas" },
+  { key: "event", label: "Event" },
+  { key: "pengurus", label: "Pengurus" },
   { key: "anggota", label: "Anggota" },
   { key: "permintaan", label: "Permintaan" },
   { key: "media", label: "Media" },
@@ -126,9 +133,11 @@ export function CommunityDashboardRoute({
 }) {
   const params = useParams();
   const router = useRouter();
-  const routeSlug = communitySlug || (params.slug as string | undefined);
+  const routeValue = communitySlug || (params.slug as string | undefined) || (params.communityId as string | undefined) || (params.idkomunitas as string | undefined);
+  const routeSlug = communitySlug || (params.slug as string | undefined) || (params.communityId as string | undefined);
   const [resolvedCommunityId, setResolvedCommunityId] = useState(communityIdOverride);
-  const communityId = resolvedCommunityId || (routeSlug ? "" : ((params.idkomunitas || params.communityId) as string));
+  const communityId = resolvedCommunityId || (routeValue?.startsWith("cmt") ? routeValue : "");
+  const communityPath = routeValue || communityId;
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
 
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
@@ -140,7 +149,7 @@ export function CommunityDashboardRoute({
   const [isOwner, setIsOwner] = useState(false);
 
   useEffect(() => {
-    if (!routeSlug || communityIdOverride) return;
+    if (!routeSlug || communityIdOverride || routeSlug.startsWith("cmt")) return;
     api.get(`/communities/${routeSlug}`).then(({ data }) => {
       const community = data.data || data;
       setResolvedCommunityId(community.id);
@@ -152,8 +161,11 @@ export function CommunityDashboardRoute({
 
   const [memberSearch, setMemberSearch] = useState("");
   const [memberRoleFilter, setMemberRoleFilter] = useState("");
+  const [memberStatusFilter, setMemberStatusFilter] = useState("");
   const [memberPage, setMemberPage] = useState(1);
   const [memberTotalPages, setMemberTotalPages] = useState(1);
+  const [officers, setOfficers] = useState<Member[]>([]);
+  const [officersLoading, setOfficersLoading] = useState(false);
 
   const [requestStatusFilter, setRequestStatusFilter] = useState<string>("");
   const [requestPage, setRequestPage] = useState(1);
@@ -164,7 +176,12 @@ export function CommunityDashboardRoute({
     description: "",
     visibility: "PUBLIC",
     membershipType: "OPEN",
-    status: "ACTIVE",
+    address: "",
+    province: "",
+    city: "",
+    district: "",
+    village: "",
+    postalCode: "",
   });
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsSuccess, setSettingsSuccess] = useState("");
@@ -198,8 +215,13 @@ export function CommunityDashboardRoute({
         name: comm.name,
         description: comm.description || "",
         visibility: comm.visibility,
-        membershipType: comm.membershipType,
-        status: comm.status,
+       membershipType: comm.membershipType,
+       address: comm.address || comm.address1 || "",
+       province: comm.province || "",
+       city: comm.city || "",
+       district: comm.district || "",
+       village: comm.village || "",
+       postalCode: comm.postalCode || "",
       });
     } catch (err: any) {
       if (err?.response?.status === 401) {
@@ -219,7 +241,7 @@ export function CommunityDashboardRoute({
   const fetchMembers = useCallback(async () => {
     try {
       const { data } = await api.get(`/communities/${communityId}/members`, {
-        params: { page: memberPage, limit: 10, search: memberSearch, role: memberRoleFilter },
+        params: { page: memberPage, limit: 10, search: memberSearch, role: memberRoleFilter, status: memberStatusFilter || undefined },
       });
       const items = (data.data || []) as MemberResponseItem[];
       setMembers(items.map((member) => ({
@@ -229,13 +251,39 @@ export function CommunityDashboardRoute({
         username: member.user.username,
         avatar: member.user.avatar,
         role: member.role,
+        status: member.status,
         joinedAt: member.joinedAt,
       })));
       setMemberTotalPages(data.pagination?.totalPages || 1);
     } catch (err: any) {
       setError(err?.response?.status === 403 ? "Anda tidak memiliki akses untuk melihat anggota komunitas ini." : "Anggota komunitas tidak dapat dimuat");
     }
-  }, [communityId, memberPage, memberSearch, memberRoleFilter]);
+  }, [communityId, memberPage, memberSearch, memberRoleFilter, memberStatusFilter]);
+
+  const fetchOfficers = useCallback(async () => {
+    try {
+      setOfficersLoading(true);
+      const { data } = await api.get(`/communities/${communityId}/members`, {
+        params: { status: "ACTIVE", limit: 100, orderBy: "role", sort: "asc" },
+      });
+      const items = (data.data || []) as MemberResponseItem[];
+      setOfficers(items
+        .filter((member) => member.role !== "MEMBER")
+        .map((member) => ({
+          id: member.id,
+          userId: member.user.id,
+          name: member.user.name,
+          username: member.user.username,
+          avatar: member.user.avatar,
+          role: member.role,
+          status: member.status,
+          joinedAt: member.joinedAt,
+        })));
+    } catch {}
+    finally {
+      setOfficersLoading(false);
+    }
+  }, [communityId]);
 
   const fetchJoinRequests = useCallback(async () => {
     try {
@@ -272,6 +320,10 @@ export function CommunityDashboardRoute({
   }, [tab, fetchMembers]);
 
   useEffect(() => {
+    if (tab === "pengurus") fetchOfficers();
+  }, [tab, fetchOfficers]);
+
+  useEffect(() => {
     if (tab === "permintaan") fetchJoinRequests();
   }, [tab, fetchJoinRequests]);
 
@@ -304,6 +356,7 @@ export function CommunityDashboardRoute({
     try {
       await api.put(`/communities/${communityId}/members/${memberId}/role`, { role: newRole });
       fetchMembers();
+      if (tab === "pengurus") fetchOfficers();
     } catch (err: any) {
       alert(err?.response?.data?.message || "Gagal mengubah role.");
     }
@@ -314,9 +367,21 @@ export function CommunityDashboardRoute({
     try {
       await api.delete(`/communities/${communityId}/members/${memberId}`);
       fetchMembers();
+      if (tab === "pengurus") fetchOfficers();
       fetchDashboard();
     } catch (err: any) {
       alert(err?.response?.data?.message || "Gagal mengeluarkan anggota.");
+    }
+  };
+
+  const handleRestoreMember = async (memberId: string, memberName: string) => {
+    if (!confirm(`Yakin ingin memulihkan ${memberName} ke komunitas?`)) return;
+    try {
+      await api.post(`/communities/${communityId}/members/${memberId}/restore`);
+      fetchMembers();
+      fetchDashboard();
+    } catch (err: any) {
+      alert(err?.response?.data?.message || "Gagal memulihkan anggota.");
     }
   };
 
@@ -377,6 +442,9 @@ export function CommunityDashboardRoute({
   const { community, pendingRequests, activeEvents, recentActivity } = dashboard;
   const canonicalTabPath: Record<Tab, string> = {
     ringkasan: "overview",
+    profil: "profile",
+    event: "events",
+    pengurus: "pengurus",
     anggota: "members",
     permintaan: "requests",
     pengaturan: "settings",
@@ -387,7 +455,7 @@ export function CommunityDashboardRoute({
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="flex">
-        <aside className="hidden lg:block w-64 border-r bg-white min-h-[calc(100vh-4rem)] sticky top-16">
+        {false && <aside aria-hidden="true" className="hidden">
           <nav className="p-4 space-y-1">
             <Link
               href="/dashboard"
@@ -406,7 +474,7 @@ export function CommunityDashboardRoute({
             {tabs.map((navTab) => (
               <Link
                 key={navTab.key}
-                href={`/dashboard/communities/${communityId}/${canonicalTabPath[navTab.key]}`}
+                href={`/dashboard/communities/${communityPath}/${canonicalTabPath[navTab.key]}`}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left ${
                   navTab.key === tab
                     ? "bg-komuna-blue/10 text-komuna-blue"
@@ -418,9 +486,19 @@ export function CommunityDashboardRoute({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                   </svg>
                 )}
+                {navTab.key === "event" && (
+                  <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                )}
                 {navTab.key === "anggota" && (
                   <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                )}
+                {navTab.key === "pengurus" && (
+                  <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                   </svg>
                 )}
                 {navTab.key === "permintaan" && (
@@ -455,7 +533,7 @@ export function CommunityDashboardRoute({
               </Link>
             ))}
           </nav>
-        </aside>
+        </aside>}
 
         <main className="flex-1 min-h-[calc(100vh-4rem)]">
           <div className="max-w-5xl mx-auto px-4 py-6">
@@ -470,15 +548,18 @@ export function CommunityDashboardRoute({
                 {community.name}
               </Link>
               <h1 className="text-2xl font-bold text-komuna-navy mt-1">
-                Dashboard Komunitas
+                {tab === "ringkasan" ? "Community Overview" : tab === "profil" ? "Profil Komunitas" : tabs.find((item) => item.key === tab)?.label || "Community Workspace"}
               </h1>
+              <p className="mt-1 text-sm text-slate-500">
+                {tab === "ringkasan" ? "Command center operasional untuk memahami kondisi dan pekerjaan komunitas." : tab === "profil" ? "Identitas, informasi publik, dan detail utama komunitas." : `Kelola ${community.name} dalam satu Community Operating Workspace.`}
+              </p>
             </div>
 
-            <div className="flex lg:hidden overflow-x-auto gap-1 mb-6 border-b border-gray-200 pb-px">
+            <div className="hidden">
               {tabs.map((navTab) => (
                 <Link
                   key={navTab.key}
-                  href={`/dashboard/communities/${communityId}/${canonicalTabPath[navTab.key]}`}
+                  href={`/dashboard/communities/${communityPath}/${canonicalTabPath[navTab.key]}`}
                   className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                     navTab.key === tab
                       ? "border-komuna-blue text-komuna-blue"
@@ -492,11 +573,21 @@ export function CommunityDashboardRoute({
 
             {tab === "ringkasan" && (
               <RingkasanTab
+                communityId={communityId}
+                communityPath={communityPath}
                 community={community}
                 pendingRequests={pendingRequests}
                 activeEvents={activeEvents}
                 recentActivity={recentActivity}
               />
+            )}
+
+            {tab === "profil" && (
+              <ProfilKomunitasTab community={community} />
+            )}
+
+            {tab === "event" && (
+              <CommunityEventTab communityId={communityId} communitySlug={community.slug} communityName={community.name} />
             )}
 
             {tab === "anggota" && (
@@ -506,9 +597,23 @@ export function CommunityDashboardRoute({
                 setMemberSearch={setMemberSearch}
                 memberRoleFilter={memberRoleFilter}
                 setMemberRoleFilter={setMemberRoleFilter}
+                memberStatusFilter={memberStatusFilter}
+                setMemberStatusFilter={setMemberStatusFilter}
                 memberPage={memberPage}
                 setMemberPage={setMemberPage}
                 memberTotalPages={memberTotalPages}
+                isOwner={isOwner}
+                currentUserId={user?.id}
+                onChangeRole={handleChangeRole}
+                onRemoveMember={handleRemoveMember}
+                onRestoreMember={handleRestoreMember}
+              />
+            )}
+
+            {tab === "pengurus" && (
+              <PengurusTab
+                officers={officers}
+                loading={officersLoading}
                 isOwner={isOwner}
                 currentUserId={user?.id}
                 onChangeRole={handleChangeRole}
@@ -555,12 +660,69 @@ export function CommunityDashboardRoute({
   );
 }
 
+function ProfilKomunitasTab({ community }: { community: DashboardData["community"] }) {
+  return (
+    <div className="space-y-6">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="h-32 bg-gradient-to-r from-komuna-navy via-komuna-blue to-komuna-teal" />
+        <div className="px-5 pb-6 sm:px-7">
+          <div className="-mt-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="flex items-end gap-4">
+              <div className="flex h-20 w-20 items-center justify-center rounded-2xl border-4 border-white bg-komuna-blue text-2xl font-bold text-white shadow-sm">
+                {community.name.charAt(0).toUpperCase()}
+              </div>
+              <div className="pb-1">
+                <h2 className="text-xl font-bold text-komuna-navy">{community.name}</h2>
+                <p className="mt-1 text-sm text-slate-500">/{community.slug}</p>
+              </div>
+            </div>
+            <Link href="/dashboard/communities" className="inline-flex items-center justify-center rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+              Kelola komunitas
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(260px,0.6fr)]">
+        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h3 className="text-base font-bold text-komuna-navy">Tentang Komunitas</h3>
+          <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-600">{community.description || "Belum ada deskripsi komunitas."}</p>
+        </section>
+        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h3 className="text-base font-bold text-komuna-navy">Informasi</h3>
+          <dl className="mt-4 space-y-3 text-sm">
+            <div className="flex justify-between gap-4"><dt className="text-slate-500">Status</dt><dd className="font-semibold text-emerald-700">{community.status}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-slate-500">Visibility</dt><dd className="font-semibold text-slate-700">{community.visibility}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-slate-500">Membership</dt><dd className="font-semibold text-slate-700">{community.membershipType}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-slate-500">Dibuat</dt><dd className="font-semibold text-slate-700">{new Date(community.createdAt).toLocaleDateString("id-ID")}</dd></div>
+          </dl>
+        </section>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[["Anggota", community.memberCount], ["Event", community.eventCount], ["Permintaan", "-"], ["Volunteer", "-"]].map(([label, value]) => (
+          <div key={label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-xl font-bold text-komuna-navy">{value}</p></div>
+        ))}
+      </div>
+
+      <div className="flex items-center justify-between rounded-xl border border-blue-100 bg-blue-50/60 p-5">
+        <div><p className="font-bold text-komuna-navy">Perlu mengubah informasi?</p><p className="mt-1 text-sm text-slate-600">Edit profil komunitas melalui Pengaturan.</p></div>
+        <Link href={`/dashboard/communities/${community.slug}/settings`} className="rounded-lg bg-komuna-blue px-4 py-2 text-sm font-bold text-white hover:bg-komuna-navy">Edit Profil</Link>
+      </div>
+    </div>
+  );
+}
+
 function RingkasanTab({
+  communityId,
+  communityPath,
   community,
   pendingRequests,
   activeEvents,
   recentActivity,
 }: {
+  communityId: string;
+  communityPath: string;
   community: DashboardData["community"];
   pendingRequests: number;
   activeEvents: number;
@@ -568,62 +730,42 @@ function RingkasanTab({
 }) {
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl shadow-sm p-5">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-komuna-blue/10 flex items-center justify-center">
-              <svg className="h-5 w-5 text-komuna-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-komuna-navy">{community.memberCount}</p>
-              <p className="text-xs text-gray-500">Total Anggota</p>
-            </div>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+        {[
+          ["Anggota", community.memberCount],
+          ["Permintaan", pendingRequests],
+          ["Event", activeEvents],
+          ["Volunteer", 0],
+          ["Aktivitas", recentActivity.length],
+          ["Status", community.status === "ACTIVE" ? "Aktif" : community.status],
+        ].map(([label, value]) => (
+          <div key={label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="truncate text-xs font-medium text-slate-500">{label}</p>
+            <p className="mt-1 truncate text-xl font-bold text-komuna-navy">{value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-xl border border-amber-100 bg-amber-50/50 p-5">
+          <p className="text-xs font-bold uppercase tracking-wider text-amber-700">Perlu Tindakan</p>
+          <div className="mt-3 space-y-2 text-sm">
+            <Link href={`/dashboard/communities/${communityPath}/requests`} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-slate-700 hover:text-komuna-blue">
+              Permintaan anggota <span className="font-bold text-amber-700">{pendingRequests}</span>
+            </Link>
+            <Link href="#" className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-slate-700 hover:text-komuna-blue">
+              Event menunggu review <span className="font-bold text-slate-500">0</span>
+            </Link>
+            <Link href="#" className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-slate-700 hover:text-komuna-blue">
+              Volunteer menunggu review <span className="font-bold text-slate-500">0</span>
+            </Link>
           </div>
         </div>
-
-        <div className="bg-white rounded-xl shadow-sm p-5">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-amber-100 flex items-center justify-center">
-              <svg className="h-5 w-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-komuna-navy">{pendingRequests}</p>
-              <p className="text-xs text-gray-500">Permintaan Pending</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm p-5">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-emerald-100 flex items-center justify-center">
-              <svg className="h-5 w-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-komuna-navy">{activeEvents}</p>
-              <p className="text-xs text-gray-500">Event Aktif</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm p-5">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center">
-              <svg className="h-5 w-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-lg font-bold text-komuna-navy">
-                {community.status === "ACTIVE" ? "Aktif" : community.status === "INACTIVE" ? "Nonaktif" : community.status}
-              </p>
-              <p className="text-xs text-gray-500">Status Komunitas</p>
-            </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Aktivitas Operasional</p>
+          <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+            <div className="rounded-lg bg-slate-50 p-3"><p className="text-xl font-bold text-komuna-navy">{activeEvents}</p><p className="text-xs text-slate-500">Event mendatang</p></div>
+            <div className="rounded-lg bg-slate-50 p-3"><p className="text-xl font-bold text-komuna-navy">0</p><p className="text-xs text-slate-500">Volunteer aktif</p></div>
           </div>
         </div>
       </div>
@@ -695,6 +837,8 @@ function AnggotaTab({
   setMemberSearch,
   memberRoleFilter,
   setMemberRoleFilter,
+  memberStatusFilter,
+  setMemberStatusFilter,
   memberPage,
   setMemberPage,
   memberTotalPages,
@@ -702,12 +846,15 @@ function AnggotaTab({
   currentUserId,
   onChangeRole,
   onRemoveMember,
+  onRestoreMember,
 }: {
   members: Member[];
   memberSearch: string;
   setMemberSearch: (v: string) => void;
   memberRoleFilter: string;
   setMemberRoleFilter: (v: string) => void;
+  memberStatusFilter: string;
+  setMemberStatusFilter: (v: string) => void;
   memberPage: number;
   setMemberPage: (v: number) => void;
   memberTotalPages: number;
@@ -715,9 +862,21 @@ function AnggotaTab({
   currentUserId?: string;
   onChangeRole: (memberId: string, role: string) => void;
   onRemoveMember: (memberId: string, name: string) => void;
+  onRestoreMember: (memberId: string, name: string) => void;
 }) {
   return (
     <div className="space-y-4">
+      <div className="flex gap-1 border-b border-gray-200 pb-px">
+        {[{ value: "", label: "Anggota Aktif" }, { value: "BANNED", label: "Diblokir" }].map((f) => (
+          <button
+            key={f.value}
+            onClick={() => { setMemberStatusFilter(f.value); setMemberPage(1); }}
+            className={`px-4 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${memberStatusFilter === f.value ? "border-komuna-blue text-komuna-blue" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
       <div className="bg-white rounded-xl shadow-sm p-4">
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
@@ -740,6 +899,8 @@ function AnggotaTab({
             <option value="">Semua Role</option>
             <option value="OWNER">Owner</option>
             <option value="ADMIN">Admin</option>
+            <option value="EVENT_MANAGER">Event Manager</option>
+            <option value="VOLUNTEER_COORDINATOR">Volunteer Coordinator</option>
             <option value="MEMBER">Member</option>
           </select>
         </div>
@@ -747,7 +908,7 @@ function AnggotaTab({
 
       <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
         {members.length === 0 ? (
-          <div className="p-8 text-center text-gray-400 text-sm">Tidak ada anggota ditemukan.</div>
+          <div className="p-8 text-center text-gray-400 text-sm">{memberStatusFilter === "BANNED" ? "Tidak ada anggota yang diblokir." : "Tidak ada anggota ditemukan."}</div>
         ) : (
           members.map((member) => (
             <div key={member.id} className="flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors">
@@ -762,10 +923,10 @@ function AnggotaTab({
                 <p className="font-medium text-komuna-navy truncate">{member.name}</p>
                 <p className="text-xs text-gray-400">@{member.username}</p>
               </div>
-              <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${roleBadge[member.role] || ""}`}>
-                {member.role}
+              <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${member.status === "BANNED" ? "bg-red-100 text-red-600" : roleBadge[member.role] || ""}`}>
+                {member.status === "BANNED" ? "Diblokir" : member.role}
               </span>
-              {member.userId !== currentUserId && (
+              {member.userId !== currentUserId && member.status !== "BANNED" && (
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {isOwner && (
                     <select
@@ -792,6 +953,14 @@ function AnggotaTab({
                   )}
                 </div>
               )}
+              {member.userId !== currentUserId && member.status === "BANNED" && (
+                <button
+                  onClick={() => onRestoreMember(member.id, member.name)}
+                  className="px-3 py-1.5 text-xs font-medium text-white bg-emerald-500 rounded-lg hover:bg-emerald-600 transition-colors flex-shrink-0"
+                >
+                  Pulihkan
+                </button>
+              )}
             </div>
           ))
         )}
@@ -816,6 +985,91 @@ function AnggotaTab({
           >
             Berikutnya
           </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PengurusTab({
+  officers,
+  loading,
+  isOwner,
+  currentUserId,
+  onChangeRole,
+  onRemoveMember,
+}: {
+  officers: Member[];
+  loading: boolean;
+  isOwner: boolean;
+  currentUserId?: string;
+  onChangeRole: (memberId: string, role: string) => void;
+  onRemoveMember: (memberId: string, name: string) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4">
+        <p className="text-sm text-gray-500">
+          Pengurus komunitas adalah anggota dengan peran governance dan operasional. Owner memiliki kewenangan tertinggi.
+        </p>
+        {isOwner && <span className="whitespace-nowrap rounded-full bg-purple-100 px-2.5 py-1 text-xs font-bold text-purple-700">Owner access</span>}
+      </div>
+
+      {loading ? (
+        <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+          <div className="h-8 w-8 border-4 border-komuna-blue border-t-transparent rounded-full animate-spin mx-auto" />
+        </div>
+      ) : officers.length === 0 ? (
+        <div className="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 text-sm">
+          Belum ada pengurus selain owner. Gunakan tab Anggota untuk menetapkan peran.
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm divide-y divide-gray-100">
+          {officers.map((member) => (
+            <div key={member.id} className="flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors">
+              {member.avatar ? (
+                <img src={member.avatar} alt="" className="h-10 w-10 rounded-full object-cover flex-shrink-0" />
+              ) : (
+                <div className="h-10 w-10 rounded-full bg-komuna-blue flex items-center justify-center flex-shrink-0">
+                  <span className="text-white font-bold text-sm">{member.name?.[0]}</span>
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-komuna-navy truncate">{member.name}</p>
+                <p className="text-xs text-gray-400">@{member.username}</p>
+              </div>
+              <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${roleBadge[member.role] || ""}`}>
+                {member.role === "OWNER" ? "Owner" : member.role === "ADMIN" ? "Admin" : member.role === "EVENT_MANAGER" ? "Officer · Event" : member.role === "VOLUNTEER_COORDINATOR" ? "Officer · Volunteer" : member.role}
+              </span>
+              {member.userId !== currentUserId && (
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {isOwner && member.role !== "OWNER" && (
+                    <select
+                      value={member.role}
+                      onChange={(e) => onChangeRole(member.id, e.target.value)}
+                      className="px-2 py-1 border border-gray-200 rounded text-xs bg-white focus:ring-1 focus:ring-komuna-blue outline-none"
+                    >
+                      <option value="MEMBER">Member</option>
+                      <option value="ADMIN">Admin</option>
+                      <option value="EVENT_MANAGER">Manajer Event</option>
+                      <option value="VOLUNTEER_COORDINATOR">Koordinator Volunteer</option>
+                    </select>
+                  )}
+                  {member.role !== "OWNER" && (
+                    <button
+                      onClick={() => onRemoveMember(member.id, member.name)}
+                      className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                      title="Keluarkan pengurus"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6v1h12v-1a6 6 0 00-6-6zM21 12h-6" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -951,7 +1205,7 @@ function PengaturanTab({
   error,
   isOwner,
 }: {
-  form: { name: string; description: string; visibility: string; membershipType: string; status: string };
+  form: { name: string; description: string; visibility: string; membershipType: string; address: string; province: string; city: string; district: string; village: string; postalCode: string };
   setForm: (v: typeof form) => void;
   onSave: () => void;
   saving: boolean;
@@ -959,9 +1213,19 @@ function PengaturanTab({
   error: string;
   isOwner: boolean;
 }) {
+  const address: AddressValue = {
+    address: form.address,
+    province: form.province,
+    city: form.city,
+    district: form.district,
+    village: form.village,
+    postalCode: form.postalCode,
+  };
   return (
-    <div className="bg-white rounded-xl shadow-sm p-6">
-      <h3 className="text-lg font-semibold text-komuna-navy mb-6">Pengaturan Komunitas</h3>
+      <div className="space-y-5">
+        <div className="rounded-xl border border-slate-200 bg-white p-6">
+        <h3 className="text-lg font-semibold text-komuna-navy mb-2">Pengaturan Komunitas</h3>
+        <p className="mb-6 text-sm text-slate-500">General, visibility, lokasi, dan detail operasional komunitas.</p>
 
       {success && (
         <div className="mb-4 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm p-3 rounded-lg flex items-center gap-2">
@@ -1004,7 +1268,7 @@ function PengaturanTab({
           />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Visibilitas</label>
             <select
@@ -1029,18 +1293,11 @@ function PengaturanTab({
               <option value="RESTRICTED">Terbatas</option>
             </select>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-            <select
-              value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value })}
-              disabled={!isOwner}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-komuna-blue focus:border-komuna-blue outline-none disabled:bg-gray-50"
-            >
-              <option value="ACTIVE">Aktif</option>
-              <option value="INACTIVE">Nonaktif</option>
-            </select>
-          </div>
+        </div>
+
+        <div>
+          <h4 className="mb-3 text-sm font-bold text-komuna-navy">Lokasi</h4>
+          <AddressSelector value={address} onChange={(next) => setForm({ ...form, ...next })} disabled={!isOwner} />
         </div>
 
         {isOwner && (
@@ -1058,6 +1315,13 @@ function PengaturanTab({
 
         {!isOwner && (
           <p className="text-xs text-gray-400 text-right pt-2">Hanya pemilik yang dapat mengubah pengaturan ini.</p>
+        )}
+        </div>
+        {isOwner && (
+          <div className="rounded-xl border border-red-200 bg-red-50/40 p-5">
+            <p className="text-sm font-bold text-red-700">Danger Zone</p>
+            <p className="mt-1 text-sm text-red-600">Deactivate dan delete memerlukan governance API dengan audit trail. Action belum diekspos sampai endpoint terverifikasi.</p>
+          </div>
         )}
       </div>
     </div>
@@ -1156,7 +1420,7 @@ interface MediaItem {
   id: string;
   title: string;
   content: string;
-  type: "ANNOUNCEMENT" | "NEWS";
+  type: "ANNOUNCEMENT" | "NEWS" | "GALLERY" | "FORUM_POST";
   imageUrl: string | null;
   isPublished: boolean;
   publishedAt: string | null;
@@ -1165,15 +1429,22 @@ interface MediaItem {
   updatedAt: string;
 }
 
+const MEDIA_TYPE_META: Record<string, { label: string; badge: string }> = {
+  ANNOUNCEMENT: { label: "Pengumuman", badge: "bg-blue-100 text-blue-700" },
+  NEWS: { label: "Berita", badge: "bg-emerald-100 text-emerald-700" },
+  GALLERY: { label: "Galeri", badge: "bg-purple-100 text-purple-700" },
+  FORUM_POST: { label: "Diskusi", badge: "bg-amber-100 text-amber-700" },
+};
+
 function MediaTab({ communityId, isOwner }: { communityId: string; isOwner: boolean }) {
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState<string>("");
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [createForm, setCreateForm] = useState({ title: "", content: "", type: "ANNOUNCEMENT" as "ANNOUNCEMENT" | "NEWS", isPublished: false });
+  const [createForm, setCreateForm] = useState({ title: "", content: "", type: "ANNOUNCEMENT" as "ANNOUNCEMENT" | "NEWS" | "GALLERY", isPublished: false, imageUrl: "" });
   const [creating, setCreating] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ title: "", content: "", type: "ANNOUNCEMENT" as "ANNOUNCEMENT" | "NEWS", isPublished: false });
+  const [editForm, setEditForm] = useState({ title: "", content: "", type: "ANNOUNCEMENT" as MediaItem["type"], isPublished: false, imageUrl: "" });
 
   const fetchMedia = useCallback(async () => {
     setLoading(true);
@@ -1192,9 +1463,9 @@ function MediaTab({ communityId, isOwner }: { communityId: string; isOwner: bool
     if (!createForm.title.trim() || !createForm.content.trim()) return;
     setCreating(true);
     try {
-      await api.post(`/communities/${communityId}/media`, createForm);
+      await api.post(`/communities/${communityId}/media`, { ...createForm, imageUrl: createForm.imageUrl.trim() || undefined });
       setShowCreateModal(false);
-      setCreateForm({ title: "", content: "", type: "ANNOUNCEMENT", isPublished: false });
+      setCreateForm({ title: "", content: "", type: "ANNOUNCEMENT", isPublished: false, imageUrl: "" });
       fetchMedia();
     } catch (err: any) { alert(err?.response?.data?.message || "Gagal membuat media."); }
     finally { setCreating(false); }
@@ -1204,7 +1475,7 @@ function MediaTab({ communityId, isOwner }: { communityId: string; isOwner: bool
     if (!editId || !editForm.title.trim() || !editForm.content.trim()) return;
     setCreating(true);
     try {
-      await api.put(`/communities/${communityId}/media/${editId}`, editForm);
+      await api.put(`/communities/${communityId}/media/${editId}`, { ...editForm, imageUrl: editForm.imageUrl.trim() || undefined });
       setEditId(null);
       fetchMedia();
     } catch (err: any) { alert(err?.response?.data?.message || "Gagal mengupdate media."); }
@@ -1228,9 +1499,13 @@ function MediaTab({ communityId, isOwner }: { communityId: string; isOwner: bool
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-komuna-navy">Community Content</h2>
+          <p className="mt-1 text-sm text-slate-500">Media, pengumuman, berita, galeri, dan diskusi komunitas.</p>
+        </div>
         <div className="flex overflow-x-auto gap-1 border-b border-gray-200 pb-px flex-1">
-          {[{ value: "", label: "Semua" }, { value: "ANNOUNCEMENT", label: "Pengumuman" }, { value: "NEWS", label: "Berita" }].map((f) => (
+          {[{ value: "", label: "Semua" }, { value: "ANNOUNCEMENT", label: "Pengumuman" }, { value: "NEWS", label: "Berita" }, { value: "GALLERY", label: "Galeri" }, { value: "FORUM_POST", label: "Diskusi" }].map((f) => (
             <button key={f.value} onClick={() => setTypeFilter(f.value)} className={`px-4 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${typeFilter === f.value ? "border-komuna-blue text-komuna-blue" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
               {f.label}
             </button>
@@ -1248,19 +1523,21 @@ function MediaTab({ communityId, isOwner }: { communityId: string; isOwner: bool
         <div className="bg-white rounded-xl shadow-sm p-8 text-center"><div className="h-8 w-8 border-4 border-komuna-blue border-t-transparent rounded-full animate-spin mx-auto" /></div>
       ) : media.length === 0 ? (
         <div className="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 text-sm">
-          Belum ada media. {isOwner && "Buat pengumuman atau berita baru."}
+          Belum ada media. {isOwner && "Buat pengumuman, berita, atau galeri baru."}
         </div>
       ) : (
         <div className="space-y-3">
-          {media.map((item) => (
+          {media.map((item) => {
+            const meta = MEDIA_TYPE_META[item.type] || { label: item.type, badge: "bg-gray-100 text-gray-600" };
+            return (
             <div key={item.id} className="bg-white rounded-xl shadow-sm p-5">
               <div className="flex items-start gap-3">
                 {item.imageUrl && <img src={item.imageUrl} alt="" className="h-12 w-12 rounded-lg object-cover flex-shrink-0" />}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h4 className="font-medium text-komuna-navy">{item.title}</h4>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${item.type === "ANNOUNCEMENT" ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}`}>
-                      {item.type === "ANNOUNCEMENT" ? "Pengumuman" : "Berita"}
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${meta.badge}`}>
+                      {meta.label}
                     </span>
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${item.isPublished ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
                       {item.isPublished ? "Dipublikasikan" : "Draft"}
@@ -1276,7 +1553,7 @@ function MediaTab({ communityId, isOwner }: { communityId: string; isOwner: bool
                     <button onClick={() => handlePublishToggle(item)} className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${item.isPublished ? "text-amber-600 hover:bg-amber-50" : "text-green-600 hover:bg-green-50"}`}>
                       {item.isPublished ? "Unpublish" : "Publish"}
                     </button>
-                    <button onClick={() => { setEditId(item.id); setEditForm({ title: item.title, content: item.content, type: item.type, isPublished: item.isPublished }); }} className="p-1.5 text-gray-400 hover:text-komuna-blue hover:bg-komuna-blue/5 rounded transition-colors">
+                    <button onClick={() => { setEditId(item.id); setEditForm({ title: item.title, content: item.content, type: item.type, isPublished: item.isPublished, imageUrl: item.imageUrl || "" }); }} className="p-1.5 text-gray-400 hover:text-komuna-blue hover:bg-komuna-blue/5 rounded transition-colors">
                       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                     </button>
                     <button onClick={() => handleDelete(item.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors">
@@ -1286,7 +1563,8 @@ function MediaTab({ communityId, isOwner }: { communityId: string; isOwner: bool
                 )}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -1299,9 +1577,10 @@ function MediaTab({ communityId, isOwner }: { communityId: string; isOwner: bool
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tipe</label>
-                <select value={createForm.type} onChange={(e) => setCreateForm({ ...createForm, type: e.target.value as "ANNOUNCEMENT" | "NEWS" })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-komuna-blue outline-none">
+                <select value={createForm.type} onChange={(e) => setCreateForm({ ...createForm, type: e.target.value as "ANNOUNCEMENT" | "NEWS" | "GALLERY" })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-komuna-blue outline-none">
                   <option value="ANNOUNCEMENT">Pengumuman</option>
                   <option value="NEWS">Berita</option>
+                  <option value="GALLERY">Galeri</option>
                 </select>
               </div>
               <div>
@@ -1312,6 +1591,12 @@ function MediaTab({ communityId, isOwner }: { communityId: string; isOwner: bool
                 <label className="block text-sm font-medium text-gray-700 mb-1">Konten</label>
                 <textarea value={createForm.content} onChange={(e) => setCreateForm({ ...createForm, content: e.target.value })} rows={6} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-komuna-blue outline-none resize-none" placeholder="Tulis konten..." />
               </div>
+              {createForm.type === "GALLERY" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">URL Gambar</label>
+                  <input type="url" value={createForm.imageUrl} onChange={(e) => setCreateForm({ ...createForm, imageUrl: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-komuna-blue outline-none" placeholder="https://..." />
+                </div>
+              )}
               <label className="flex items-center gap-2 text-sm text-gray-700">
                 <input type="checkbox" checked={createForm.isPublished} onChange={(e) => setCreateForm({ ...createForm, isPublished: e.target.checked })} className="rounded text-komuna-blue focus:ring-komuna-blue" />
                 Langsung publikasikan
@@ -1334,9 +1619,11 @@ function MediaTab({ communityId, isOwner }: { communityId: string; isOwner: bool
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tipe</label>
-                <select value={editForm.type} onChange={(e) => setEditForm({ ...editForm, type: e.target.value as "ANNOUNCEMENT" | "NEWS" })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-komuna-blue outline-none">
+                <select value={editForm.type} onChange={(e) => setEditForm({ ...editForm, type: e.target.value as MediaItem["type"] })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-komuna-blue outline-none">
                   <option value="ANNOUNCEMENT">Pengumuman</option>
                   <option value="NEWS">Berita</option>
+                  <option value="GALLERY">Galeri</option>
+                  <option value="FORUM_POST">Diskusi</option>
                 </select>
               </div>
               <div>
@@ -1346,6 +1633,10 @@ function MediaTab({ communityId, isOwner }: { communityId: string; isOwner: bool
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Konten</label>
                 <textarea value={editForm.content} onChange={(e) => setEditForm({ ...editForm, content: e.target.value })} rows={6} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-komuna-blue outline-none resize-none" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">URL Gambar</label>
+                <input type="url" value={editForm.imageUrl} onChange={(e) => setEditForm({ ...editForm, imageUrl: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-komuna-blue outline-none" placeholder="https://..." />
               </div>
               <label className="flex items-center gap-2 text-sm text-gray-700">
                 <input type="checkbox" checked={editForm.isPublished} onChange={(e) => setEditForm({ ...editForm, isPublished: e.target.checked })} className="rounded text-komuna-blue focus:ring-komuna-blue" />

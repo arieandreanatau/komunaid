@@ -22,14 +22,19 @@ auditRoutes.get("/audit-logs", requireSuperAdmin(), async (c) => {
   const actionType = url.searchParams.get("actionType") || "";
   const resourceName = url.searchParams.get("resourceName") || "";
   const userId = url.searchParams.get("userId") || "";
+  const actorRole = url.searchParams.get("actorRole") || "";
   const dateFrom = url.searchParams.get("dateFrom") || "";
   const dateTo = url.searchParams.get("dateTo") || "";
 
   const where: Record<string, any> = {};
 
-  if (actionType) where.actionType = actionType;
+  if (actionType) {
+    const actionTypes = actionType.split(",").map((value) => value.trim()).filter(Boolean);
+    where.actionType = actionTypes.length > 1 ? { in: actionTypes } : actionTypes[0];
+  }
   if (resourceName) where.resourceName = resourceName;
   if (userId) where.userId = userId;
+  if (actorRole) where.actorRole = actorRole;
 
   if (dateFrom || dateTo) {
     where.createdAt = {};
@@ -63,6 +68,7 @@ auditRoutes.get("/audit-logs", requireSuperAdmin(), async (c) => {
     data: logs.map((l) => ({
       id: l.id,
       user: l.user,
+      actorRole: l.actorRole,
       actionType: l.actionType,
       resourceName: l.resourceName,
       resourceId: l.resourceId,

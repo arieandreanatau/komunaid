@@ -167,20 +167,30 @@ test.describe("Search - Events", () => {
     await page.goto("/events");
     await page.getByPlaceholder("Cari event...").fill("React");
     await page.getByRole("button", { name: "Mendatang" }).click();
-    await expect(page.getByRole("button", { name: "Mendatang" })).toHaveClass(/bg-komuna-blue/);
+    await expect(page.getByRole("button", { name: "Mendatang" })).toHaveClass(/border-komuna-forest/);
   });
 
   test("search filters combined with location type", async ({ page }) => {
     await page.goto("/events");
     await page.getByPlaceholder("Cari event...").fill("Workshop");
-    await page.getByRole("button", { name: "Online" }).click();
-    await expect(page.getByRole("button", { name: "Online" })).toHaveClass(/bg-komuna-blue/);
+    await page.getByRole("button", { name: "Online" }).first().click();
+    await expect(page.getByRole("button", { name: "Online" }).first()).toHaveClass(/bg-komuna-forest/);
   });
 });
 
 test.describe("Search - Volunteer", () => {
   test.beforeEach(async ({ page }) => {
     await page.route("**/api/v1/volunteer*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: mockVolunteerData,
+          pagination: { total: 1, totalPages: 1, page: 1, limit: 12 },
+        }),
+      });
+    });
+    await page.route("**/api/v1/volunteer-programs*", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -207,14 +217,15 @@ test.describe("Search - Volunteer", () => {
   test("search combined with status filter", async ({ page }) => {
     await page.goto("/volunteer");
     await page.getByPlaceholder("Cari volunteer...").fill("Pantai");
-    await page.getByRole("button", { name: "Open" }).click();
-    await expect(page.getByRole("button", { name: "Open" })).toHaveClass(/bg-komuna-blue/);
+    const openTab = page.getByRole("button", { name: "Open", exact: true }).first();
+    await openTab.click();
+    await expect(openTab).toHaveClass(/bg-komuna-forest/);
   });
 
   test("search combined with sort option", async ({ page }) => {
     await page.goto("/volunteer");
     await page.getByPlaceholder("Cari volunteer...").fill("Pantai");
-    const sortSelect = page.getByRole("combobox");
+    const sortSelect = page.getByLabel("Urutkan volunteer");
     await sortSelect.selectOption("name");
     await expect(sortSelect).toHaveValue("name");
   });

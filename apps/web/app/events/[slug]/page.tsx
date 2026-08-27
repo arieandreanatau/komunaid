@@ -38,6 +38,25 @@ interface Event {
   contactEmail: string;
   contactPhone: string;
   gallery: Array<{ id: string; url: string; caption: string | null }>;
+  agendas?: Array<{
+    id: string;
+    session: string;
+    description: string | null;
+    startTime: string | null;
+    endTime: string | null;
+    room: string | null;
+    speakerName: string | null;
+  }>;
+  speakers?: Array<{
+    id: string;
+    name: string;
+    photo: string | null;
+    bio: string | null;
+    position: string | null;
+    institution: string | null;
+    topic: string | null;
+  }>;
+  tickets?: Array<{ id: string; name: string; description: string | null; price: string; quota: number | null }>;
   userRegistration: {
     id: string;
     status: string;
@@ -237,6 +256,19 @@ export default function EventDetailPage() {
                 </div>
                 <h1 className="text-2xl md:text-3xl font-bold text-komuna-navy mb-4">{event.title}</h1>
 
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-gray-600 mb-4">
+                  <span className="inline-flex items-center gap-1.5">
+                    <svg className="h-4 w-4 text-komuna-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                    {event.registeredCount} peserta
+                  </span>
+                  {event.community && (
+                    <span className="inline-flex items-center gap-1.5">
+                      <svg className="h-4 w-4 text-komuna-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                      {event.community.name}
+                    </span>
+                  )}
+                </div>
+
                 <div className="space-y-3 text-sm text-gray-600">
                   <div className="flex items-center gap-3">
                     <svg className="h-5 w-5 text-komuna-blue flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -293,6 +325,67 @@ export default function EventDetailPage() {
                 <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">{event.description}</p>
               </div>
 
+              {/* Agenda */}
+              {event.agendas && event.agendas.length > 0 && (
+                <div className="bg-white rounded-xl shadow-sm p-6">
+                  <h2 className="text-lg font-semibold text-komuna-navy mb-4">Agenda</h2>
+                  <div className="space-y-3">
+                    {event.agendas.map((agenda, idx) => (
+                      <div key={agenda.id} className="flex gap-4 p-4 rounded-lg border border-gray-100">
+                        <div className="flex-shrink-0 text-center w-12">
+                          <span className="block text-sm font-bold text-komuna-blue">{idx + 1}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-1">
+                            <h3 className="font-medium text-komuna-navy text-sm">{agenda.session}</h3>
+                            {agenda.speakerName && (
+                              <span className="px-2 py-0.5 bg-komuna-teal/10 text-komuna-teal rounded-full text-xs font-medium">
+                                {agenda.speakerName}
+                              </span>
+                            )}
+                          </div>
+                          {(agenda.startTime || agenda.endTime) && (
+                            <p className="text-xs text-gray-500 mb-1">
+                              {agenda.startTime ? new Date(agenda.startTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "-"}
+                              {agenda.endTime ? ` – ${new Date(agenda.endTime).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}` : ""}
+                              {agenda.room ? ` · ${agenda.room}` : ""}
+                            </p>
+                          )}
+                          {agenda.description && <p className="text-sm text-gray-600">{agenda.description}</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Speakers */}
+              {event.speakers && event.speakers.length > 0 && (
+                <div className="bg-white rounded-xl shadow-sm p-6">
+                  <h2 className="text-lg font-semibold text-komuna-navy mb-4">Pembicara</h2>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {event.speakers.map((speaker) => (
+                      <div key={speaker.id} className="p-4 rounded-lg border border-gray-100 text-center">
+                        {speaker.photo ? (
+                          <img src={speaker.photo} alt={speaker.name} className="h-16 w-16 rounded-full object-cover mx-auto mb-2" />
+                        ) : (
+                          <div className="h-16 w-16 rounded-full bg-komuna-blue/10 flex items-center justify-center mx-auto mb-2">
+                            <span className="text-komuna-blue font-bold text-lg">{getInitial(speaker.name)}</span>
+                          </div>
+                        )}
+                        <h3 className="font-medium text-komuna-navy text-sm">{speaker.name}</h3>
+                        {(speaker.position || speaker.institution) && (
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {[speaker.position, speaker.institution].filter(Boolean).join(" · ")}
+                          </p>
+                        )}
+                        {speaker.topic && <p className="text-xs text-komuna-teal mt-1 italic">{speaker.topic}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Gallery */}
               {event.gallery && event.gallery.length > 0 && (
                 <div className="bg-white rounded-xl shadow-sm p-6">
@@ -320,7 +413,7 @@ export default function EventDetailPage() {
                             {re.coverImage || re.thumbnail ? (
                               <img src={re.coverImage || re.thumbnail} alt={re.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                       ) : (
-                        <div className="h-full bg-gradient-to-br from-komuna-blue to-komuna-teal flex items-center justify-center"><span className="text-white text-7xl font-bold opacity-20">{getInitial(event.title)}</span></div>
+                        <div className="h-full bg-gradient-to-br from-komuna-blue to-komuna-teal flex items-center justify-center"><span className="text-white text-7xl font-bold opacity-20">{getInitial(re.title)}</span></div>
                       )}
                             {statusInfo && <span className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-xs font-medium ${statusInfo.className}`}>{statusInfo.label}</span>}
                           </div>

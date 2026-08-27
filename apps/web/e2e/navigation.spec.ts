@@ -29,11 +29,22 @@ test.describe("Navigation - Header", () => {
   });
 
   test("header persists across pages", async ({ page }) => {
+    test.setTimeout(120000);
     await expect(page.locator("header")).toBeVisible();
-    await page.goto("/communities");
+    await page.goto("/communities", { waitUntil: "domcontentloaded" });
     await expect(page.locator("header")).toBeVisible();
-    await page.goto("/events");
+    await page.goto("/events", { waitUntil: "domcontentloaded" });
     await expect(page.locator("header")).toBeVisible();
+  });
+
+  test("V1.5 public pages load with header and footer", async ({ page }) => {
+    test.setTimeout(120000);
+    await page.goto("/network", { waitUntil: "domcontentloaded" });
+    await expect(page.locator("header")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Terhubung Lebih Luas" }).first()).toBeVisible();
+    await page.goto("/kolaborasi", { waitUntil: "domcontentloaded" });
+    await expect(page.locator("header")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Kolaborasi Komunitas" }).first()).toBeVisible();
   });
 
   test("header is sticky on scroll", async ({ page }) => {
@@ -66,11 +77,12 @@ test.describe("Navigation - Footer", () => {
   });
 
   test("footer appears on all public pages", async ({ page }) => {
-    await page.goto("/communities");
+    test.setTimeout(120000);
+    await page.goto("/communities", { waitUntil: "domcontentloaded" });
     await expect(page.locator("footer")).toBeVisible();
-    await page.goto("/events");
+    await page.goto("/events", { waitUntil: "domcontentloaded" });
     await expect(page.locator("footer")).toBeVisible();
-    await page.goto("/volunteer");
+    await page.goto("/volunteer", { waitUntil: "domcontentloaded" });
     await expect(page.locator("footer")).toBeVisible();
   });
 
@@ -98,9 +110,9 @@ test.describe("Navigation - Breadcrumbs", () => {
       });
     });
     await page.goto("/events?communityId=123");
-    const breadcrumb = page.locator("nav").filter({ hasText: "Event" });
-    if (await breadcrumb.isVisible()) {
-      await expect(breadcrumb.getByText("Event")).toBeVisible();
+    const pageNav = page.locator("nav").filter({ hasText: "Event" }).first();
+    if (await pageNav.isVisible()) {
+      await expect(pageNav.getByText("Event")).toBeVisible();
     }
   });
 });

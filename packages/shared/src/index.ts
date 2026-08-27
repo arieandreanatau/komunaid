@@ -220,6 +220,7 @@ export const communityQuerySchema = z.object({
     z.enum(["OPEN", "RESTRICTED"]).optional()
   ),
   categoryId: z.preprocess(emptyToUndefined, z.string().optional()),
+  category: z.preprocess(emptyToUndefined, z.string().optional()),
   province: z.preprocess(emptyToUndefined, z.string().optional()),
   city: z.preprocess(emptyToUndefined, z.string().optional()),
   tag: z.preprocess(emptyToUndefined, z.string().optional()),
@@ -382,6 +383,8 @@ export const createEventSchema = z.object({
   timezone: z.string().default("Asia/Jakarta"),
   quota: z.number().int().min(1, "Kuota minimal 1"),
   allowWaitlist: z.boolean().default(false),
+  registrationOpensAt: z.string().datetime("Format tanggal tidak valid").optional(),
+  registrationDeadline: z.string().datetime("Format tanggal tidak valid").optional(),
   visibility: z.enum(["PUBLIC", "PRIVATE"]).default("PUBLIC"),
   contactName: z.string().max(100).optional(),
   contactEmail: z.string().email("Email tidak valid").optional(),
@@ -390,6 +393,42 @@ export const createEventSchema = z.object({
   organizationId: z.string().optional(),
   categoryIds: z.array(z.string()).max(5, "Maksimal 5 kategori").optional(),
   gallery: z.array(z.string().url()).max(10, "Maksimal 10 gambar").optional(),
+  agendas: z
+    .array(
+      z.object({
+        session: z.string().min(1, "Nama sesi wajib").max(200),
+        description: z.string().max(2000).optional(),
+        startTime: z.string().datetime("Format tanggal tidak valid").optional(),
+        endTime: z.string().datetime("Format tanggal tidak valid").optional(),
+        room: z.string().max(100).optional(),
+        speakerName: z.string().max(200).optional(),
+      })
+    )
+    .max(30, "Maksimal 30 sesi").optional(),
+  speakers: z
+    .array(
+      z.object({
+        name: z.string().min(1, "Nama pembicara wajib").max(200),
+        photo: z.string().url("URL foto tidak valid").optional(),
+        bio: z.string().max(2000).optional(),
+        position: z.string().max(200).optional(),
+        institution: z.string().max(200).optional(),
+        socialMedia: z.string().max(500).optional(),
+        topic: z.string().max(500).optional(),
+        material: z.string().max(500).optional(),
+      })
+    )
+    .max(30, "Maksimal 30 pembicara").optional(),
+  tickets: z
+    .array(
+      z.object({
+        name: z.string().min(1, "Nama tiket wajib").max(200),
+        description: z.string().max(1000).optional(),
+        price: z.coerce.number().min(0, "Harga tidak boleh negatif"),
+        quota: z.number().int().min(1).optional(),
+      })
+    )
+    .max(10, "Maksimal 10 tiket").optional(),
 });
 
 export const updateEventSchema = createEventSchema.partial();
@@ -403,21 +442,41 @@ export const eventQuerySchema = z.object({
     z
       .enum([
         "DRAFT",
+        "SUBMITTED",
+        "IN_REVIEW",
+        "REVISION_REQUESTED",
+        "RESUBMITTED",
+        "APPROVED",
         "PUBLISHED",
         "REGISTRATION_OPEN",
         "REGISTRATION_CLOSED",
         "ONGOING",
-        "COMPLETED",
-        "CANCELLED",
-        "ARCHIVED",
+         "COMPLETED",
+         "CANCELLED",
+         "REJECTED",
+         "ARCHIVED",
       ])
       .optional()
   ),
-  communityId: z.preprocess(emptyToUndefined, z.string().optional()),
+communityId: z.preprocess(emptyToUndefined, z.string().optional()),
   organizationId: z.preprocess(emptyToUndefined, z.string().optional()),
+  categoryId: z.preprocess(emptyToUndefined, z.string().optional()),
+  locationType: z.preprocess(
+    emptyToUndefined,
+    z.enum(["OFFLINE", "ONLINE", "HYBRID"]).optional()
+  ),
   upcoming: z.preprocess(emptyToUndefined, z.coerce.boolean().optional()),
   sort: z.enum(["asc", "desc"]).default("desc"),
   orderBy: z.enum(["createdAt", "eventDate", "title"]).default("eventDate"),
+});
+
+export const reviewEventSchema = z.object({
+  action: z.enum(["APPROVE", "REJECT", "REQUEST_REVISION"]),
+  note: z.string().max(5000).optional(),
+}).superRefine((data, ctx) => {
+  if (["REJECT", "REQUEST_REVISION"].includes(data.action) && !data.note?.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Catatan reviewer wajib diisi", path: ["note"] });
+  }
 });
 
 // ==========================================

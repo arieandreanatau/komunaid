@@ -18,8 +18,8 @@ interface Participant {
 }
 
 interface ParticipantsResponse {
-  participants: Participant[];
-  pagination: { page: number; totalPages: number; totalItems: number };
+  data: Participant[];
+  pagination: { page: number; totalPages: number; total: number };
 }
 
 const REG_STATUS_MAP: Record<string, { label: string; className: string }> = {
@@ -129,7 +129,7 @@ export default function EventParticipantsPage() {
   };
 
   const toggleSelectAll = () => {
-    const participants = data?.participants || [];
+    const participants = data?.data || [];
     const checkable = participants.filter(
       (p) => p.status === "CONFIRMED" && p.attendance !== "CHECKED_IN" && p.attendance !== "CHECKED_OUT"
     );
@@ -169,8 +169,8 @@ export default function EventParticipantsPage() {
 
   if (!isAuthenticated) return null;
 
-  const participants = data?.participants || [];
-  const pagination = data?.pagination || { page: 1, totalPages: 1, totalItems: 0 };
+  const participants = data?.data || [];
+  const pagination = data?.pagination || { page: 1, totalPages: 1, total: 0 };
 
   return (
     <div className="space-y-6">
@@ -189,7 +189,7 @@ export default function EventParticipantsPage() {
             <span className="text-sm text-gray-500">Peserta</span>
           </div>
           <h1 className="text-2xl font-bold text-komuna-navy">Kelola Peserta</h1>
-          <p className="text-sm text-gray-500 mt-1">{pagination.totalItems} peserta terdaftar</p>
+          <p className="text-sm text-gray-500 mt-1">{pagination.total} peserta terdaftar</p>
         </div>
         <button
           onClick={handleExport}

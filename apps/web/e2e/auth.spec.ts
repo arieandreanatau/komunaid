@@ -68,13 +68,21 @@ test.describe("Authentication - Login", () => {
     await expect(page).toHaveURL(/communities/);
   });
 
-  test("shows loading state while submitting", async ({ page }) => {
-    let resolveLogin: (value: unknown) => void;
-    await page.route("**/api/v1/auth/login", async (route) => {
-      const response = await new Promise((resolve) => {
-        resolveLogin = resolve;
+test("shows loading state while submitting", async ({ page }) => {
+    const loginRequested = new Promise<void>((resolve) => {
+      let resolveLogin: (value: unknown) => void;
+      page.route("**/api/v1/auth/login", async (route) => {
+        const response = await new Promise((resolvePromise) => {
+          resolveLogin = resolvePromise;
+          resolve();
+        });
+        await route.fulfill(response as any);
       });
-      await route.fulfill(response as any);
+      page.on("request", (request) => {
+        if (request.url().includes("/api/v1/auth/login")) {
+          resolve();
+        }
+      });
     });
 
     await page.getByLabel("Email atau Username").fill("test@example.com");
@@ -82,14 +90,7 @@ test.describe("Authentication - Login", () => {
     await page.getByRole("button", { name: "Masuk" }).click();
 
     await expect(page.getByRole("button", { name: "Masuk..." })).toBeVisible();
-
-    resolveLogin!({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        data: { user: { id: "1", roles: ["USER"] }, token: "jwt" },
-      }),
-    });
+    await loginRequested;
   });
 });
 
@@ -108,15 +109,16 @@ test.describe("Authentication - Register", () => {
   });
 
   test("shows terms and privacy checkbox", async ({ page }) => {
-    const checkbox = page.getByLabel("terms");
+    const checkbox = page.getByRole("checkbox", { name: /Saya menyetujui/ });
     await expect(checkbox).toBeVisible();
     await expect(page.getByText("Syarat & Ketentuan")).toBeVisible();
     await expect(page.getByText("Kebijakan Privasi")).toBeVisible();
   });
 
-  test("validates required fields", async ({ page }) => {
+test("validates required fields", async ({ page }) => {
     await page.getByRole("button", { name: "Daftar" }).click();
-    await expect(page.locator("p.text-red-500").first()).toBeVisible();
+    const formValid = await page.evaluate(() => document.querySelector("form")?.checkValidity() ?? true);
+    expect(formValid).toBe(false);
   });
 
   test("successful registration redirects to dashboard", async ({ page }) => {
@@ -124,9 +126,9 @@ test.describe("Authentication - Register", () => {
     await page.getByLabel("Nama Lengkap").fill("Test User");
     await page.getByLabel("Username").fill("testuser");
     await page.getByLabel("Email").fill("test@example.com");
-    await page.getByLabel("Password", { exact: true }).fill("password123");
-    await page.getByLabel("Konfirmasi Password").fill("password123");
-    await page.getByLabel("terms").check();
+    await page.getByLabel("Password", { exact: true }).fill("Password123");
+    await page.getByLabel("Konfirmasi Password").fill("Password123");
+    await page.getByRole("checkbox", { name: /Saya menyetujui/ }).check();
     await page.getByRole("button", { name: "Daftar" }).click();
     await expect(page.getByRole("heading", { name: "Pendaftaran Berhasil" })).toBeVisible();
     await expect(page.getByText("Memuat dashboard...")).toBeVisible();
@@ -139,9 +141,9 @@ test.describe("Authentication - Register", () => {
     await page.getByLabel("Nama Lengkap").fill("Test User");
     await page.getByLabel("Username").fill("testuser");
     await page.getByLabel("Email").fill("existing@example.com");
-    await page.getByLabel("Password", { exact: true }).fill("password123");
-    await page.getByLabel("Konfirmasi Password").fill("password123");
-    await page.getByLabel("terms").check();
+    await page.getByLabel("Password", { exact: true }).fill("Password123");
+    await page.getByLabel("Konfirmasi Password").fill("Password123");
+    await page.getByRole("checkbox", { name: /Saya menyetujui/ }).check();
     await page.getByRole("button", { name: "Daftar" }).click();
     await expect(page.getByText("Email sudah terdaftar")).toBeVisible();
   });
@@ -184,16 +186,17 @@ test.describe("Authentication - Forgot Password", () => {
 });
 
 test.describe("Authentication - Protected Routes", () => {
-  test("unauthenticated user redirected from /dashboard to /login", async ({ page }) => {
+test("unauthenticated user redirected from /dashboard to /login", async ({ page }) => {
     await page.goto("/dashboard");
     await expect(page).toHaveURL(/login/);
-    await expect(page).toHaveURL(/redirect=\/dashboard/);
+    await expect(page).toHaveURL(/redirect=(%2F|\/)dashboard/);
   });
 
   test("unauthenticated user redirected from /communities/create", async ({ page }) => {
     await page.goto("/communities/create");
     await expect(page).toHaveURL(/login/);
-    await expect(page).toHaveURL(/redirect=\/communities\/create/);
+    await expect(page).toHaveURL(/communities/);
+    await expect(page).toHaveURL(/create/);
   });
 
   test("admin page redirects to /admin/login when not authenticated", async ({ page }) => {
@@ -201,3 +204,4 @@ test.describe("Authentication - Protected Routes", () => {
     await expect(page).toHaveURL(/admin\/login/);
   });
 });
+

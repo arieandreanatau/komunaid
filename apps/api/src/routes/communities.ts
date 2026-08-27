@@ -59,6 +59,22 @@ communityRoutes.get("/", optionalAuthMiddleware, validate(communityQuerySchema, 
     where.membershipType = q.membershipType;
   }
 
+  if (q.category && !q.categoryId) {
+    const category =
+      (await prisma.category.findFirst({
+        where: { slug: q.category, isActive: true, type: "COMMUNITY" },
+        select: { id: true },
+      })) ||
+      (await prisma.category.findFirst({
+        where: { name: q.category, isActive: true, type: "COMMUNITY" },
+        select: { id: true },
+      }));
+    if (!category) {
+      return c.json({ success: false, message: "Kategori tidak ditemukan", data: [], pagination: { page, limit, total: 0, totalPages: 0 } }, 404);
+    }
+    where.categories = { some: { categoryId: category.id } };
+  }
+
   if (q.categoryId) {
     where.categories = { some: { categoryId: q.categoryId } };
   }
@@ -194,6 +210,8 @@ communityRoutes.get("/featured/list", async (c) => {
       categories: comm.categories.map((cc) => cc.category),
       tags: comm.tags.map((t) => t.tag),
       createdAt: comm.createdAt,
+      badge: "Unggulan",
+      badgeCriteria: "Jumlah anggota terbanyak & komunitas terbaru",
     })),
   });
 });
@@ -241,6 +259,8 @@ communityRoutes.get("/new/list", async (c) => {
       categories: comm.categories.map((cc) => cc.category),
       tags: comm.tags.map((t) => t.tag),
       createdAt: comm.createdAt,
+      badge: "Terbaru",
+      badgeCriteria: "Komunitas yang baru saja disetujui",
     })),
   });
 });
@@ -288,6 +308,8 @@ communityRoutes.get("/popular/list", async (c) => {
       categories: comm.categories.map((cc) => cc.category),
       tags: comm.tags.map((t) => t.tag),
       createdAt: comm.createdAt,
+      badge: "Populer",
+      badgeCriteria: "Komunitas dengan jumlah anggota terbanyak",
     })),
   });
 });
@@ -393,6 +415,18 @@ communityRoutes.get(
 // 2. GET COMMUNITY BY SLUG (Public)
 // ==========================================
 
+communityRoutes.get("/my/saved", authMiddleware, async (c) => {
+  const user = c.get("user");
+  const page = Math.max(1, Number(new URL(c.req.url).searchParams.get("page") || 1));
+  const limit = Math.min(100, Math.max(1, Number(new URL(c.req.url).searchParams.get("limit") || 20)));
+  const where = { userId: user.id, community: { deletedAt: null } };
+  const [saved, total] = await Promise.all([
+    prisma.communitySave.findMany({ where, include: { community: { select: { id: true, name: true, slug: true, logo: true, coverImage: true, description: true, _count: { select: { members: true } } } } }, orderBy: { createdAt: "desc" }, skip: (page - 1) * limit, take: limit }),
+    prisma.communitySave.count({ where }),
+  ]);
+  return c.json({ success: true, data: saved.map((item) => ({ ...item.community, memberCount: item.community._count.members, _count: undefined, savedAt: item.createdAt })), pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
+});
+
 communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
   const slug = c.req.param("slug") as string;
   const user = c.get("user");
@@ -416,7 +450,7 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
         where: {
           deletedAt: null,
           visibility: "PUBLIC",
-          status: { notIn: ["DRAFT", "CANCELLED", "ARCHIVED"] },
+          status: { in: ["PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"] },
         },
         orderBy: { eventDate: "asc" },
         take: 20,
@@ -461,6 +495,8 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
   }
 
   let userMembership: { role: string; status: string } | null = null;
+  let pendingJoinRequests = 0;
+  let isSaved = false;
   if (user) {
     const membership = await prisma.communityMember.findUnique({
       where: {
@@ -469,12 +505,35 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
           userId: user.id,
         },
       },
-      select: { role: true, status: true },
+      select: { role: true, status: true, deletedAt: true },
     });
     userMembership = membership
       ? { role: membership.role, status: membership.status }
       : null;
+    try {
+      isSaved = Boolean(await prisma.communitySave.findUnique({ where: { communityId_userId: { communityId: community.id, userId: user.id } }, select: { id: true } }));
+    } catch {
+      // Keep community detail compatible until bookmark tables are migrated.
+      isSaved = false;
+    }
+    const canManage = user.id === community.ownerId || Boolean(membership && membership.status === "ACTIVE" && membership.deletedAt === null && ["OWNER", "ADMIN"].includes(membership.role));
+    if (canManage) {
+      pendingJoinRequests = await prisma.joinRequest.count({
+        where: { communityId: community.id, status: "PENDING" },
+      });
+    }
   }
+
+  const officers = await prisma.communityMember.findMany({
+    where: { communityId: community.id, status: "ACTIVE", deletedAt: null, role: { not: "MEMBER" } },
+    include: {
+      user: {
+        select: { id: true, name: true, avatar: true },
+      },
+    },
+    orderBy: { joinedAt: "asc" },
+    take: 10,
+  });
 
   return c.json({
     success: true,
@@ -497,6 +556,11 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
       province: community.province,
       city: community.city,
       website: community.website,
+      instagram: community.instagram,
+      contactEmail: community.contactEmail,
+      contactPhone: community.contactPhone,
+      pendingJoinRequests,
+      isSaved,
       membershipType: community.membershipType,
       status: community.status,
       visibility: community.visibility,
@@ -504,6 +568,12 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
       memberCount: community._count.members,
       eventCount: community._count.events,
       membersPreview: community.members.map((m) => ({
+        id: m.user.id,
+        name: m.user.name,
+        avatar: m.user.avatar,
+        role: m.role,
+      })),
+      officers: officers.map((m) => ({
         id: m.user.id,
         name: m.user.name,
         avatar: m.user.avatar,
@@ -538,6 +608,21 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
       updatedAt: community.updatedAt,
     },
   });
+});
+
+communityRoutes.post("/:communityId/save", authMiddleware, async (c) => {
+  const user = c.get("user");
+  const communityId = c.req.param("communityId") as string;
+  const community = await prisma.community.findFirst({ where: { id: communityId, deletedAt: null }, select: { id: true } });
+  if (!community) return c.json({ success: false, message: "Komunitas tidak ditemukan" }, 404);
+  await prisma.communitySave.upsert({ where: { communityId_userId: { communityId, userId: user.id } }, create: { communityId, userId: user.id }, update: {} });
+  return c.json({ success: true, message: "Komunitas berhasil disimpan" });
+});
+
+communityRoutes.delete("/:communityId/save", authMiddleware, async (c) => {
+  const user = c.get("user");
+  await prisma.communitySave.deleteMany({ where: { communityId: c.req.param("communityId") as string, userId: user.id } });
+  return c.json({ success: true, message: "Komunitas dihapus dari daftar tersimpan" });
 });
 
 // ==========================================
@@ -1903,11 +1988,12 @@ communityRoutes.get(
             status: "ACTIVE",
             deletedAt: null,
           },
-          select: { id: true },
+          select: { id: true, role: true },
         })
       : null;
 
     const canViewPrivateMembers = Boolean(isMember || community.ownerId === authUser?.id);
+    const isAdminMember = community.ownerId === authUser?.id || Boolean(isMember && ["OWNER", "ADMIN"].includes(isMember.role));
 
     if (community.visibility === "PRIVATE" && !canViewPrivateMembers) {
       return c.json({ success: false, message: "Komunitas ini bersifat privat" }, 403);
@@ -1922,14 +2008,23 @@ communityRoutes.get(
     const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") || "20") || 20));
     const search = url.searchParams.get("search") || "";
     const roleFilter = url.searchParams.get("role") || "";
+    const statusFilter = url.searchParams.get("status") || "";
     const sort = url.searchParams.get("sort") || "asc";
     const orderByParam = url.searchParams.get("orderBy") || "joinedAt";
 
-    const where: any = {
-      communityId,
-      status: "ACTIVE",
-      deletedAt: null,
-    };
+    if (statusFilter && statusFilter !== "ACTIVE" && !isAdminMember) {
+      return c.json({ success: false, message: "Anda tidak memiliki akses untuk melihat daftar anggota tersebut" }, 403);
+    }
+
+    const where: any = { communityId };
+
+    const allowedStatuses = ["ACTIVE", "BANNED", "LEFT", "PENDING", "REJECTED"];
+    if (statusFilter && allowedStatuses.includes(statusFilter)) {
+      where.status = statusFilter;
+    } else {
+      where.status = "ACTIVE";
+      where.deletedAt = null;
+    }
 
     if (roleFilter) {
       where.role = roleFilter;
@@ -2073,7 +2168,96 @@ communityRoutes.delete(
 );
 
 // ==========================================
-// 19. CHANGE MEMBER ROLE (Owner)
+// 19. RESTORE MEMBER (Admin)
+// ==========================================
+
+communityRoutes.post(
+  "/:communityId/members/:memberId/restore",
+  authMiddleware,
+  requireCommunityAdmin,
+  async (c) => {
+    const authUser = c.get("user");
+    const communityId = c.req.param("communityId") as string;
+    const memberId = c.req.param("memberId") as string;
+
+    const member = await prisma.communityMember.findUnique({
+      where: { id: memberId },
+      include: {
+        user: { select: { id: true, name: true } },
+      },
+    });
+
+    if (!member || member.communityId !== communityId) {
+      return c.json({ success: false, message: "Anggota tidak ditemukan" }, 404);
+    }
+
+    if (member.role === "OWNER") {
+      return c.json(
+        { success: false, message: "Tidak bisa memulihkan owner" },
+        403
+      );
+    }
+
+    if (member.status !== "BANNED") {
+      return c.json(
+        { success: false, message: "Hanya anggota yang diblokir yang dapat dipulihkan" },
+        400
+      );
+    }
+
+    const community = await prisma.community.findUnique({ where: { id: communityId } });
+    if (!community || community.deletedAt) {
+      return c.json({ success: false, message: "Komunitas tidak ditemukan" }, 404);
+    }
+    const isOwner = community.ownerId === authUser.id;
+
+    if (member.role === "ADMIN" && !isOwner) {
+      return c.json(
+        { success: false, message: "Hanya owner yang dapat memulihkan admin" },
+        403
+      );
+    }
+
+    await prisma.communityMember.update({
+      where: { id: memberId },
+      data: { status: "ACTIVE", deletedAt: null },
+    });
+
+    await createAuditLog({
+      userId: authUser.id,
+      actionType: AuditActions.COMMUNITY_ROLE_CHANGE,
+      resourceName: "Community",
+      resourceId: communityId,
+      afterData: {
+        action: "restore_member",
+        targetUserId: member.userId,
+        targetUserName: member.user.name,
+        previousRole: member.role,
+      },
+    });
+
+    await prisma.activityHistory.create({
+      data: {
+        userId: authUser.id,
+        action: "COMMUNITY_MEMBER_RESTORE",
+        details: {
+          communityId,
+          communityName: community?.name || communityId,
+          memberName: member.user.name,
+          memberId: member.userId,
+        },
+      },
+    });
+
+    return c.json({
+      success: true,
+      message: `Anggota "${member.user.name}" berhasil dipulihkan ke komunitas`,
+    });
+  }
+);
+
+// ==========================================
+// 20. CHANGE MEMBER ROLE (Owner)
 // ==========================================
 
 communityRoutes.put(

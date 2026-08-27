@@ -10,7 +10,7 @@ import { Pagination } from "@/components/pagination";
 import { useToast } from "@/components/ui/toast";
 
 type TabKey = "all" | "created" | "registered" | "saved";
-type LifecycleFilter = "" | "upcoming" | "ongoing" | "completed" | "cancelled";
+type LifecycleFilter = "" | "upcoming" | "ongoing" | "completed" | "rejected" | "cancelled";
 
 interface CreatedEvent {
   id: string;
@@ -62,6 +62,12 @@ interface SavedEvent {
 
 const EVENT_STATUS_MAP: Record<string, { label: string; className: string }> = {
   DRAFT: { label: "Draft", className: "bg-gray-100 text-gray-600" },
+  SUBMITTED: { label: "Menunggu review", className: "bg-amber-100 text-amber-700" },
+  IN_REVIEW: { label: "Sedang ditinjau", className: "bg-amber-100 text-amber-700" },
+  REVISION_REQUESTED: { label: "Perlu revisi", className: "bg-orange-100 text-orange-700" },
+  RESUBMITTED: { label: "Dikirim ulang", className: "bg-amber-100 text-amber-700" },
+  APPROVED: { label: "Disetujui", className: "bg-blue-100 text-blue-700" },
+  REJECTED: { label: "Ditolak", className: "bg-red-100 text-red-700" },
   PUBLISHED: { label: "Diterbitkan", className: "bg-blue-100 text-blue-700" },
   REGISTRATION_OPEN: { label: "Pendaftaran Buka", className: "bg-green-100 text-green-700" },
   REGISTRATION_CLOSED: { label: "Pendaftaran Tutup", className: "bg-yellow-100 text-yellow-700" },
@@ -86,6 +92,7 @@ const ATTENDANCE_MAP: Record<string, { label: string; className: string }> = {
 };
 
 function getLifecycleStatus(eventDate: string, status: string): string {
+  if (status === "REJECTED") return "rejected";
   if (status === "CANCELLED") return "cancelled";
   if (status === "COMPLETED") return "completed";
   if (status === "ONGOING") return "ongoing";
@@ -653,6 +660,7 @@ export default function MyEventsPage() {
     { value: "upcoming", label: "Mendatang" },
     { value: "ongoing", label: "Berlangsung" },
     { value: "completed", label: "Selesai" },
+    { value: "rejected", label: "Ditolak" },
     { value: "cancelled", label: "Dibatalkan" },
   ];
 

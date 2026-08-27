@@ -7,6 +7,18 @@ import type { AuthUser } from "../../middleware/auth";
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
 export const volunteersRoutes = new Hono<Env>();
 
+// VolunteerOpportunity is retained only for historical admin reads during the
+// VolunteerProgram migration. Lifecycle/application mutations must use the
+// canonical VolunteerProgram admin APIs (/volunteer-programs/admin/*).
+volunteersRoutes.use("*", async (c, next) => {
+  if (["GET", "HEAD", "OPTIONS"].includes(c.req.method)) return next();
+  return c.json({
+    success: false,
+    code: "LEGACY_VOLUNTEER_DEPRECATED",
+    message: "Lifecycle VolunteerOpportunity sudah read-only. Gunakan VolunteerProgram API untuk pengelolaan dan moderasi.",
+  }, 410);
+});
+
 function pagination(url: string) {
   const u = new URL(url);
   const page = Math.max(1, parseInt(u.searchParams.get("page") || "1"));
@@ -148,133 +160,6 @@ volunteersRoutes.get("/volunteers/:opportunityId/applications", async (c) => {
   });
 });
 
-volunteersRoutes.put("/volunteers/applications/:applicationId/approve", async (c) => {
-  const authUser = c.get("user");
-  const applicationId = c.req.param("applicationId") as string;
-
-  const application = await prisma.volunteerApplication.findUnique({ where: { id: applicationId } });
-  if (!application) {
-    return c.json({ success: false, message: "Aplikasi tidak ditemukan" }, 404);
-  }
-
-  if (application.status === "ACCEPTED") {
-    return c.json({ success: false, message: "Aplikasi sudah diterima" }, 400);
-  }
-
-  const before = { status: application.status };
-
-  await prisma.volunteerApplication.update({
-    where: { id: applicationId },
-    data: { status: "ACCEPTED", reviewedById: authUser.id, reviewedAt: new Date() },
-  });
-
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.VOLUNTEER_APPLICATION_APPROVE,
-    resourceName: "VolunteerApplication",
-    resourceId: applicationId,
-    beforeData: before,
-    afterData: { status: "ACCEPTED" },
-  });
-
-  await prisma.notification.create({
-    data: {
-      userId: application.userId,
-      title: "Aplikasi Volunteer Diterima",
-      message: "Aplikasi volunteer Anda telah diterima oleh admin.",
-      type: "SYSTEM",
-    },
-  });
-
-  return c.json({ success: true, message: "Aplikasi berhasil diterima" });
-});
-
-volunteersRoutes.put("/volunteers/applications/:applicationId/reject", async (c) => {
-  const authUser = c.get("user");
-  const applicationId = c.req.param("applicationId") as string;
-  const body = await c.req.json();
-  const { note } = body as { note?: string };
-
-  const application = await prisma.volunteerApplication.findUnique({ where: { id: applicationId } });
-  if (!application) {
-    return c.json({ success: false, message: "Aplikasi tidak ditemukan" }, 404);
-  }
-
-  const before = { status: application.status };
-
-  await prisma.volunteerApplication.update({
-    where: { id: applicationId },
-    data: { status: "REJECTED", reviewedById: authUser.id, reviewedAt: new Date(), reviewNote: note || null },
-  });
-
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.VOLUNTEER_APPLICATION_REJECT,
-    resourceName: "VolunteerApplication",
-    resourceId: applicationId,
-    beforeData: before,
-    afterData: { status: "REJECTED", note },
-  });
-
-  return c.json({ success: true, message: "Aplikasi berhasil ditolak" });
-});
-
-volunteersRoutes.put("/volunteers/:opportunityId/suspend", async (c) => {
-  const authUser = c.get("user");
-  const opportunityId = c.req.param("opportunityId") as string;
-
-  const opportunity = await prisma.volunteerOpportunity.findUnique({ where: { id: opportunityId } });
-  if (!opportunity) {
-    return c.json({ success: false, message: "Volunteer opportunity tidak ditemukan" }, 404);
-  }
-
-  const before = { status: opportunity.status };
-
-  await prisma.volunteerOpportunity.update({
-    where: { id: opportunityId },
-    data: { status: "CLOSED" },
-  });
-
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.VOLUNTEER_SUSPEND,
-    resourceName: "VolunteerOpportunity",
-    resourceId: opportunityId,
-    beforeData: before,
-    afterData: { status: "CLOSED" },
-  });
-
-  return c.json({ success: true, message: "Volunteer opportunity berhasil ditutup" });
-});
-
-volunteersRoutes.put("/volunteers/:opportunityId/archive", async (c) => {
-  const authUser = c.get("user");
-  const opportunityId = c.req.param("opportunityId") as string;
-
-  const opportunity = await prisma.volunteerOpportunity.findUnique({ where: { id: opportunityId } });
-  if (!opportunity) {
-    return c.json({ success: false, message: "Volunteer opportunity tidak ditemukan" }, 404);
-  }
-
-  const before = { status: opportunity.status };
-
-  await prisma.volunteerOpportunity.update({
-    where: { id: opportunityId },
-    data: { status: "ARCHIVED" },
-  });
-
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.VOLUNTEER_ARCHIVE,
-    resourceName: "VolunteerOpportunity",
-    resourceId: opportunityId,
-    beforeData: before,
-    afterData: { status: "ARCHIVED" },
-  });
-
-  return c.json({ success: true, message: "Volunteer opportunity berhasil diarsipkan" });
-});
-
 volunteersRoutes.put("/volunteers/:opportunityId/soft-delete", requireSuperAdmin(), async (c) => {
   const authUser = c.get("user");
   const opportunityId = c.req.param("opportunityId") as string;
@@ -307,30 +192,10 @@ volunteersRoutes.put("/volunteers/:opportunityId/soft-delete", requireSuperAdmin
   return c.json({ success: true, message: "Volunteer opportunity berhasil dihapus" });
 });
 
-volunteersRoutes.put("/volunteers/:opportunityId/restore", async (c) => {
-  const authUser = c.get("user");
-  const opportunityId = c.req.param("opportunityId") as string;
-
-  const opportunity = await prisma.volunteerOpportunity.findUnique({ where: { id: opportunityId } });
-  if (!opportunity) {
-    return c.json({ success: false, message: "Volunteer opportunity tidak ditemukan" }, 404);
-  }
-
-  const before = { status: opportunity.status, deletedAt: opportunity.deletedAt };
-
-  await prisma.volunteerOpportunity.update({
-    where: { id: opportunityId },
-    data: { deletedAt: null, status: "PUBLISHED" },
-  });
-
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.VOLUNTEER_OPPORTUNITY_ARCHIVE,
-    resourceName: "VolunteerOpportunity",
-    resourceId: opportunityId,
-    beforeData: before,
-    afterData: { deletedAt: null, status: "PUBLISHED" },
-  });
-
-  return c.json({ success: true, message: "Volunteer opportunity berhasil dipulihkan" });
+volunteersRoutes.put("/volunteers/:opportunityId/restore", requireSuperAdmin(), async (c) => {
+  return c.json({
+    success: false,
+    code: "LEGACY_VOLUNTEER_DEPRECATED",
+    message: "Lifecycle VolunteerOpportunity sudah read-only. Gunakan VolunteerProgram API.",
+  }, 410);
 });

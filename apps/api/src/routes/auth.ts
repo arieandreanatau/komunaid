@@ -502,6 +502,7 @@ authRoutes.get("/me", authMiddleware, async (c) => {
         bio: userData.bio,
         location: userData.location,
         avatar: userData.avatar,
+        isProfilePublic: userData.isProfilePublic,
         status: userData.status,
         roles: userData.roles.map((r) => r.role),
         interests: userData.interests.map((i) => i.interest),
