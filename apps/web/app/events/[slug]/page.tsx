@@ -27,6 +27,9 @@ interface Event {
   endDate: string;
   timezone: string;
   status: string;
+  canRegister?: boolean;
+  registrationStatus?: string;
+  registrationOpensAt?: string | null;
   quota: number;
   registeredCount: number;
   waitlistCount: number;
@@ -75,6 +78,11 @@ const REG_STATUS_MAP: Record<string, { label: string; className: string }> = {
 
 const RELATED_STATUS_MAP: Record<string, { label: string; className: string }> = {
   DRAFT: { label: "Draft", className: "bg-gray-100 text-gray-600" },
+  SUBMITTED: { label: "Menunggu review", className: "bg-amber-100 text-amber-700" },
+  IN_REVIEW: { label: "Sedang ditinjau", className: "bg-amber-100 text-amber-700" },
+  REVISION_REQUESTED: { label: "Perlu revisi", className: "bg-orange-100 text-orange-700" },
+  REJECTED: { label: "Ditolak", className: "bg-red-100 text-red-700" },
+  APPROVED: { label: "Disetujui", className: "bg-emerald-100 text-emerald-700" },
   PUBLISHED: { label: "Diterbitkan", className: "bg-blue-100 text-blue-700" },
   REGISTRATION_OPEN: { label: "Pendaftaran Buka", className: "bg-green-100 text-green-700" },
   REGISTRATION_CLOSED: { label: "Pendaftaran Tutup", className: "bg-yellow-100 text-yellow-700" },
@@ -210,7 +218,7 @@ export default function EventDetailPage() {
 
   const registration = event.userRegistration;
   const isRegistered = registration && registration.status !== "CANCELLED" && registration.status !== "REJECTED";
-  const canRegister = (event.status === "REGISTRATION_OPEN" || event.status === "PUBLISHED") && (!isRegistered || registration?.status === "CANCELLED");
+  const canRegister = event.canRegister === true && (!isRegistered || registration?.status === "CANCELLED");
   const canCancel = isRegistered && event.status !== "COMPLETED" && event.status !== "CANCELLED";
   const regInfo = registration ? REG_STATUS_MAP[registration.status] : null;
   const quotaPercent = event.quota > 0 ? Math.round((event.registeredCount / event.quota) * 100) : 0;
@@ -227,6 +235,12 @@ export default function EventDetailPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Main Content */}
             <div className="lg:col-span-2 space-y-6">
+              {(event.status === "SUBMITTED" || event.status === "IN_REVIEW") && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">Event ini sudah tampil untuk informasi publik, tetapi masih dalam proses review platform. Pendaftaran belum dibuka.</div>
+              )}
+              {(event.status === "APPROVED" || event.status === "PUBLISHED") && (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">Event telah disetujui. {event.registrationOpensAt ? `Pendaftaran dibuka pada ${new Date(event.registrationOpensAt).toLocaleString("id-ID")}.` : "Pendaftaran belum dibuka."}</div>
+              )}
               {/* Cover */}
               <div className="bg-white rounded-xl shadow-sm overflow-hidden">
                 {event.coverImage ? (

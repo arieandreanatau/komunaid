@@ -11,6 +11,7 @@ import { createWithUniqueSlug } from "../lib/slug";
 import { slugify } from "@komunaid/utils";
 import type { AuthUser } from "../middleware/auth";
 import { sendEmail } from "../services/email";
+import { EVENT_PUBLIC_STATUSES, isRegistrationOpen, registrationState } from "../services/content-lifecycle";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
 
@@ -112,7 +113,7 @@ eventRoutes.get("/", optionalAuthMiddleware, validate(eventQuerySchema, "query")
   const where: any = {
     deletedAt: null,
     visibility: "PUBLIC",
-    status: { in: ["SUBMITTED", "IN_REVIEW", "PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"] },
+    status: { in: [...EVENT_PUBLIC_STATUSES] as any },
   };
 
   if (q.search) {
@@ -126,7 +127,7 @@ if (q.communityId) where.communityId = q.communityId;
   if (q.organizationId) where.organizationId = q.organizationId;
   if (q.categoryId) where.categories = { some: { categoryId: q.categoryId } };
   if (q.locationType) where.locationType = q.locationType;
-  if (q.status && ["SUBMITTED", "IN_REVIEW", "PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"].includes(q.status)) {
+  if (q.status && EVENT_PUBLIC_STATUSES.includes(q.status as (typeof EVENT_PUBLIC_STATUSES)[number])) {
     where.status = q.status;
   }
 
@@ -175,7 +176,10 @@ if (q.communityId) where.communityId = q.communityId;
       status: e.status,
       visibility: e.visibility,
        registeredCount: e._count.registrations,
-       canRegister: e.status === "REGISTRATION_OPEN",
+        registrationStatus: registrationState(e),
+        registrationOpensAt: e.registrationOpensAt,
+        registrationDeadline: e.registrationDeadline,
+        canRegister: isRegistrationOpen(e),
       community: e.community,
       organization: e.organization,
       createdBy: e.createdBy,
@@ -199,7 +203,7 @@ eventRoutes.get("/popular/upcoming", async (c) => {
   const eventWhere: Prisma.EventWhereInput = {
     deletedAt: null,
     visibility: "PUBLIC" as const,
-    status: { in: ["SUBMITTED", "IN_REVIEW", "PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED"] },
+      status: { in: [...EVENT_PUBLIC_STATUSES] as any },
     eventDate: { gte: new Date() },
   };
   const ranked = await prisma.eventRegistration.groupBy({
@@ -311,7 +315,7 @@ eventRoutes.get("/featured", async (c) => {
     where: {
       deletedAt: null,
       visibility: "PUBLIC",
-    status: { in: ["SUBMITTED", "IN_REVIEW", "PUBLISHED", "REGISTRATION_OPEN"] },
+     status: { in: [...EVENT_PUBLIC_STATUSES] as any },
     },
     include: {
       community: { select: { id: true, name: true, slug: true, logo: true } },
@@ -377,7 +381,7 @@ eventRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
 
   const role = user ? await getEventOrganizerRole(user.id, event) : null;
   const isOrganizer = user ? await canManageEvent(role, user.id, event) : false;
-  const isPublicEvent = event.visibility === "PUBLIC" && ["SUBMITTED", "IN_REVIEW", "PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"].includes(event.status);
+  const isPublicEvent = event.visibility === "PUBLIC" && EVENT_PUBLIC_STATUSES.includes(event.status as (typeof EVENT_PUBLIC_STATUSES)[number]);
   if (!isPublicEvent && !isOrganizer) {
     return c.json({ success: false, message: "Event tidak ditemukan" }, 404);
   }
@@ -417,8 +421,12 @@ eventRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
       ...event,
       registrations: undefined,
       gallery: galleryParsed,
-      registeredCount: event._count.registrations,
-      waitlistCount,
+       registeredCount: event._count.registrations,
+       waitlistCount,
+       registrationStatus: registrationState(event),
+       registrationOpensAt: event.registrationOpensAt,
+       registrationDeadline: event.registrationDeadline,
+       canRegister: isRegistrationOpen(event),
       registeredUsers: isOrganizer
         ? event.registrations.map((r) => ({
             id: r.user.id,
@@ -482,13 +490,11 @@ eventRoutes.post("/", authMiddleware, validate(createEventSchema), async (c) => 
   const authUser = c.get("user");
   const data = c.get("validated");
 
-  if (!data.communityId && !data.organizationId) {
-    return c.json({ success: false, message: "Event harus dimiliki oleh Community atau Organization" }, 400);
+  if (new Date(data.eventDate) <= new Date()) {
+    return c.json({ success: false, message: "Tanggal event harus di masa depan" }, 400);
   }
 
-  if (data.communityId && data.organizationId) {
-    return c.json({ success: false, message: "Event hanya boleh dimiliki oleh satu penyelenggara" }, 400);
-  }
+  if (!data.communityId) return c.json({ success: false, message: "Event harus dimiliki oleh komunitas" }, 400);
 
   if (data.communityId) {
     const membership = await prisma.communityMember.findUnique({
@@ -500,15 +506,7 @@ eventRoutes.post("/", authMiddleware, validate(createEventSchema), async (c) => 
     }
   }
 
-  if (data.organizationId) {
-    const membership = await prisma.organizationMember.findUnique({
-      where: { organizationId_userId: { organizationId: data.organizationId, userId: authUser.id } },
-    });
-    const isSA = await isSuperAdmin(authUser.id);
-    if (!isSA && (!membership || membership.status !== "ACTIVE" || membership.deletedAt !== null || !["OWNER", "ADMIN"].includes(membership.role))) {
-      return c.json({ success: false, message: "Tidak memiliki akses membuat event di organisasi ini" }, 403);
-    }
-  }
+  if (data.organizationId) return c.json({ success: false, message: "Event baru hanya dapat dibuat oleh komunitas" }, 400);
 
   const { categoryIds, gallery, agendas, speakers, tickets, ...eventData } = data;
 
@@ -532,6 +530,8 @@ eventRoutes.post("/", authMiddleware, validate(createEventSchema), async (c) => 
             createdById: authUser.id,
             eventDate: new Date(data.eventDate),
             endDate: data.endDate ? new Date(data.endDate) : null,
+            registrationOpensAt: data.registrationOpensAt ? new Date(data.registrationOpensAt) : null,
+            registrationDeadline: data.registrationDeadline ? new Date(data.registrationDeadline) : null,
             gallery: gallery ? JSON.stringify(gallery) : null,
             categories: categoryIds
               ? { create: categoryIds.map((categoryId: string) => ({ categoryId })) }
@@ -605,14 +605,13 @@ eventRoutes.post("/", authMiddleware, validate(createEventSchema), async (c) => 
     afterData: { title: event.title, slug: event.slug, status: event.status },
   });
 
-  const submitted = await transitionEvent(event, "SUBMITTED", authUser.id, { submittedAt: new Date() });
-  const queued = await transitionEvent(submitted, "IN_REVIEW", authUser.id, { reason: "Event masuk antrean review" });
+  const queued = await transitionEvent(event, "SUBMITTED", authUser.id, { submittedAt: new Date() });
   const admins = await prisma.userRole.findMany({ where: { role: "SUPER_ADMIN" }, include: { user: { select: { email: true } } } });
   if (admins.length) {
-    await prisma.notification.createMany({
-      data: admins.map((admin) => ({ userId: admin.userId, title: "Event Baru Menunggu Review", message: `Event "${event.title}" telah dikirim untuk review.`, type: "APPROVAL" as const, link: `/admin/events/events` })),
-    });
-    await sendEmail({ to: admins.map((admin) => admin.user.email), subject: `Event baru menunggu review: ${event.title}`, html: `<p>Event <strong>${event.title}</strong> telah dikirim untuk review.</p><p><a href="${process.env.APP_URL || "http://localhost:3000"}/admin/events/events">Buka antrean event</a></p>` });
+    try {
+      await prisma.notification.createMany({ data: admins.map((admin) => ({ userId: admin.userId, title: "Event Baru Menunggu Review", message: `Event "${event.title}" telah dikirim untuk review.`, type: "APPROVAL" as const, link: `/admin/events/events` })) });
+      await sendEmail({ to: admins.map((admin) => admin.user.email), subject: `Event baru menunggu review: ${event.title}`, html: `<p>Event <strong>${event.title}</strong> telah dikirim untuk review.</p><p><a href="${process.env.APP_URL || "http://localhost:3000"}/admin/events/events">Buka antrean event</a></p>` });
+    } catch { /* notification delivery is non-critical */ }
   }
 
   return c.json({
@@ -622,8 +621,11 @@ eventRoutes.post("/", authMiddleware, validate(createEventSchema), async (c) => 
       id: event.id,
       title: event.title,
       slug: event.slug,
-        status: queued.status,
-        canRegister: false,
+      status: queued.status,
+      registrationStatus: registrationState(queued),
+      registrationOpensAt: queued.registrationOpensAt,
+      registrationDeadline: queued.registrationDeadline,
+      canRegister: false,
       community: event.community,
       organization: event.organization,
       categories: event.categories.map((c) => c.category),
@@ -648,6 +650,10 @@ eventRoutes.patch("/:eventId", authMiddleware, validate(updateEventSchema), asyn
   const role = await getEventOrganizerRole(authUser.id, event);
   if (!await canManageEvent(role, authUser.id, event)) {
     return c.json({ success: false, message: "Tidak memiliki akses mengubah event ini" }, 403);
+  }
+
+  if (!["DRAFT", "REVISION_REQUESTED"].includes(event.status)) {
+    return c.json({ success: false, message: "Event hanya dapat diubah saat draft atau perlu revisi" }, 400);
   }
 
   if (["COMPLETED", "CANCELLED", "ARCHIVED"].includes(event.status)) {
@@ -679,14 +685,8 @@ eventRoutes.patch("/:eventId", authMiddleware, validate(updateEventSchema), asyn
     }
   }
 
-  if (hasOrganizationChange && targetOrganizationId !== event.organizationId) {
-    const membership = await prisma.organizationMember.findUnique({
-      where: { organizationId_userId: { organizationId: targetOrganizationId!, userId: authUser.id } },
-    });
-    const isSA = await isSuperAdmin(authUser.id);
-    if (!isSA && (!membership || membership.status !== "ACTIVE" || membership.deletedAt !== null || !["OWNER", "ADMIN"].includes(membership.role))) {
-      return c.json({ success: false, message: "Tidak memiliki akses memindahkan event ke organisasi ini" }, 403);
-    }
+  if (hasOrganizationChange) {
+    return c.json({ success: false, message: "Event baru hanya dapat dimiliki komunitas" }, 400);
   }
 
   const sanitizedUpdateData = {
@@ -699,6 +699,17 @@ eventRoutes.patch("/:eventId", authMiddleware, validate(updateEventSchema), asyn
     contactPhone: sanitizeText(updateData.contactPhone),
   };
 
+  if (data.eventDate && new Date(data.eventDate) <= new Date()) {
+    return c.json({ success: false, message: "Tanggal event harus di masa depan" }, 400);
+  }
+  if (data.registrationOpensAt !== undefined || data.registrationDeadline !== undefined) {
+    const opensAt = data.registrationOpensAt ? new Date(data.registrationOpensAt) : event.registrationOpensAt;
+    const deadline = data.registrationDeadline ? new Date(data.registrationDeadline) : event.registrationDeadline;
+    const eventDate = data.eventDate ? new Date(data.eventDate) : event.eventDate;
+    if (opensAt && deadline && opensAt >= deadline) return c.json({ success: false, message: "Tanggal buka harus sebelum batas pendaftaran" }, 400);
+    if (deadline && deadline >= eventDate) return c.json({ success: false, message: "Batas pendaftaran harus sebelum tanggal event" }, 400);
+  }
+
   const updated = await prisma.$transaction(async (tx) => {
     const updatedEvent = await tx.event.update({
       where: { id: eventId },
@@ -708,6 +719,8 @@ eventRoutes.patch("/:eventId", authMiddleware, validate(updateEventSchema), asyn
         organizationId: hasCommunityChange || hasOrganizationChange ? targetOrganizationId ?? null : undefined,
         eventDate: data.eventDate ? new Date(data.eventDate) : undefined,
         endDate: data.endDate ? new Date(data.endDate) : undefined,
+        registrationOpensAt: data.registrationOpensAt ? new Date(data.registrationOpensAt) : undefined,
+        registrationDeadline: data.registrationDeadline ? new Date(data.registrationDeadline) : undefined,
         gallery: gallery !== undefined ? JSON.stringify(gallery) : undefined,
       },
       include: {
@@ -894,10 +907,12 @@ eventRoutes.post("/:eventId/review", authMiddleware, requireSuperAdmin(), valida
   if (event.createdById === reviewer.id) return c.json({ success: false, message: "Reviewer tidak dapat mereview event miliknya sendiri" }, 403);
 
   const targetStatus = action === "APPROVE" ? "APPROVED" : action === "REJECT" ? "REJECTED" : "REVISION_REQUESTED";
-  const allowed = event.status === "SUBMITTED" || event.status === "RESUBMITTED";
+  const allowed = event.status === "SUBMITTED" || event.status === "RESUBMITTED" || event.status === "IN_REVIEW";
   if (!allowed) return c.json({ success: false, message: "Event tidak dalam antrean review" }, 400);
 
-  const inReview = await transitionEvent(event, "IN_REVIEW", reviewer.id, { reviewedAt: new Date(), reviewedById: reviewer.id });
+  const inReview = event.status === "IN_REVIEW"
+    ? event
+    : await transitionEvent(event, "IN_REVIEW", reviewer.id, { reviewedAt: new Date(), reviewedById: reviewer.id });
   const updated = await transitionEvent(inReview, targetStatus, reviewer.id, {
     reviewedAt: new Date(),
     reviewedById: reviewer.id,
@@ -912,6 +927,15 @@ eventRoutes.post("/:eventId/review", authMiddleware, requireSuperAdmin(), valida
     beforeData: { status: event.status },
     afterData: { status: targetStatus, action, note: note || null },
   });
+
+  const creator = await prisma.user.findUnique({ where: { id: event.createdById }, select: { email: true } });
+  if (creator?.email) {
+    const resultLabel = action === "APPROVE" ? "disetujui" : action === "REJECT" ? "ditolak" : "memerlukan revisi";
+    try {
+      await prisma.notification.create({ data: { userId: event.createdById, title: `Event ${resultLabel}`, message: `Event "${event.title}" ${resultLabel}.${note ? ` Catatan: ${note}` : ""}`, type: "APPROVAL", link: `/dashboard/events` } });
+      await sendEmail({ to: creator.email, subject: `Status review event: ${event.title}`, html: `<p>Event <strong>${event.title}</strong> ${resultLabel}.</p>${note ? `<p>Catatan: ${note}</p>` : ""}` });
+    } catch { /* notification delivery is non-critical */ }
+  }
 
   return c.json({ success: true, message: "Review event berhasil disimpan", data: { id: updated.id, status: updated.status } });
 });
@@ -1337,10 +1361,9 @@ eventRoutes.post("/:eventId/register", authMiddleware, async (c) => {
     `;
     const lockedEvent = lockedRows[0];
     if (!lockedEvent || lockedEvent.deletedAt) return { code: "EVENT_NOT_FOUND" };
-    if (lockedEvent.status !== "REGISTRATION_OPEN") return { code: "REGISTRATION_NOT_OPEN" };
     const now = new Date();
-    if (lockedEvent.registrationOpensAt && lockedEvent.registrationOpensAt > now) return { code: "REGISTRATION_NOT_OPEN" };
-    if (lockedEvent.registrationDeadline && lockedEvent.registrationDeadline < now) return { code: "REGISTRATION_DEADLINE_PASSED" };
+    if (!isRegistrationOpen({ ...lockedEvent, now })) return { code: "REGISTRATION_NOT_OPEN" };
+    if (lockedEvent.registrationDeadline && lockedEvent.registrationDeadline <= now) return { code: "REGISTRATION_DEADLINE_PASSED" };
 
     const existing = await tx.eventRegistration.findUnique({ where: { eventId_userId: { eventId, userId: authUser.id } } });
     if (existing && ["CONFIRMED", "PENDING", "WAITLISTED"].includes(existing.status)) return { code: "EVENT_ALREADY_REGISTERED" };

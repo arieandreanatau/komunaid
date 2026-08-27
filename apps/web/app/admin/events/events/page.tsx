@@ -14,11 +14,12 @@ interface EventItem {
 interface Pagination { page: number; limit: number; total: number; totalPages: number; }
 
 const statusColors: Record<string, string> = {
-  DRAFT: "bg-gray-100 text-gray-600", PUBLISHED: "bg-green-100 text-green-700",
+  DRAFT: "bg-gray-100 text-gray-600", SUBMITTED: "bg-amber-100 text-amber-700", IN_REVIEW: "bg-amber-100 text-amber-700", REVISION_REQUESTED: "bg-orange-100 text-orange-700", REJECTED: "bg-red-100 text-red-700", APPROVED: "bg-emerald-100 text-emerald-700", PUBLISHED: "bg-green-100 text-green-700",
   REGISTRATION_OPEN: "bg-blue-100 text-blue-700", REGISTRATION_CLOSED: "bg-yellow-100 text-yellow-700",
   ONGOING: "bg-purple-100 text-purple-700", COMPLETED: "bg-green-100 text-green-700",
   CANCELLED: "bg-red-100 text-red-700", ARCHIVED: "bg-gray-100 text-gray-600",
 };
+const statusLabels: Record<string, string> = { DRAFT: "Draft", SUBMITTED: "Menunggu review", IN_REVIEW: "Sedang ditinjau", REVISION_REQUESTED: "Perlu revisi", REJECTED: "Ditolak", APPROVED: "Disetujui", PUBLISHED: "Diterbitkan", REGISTRATION_OPEN: "Pendaftaran dibuka", REGISTRATION_CLOSED: "Pendaftaran ditutup", ONGOING: "Berlangsung", COMPLETED: "Selesai", CANCELLED: "Dibatalkan", ARCHIVED: "Diarsipkan" };
 
 function formatDate(d: string) { return new Date(d).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }); }
 
@@ -31,6 +32,8 @@ export default function EventsListPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [confirmModal, setConfirmModal] = useState<{ eventId: string; action: string; title: string } | null>(null);
+  const [reviewModal, setReviewModal] = useState<{ eventId: string; action: "APPROVE" | "REJECT" | "REQUEST_REVISION"; title: string } | null>(null);
+  const [reviewNote, setReviewNote] = useState("");
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
@@ -56,6 +59,16 @@ export default function EventsListPage() {
     finally { setActionLoading(null); }
   };
 
+  const handleReview = async () => {
+    if (!reviewModal) return;
+    if (reviewModal.action !== "APPROVE" && !reviewNote.trim()) return;
+    setActionLoading(reviewModal.eventId);
+    try {
+      await api.post(`/events/${reviewModal.eventId}/review`, { action: reviewModal.action, note: reviewNote.trim() || undefined });
+      setReviewModal(null); setReviewNote(""); fetchEvents();
+    } finally { setActionLoading(null); }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -70,7 +83,7 @@ export default function EventsListPage() {
       </div>
 
       <div className="flex gap-1 bg-white rounded-lg p-1 shadow-sm overflow-x-auto">
-        {[{ v: "", l: "Semua" }, { v: "PUBLISHED", l: "Published" }, { v: "CANCELLED", l: "Cancelled" }, { v: "ARCHIVED", l: "Archived" }].map((t) => (
+        {[{ v: "", l: "Semua" }, { v: "SUBMITTED", l: "Menunggu review" }, { v: "IN_REVIEW", l: "Sedang ditinjau" }, { v: "REVISION_REQUESTED", l: "Perlu revisi" }, { v: "APPROVED", l: "Disetujui" }, { v: "CANCELLED", l: "Dibatalkan" }, { v: "ARCHIVED", l: "Diarsipkan" }].map((t) => (
           <button key={t.v} onClick={() => { setStatusFilter(t.v); setPage(1); }}
             className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${statusFilter === t.v ? "bg-komuna-blue text-white" : "text-gray-600 hover:bg-gray-100"}`}>
             {t.l}
@@ -110,13 +123,18 @@ export default function EventsListPage() {
                         {e.isOnline ? "Online" : (e.community?.name || "Offline")}
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[e.status] || "bg-gray-100 text-gray-600"}`}>{e.status}</span>
+                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[e.status] || "bg-gray-100 text-gray-600"}`}>{statusLabels[e.status] || e.status}</span>
                       </td>
                       <td className="px-4 py-3 text-center hidden sm:table-cell text-gray-600 text-xs">{e.registrationCount}/{e.quota}</td>
                       <td className="px-4 py-3 hidden md:table-cell text-gray-500 text-xs">{formatDate(e.eventDate)}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-2">
-                          {(e.status === "PUBLISHED" || e.status === "REGISTRATION_OPEN") && (
+                          {(e.status === "SUBMITTED" || e.status === "RESUBMITTED" || e.status === "IN_REVIEW") && <>
+                            <button onClick={() => setReviewModal({ eventId: e.id, action: "APPROVE", title: e.title })} className="px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 rounded-lg hover:bg-green-100">Setujui</button>
+                            <button onClick={() => setReviewModal({ eventId: e.id, action: "REQUEST_REVISION", title: e.title })} className="px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100">Minta revisi</button>
+                            <button onClick={() => setReviewModal({ eventId: e.id, action: "REJECT", title: e.title })} className="px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100">Tolak</button>
+                          </>}
+                          {(e.status !== "CANCELLED" && e.status !== "ARCHIVED" && e.status !== "COMPLETED") && (
                             <button onClick={() => setConfirmModal({ eventId: e.id, action: "suspend", title: e.title })}
                               className="px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100">Batalkan</button>
                           )}
@@ -166,6 +184,16 @@ export default function EventsListPage() {
                 {actionLoading ? "Memproses..." : "Konfirmasi"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {reviewModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+            <h3 className="text-lg font-semibold text-komuna-navy mb-2">{reviewModal.action === "APPROVE" ? "Setujui Event" : reviewModal.action === "REJECT" ? "Tolak Event" : "Minta Revisi Event"}</h3>
+            <p className="text-sm text-gray-600 mb-4">{reviewModal.title}</p>
+            {reviewModal.action !== "APPROVE" && <textarea value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} required rows={4} placeholder="Catatan review wajib diisi" className="w-full rounded-lg border border-gray-200 p-3 text-sm" />}
+            <div className="mt-5 flex justify-end gap-3"><button onClick={() => { setReviewModal(null); setReviewNote(""); }} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg">Batal</button><button onClick={handleReview} disabled={!!actionLoading || (reviewModal.action !== "APPROVE" && !reviewNote.trim())} className="px-4 py-2 text-sm font-medium text-white bg-komuna-blue rounded-lg disabled:opacity-50">{actionLoading ? "Memproses..." : "Konfirmasi"}</button></div>
           </div>
         </div>
       )}

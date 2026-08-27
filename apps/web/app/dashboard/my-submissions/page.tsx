@@ -16,7 +16,7 @@ interface Submission {
   description: string;
   logo: string | null;
   banner: string | null;
-  status: "DRAFT" | "PENDING" | "APPROVED" | "REJECTED" | "REVISION_REQUIRED";
+  status: "DRAFT" | "PENDING" | "UNDER_REVIEW" | "APPROVED" | "REJECTED" | "REVISION_REQUIRED";
   membershipType: string;
   visibility: string;
   adminNote: string | null;
@@ -40,12 +40,13 @@ interface PaginatedResponse {
   };
 }
 
-type StatusFilter = "" | "DRAFT" | "PENDING" | "APPROVED" | "REJECTED" | "REVISION_REQUIRED";
+type StatusFilter = "" | "DRAFT" | "PENDING" | "UNDER_REVIEW" | "APPROVED" | "REJECTED" | "REVISION_REQUIRED";
 
 const STATUS_TABS: { value: StatusFilter; label: string }[] = [
   { value: "", label: "Semua" },
   { value: "DRAFT", label: "Draft" },
   { value: "PENDING", label: "Menunggu Review" },
+  { value: "UNDER_REVIEW", label: "Sedang Direview" },
   { value: "APPROVED", label: "Disetujui" },
   { value: "REJECTED", label: "Ditolak" },
   { value: "REVISION_REQUIRED", label: "Perlu Revisi" },
@@ -54,6 +55,7 @@ const STATUS_TABS: { value: StatusFilter; label: string }[] = [
 const STATUS_BADGE: Record<string, { variant: string; label: string }> = {
   DRAFT: { variant: "default", label: "Draft" },
   PENDING: { variant: "pending", label: "Menunggu Review" },
+  UNDER_REVIEW: { variant: "pending", label: "Sedang Direview" },
   APPROVED: { variant: "approved", label: "Disetujui" },
   REJECTED: { variant: "rejected", label: "Ditolak" },
   REVISION_REQUIRED: { variant: "warning", label: "Perlu Revisi" },
@@ -156,7 +158,7 @@ function ApprovalTimeline({
     {
       label: "Sedang direview",
       date: null,
-      status: hasSubmitted && !hasReviewed ? ("current" as const) : hasReviewed ? ("completed" as const) : ("pending" as const),
+     status: submission.status === "UNDER_REVIEW" || (hasSubmitted && !hasReviewed) ? ("current" as const) : hasReviewed ? ("completed" as const) : ("pending" as const),
     },
     {
       label: "Keputusan",

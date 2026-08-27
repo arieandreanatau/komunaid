@@ -12,12 +12,12 @@ const STEPS = ["Informasi Dasar", "Penyelenggara", "Kesempatan", "Jadwal & Lokas
 type WizardState = {
   title: string; description: string; location: string; capacity: number;
   organizerType: "COMMUNITY" | "INDEPENDENT"; communityId: string;
-  startDate: string; endDate: string; registrationDeadline: string;
+  startDate: string; endDate: string; registrationOpensAt: string; registrationDeadline: string;
   requirements: string; benefits: string; responsibilities: string;
   picName: string; picContact: string; coverImage: string; motivation: string;
 };
 
-const EMPTY: WizardState = { title: "", description: "", location: "", capacity: 20, organizerType: "COMMUNITY", communityId: "", startDate: "", endDate: "", registrationDeadline: "", requirements: "", benefits: "", responsibilities: "", picName: "", picContact: "", coverImage: "", motivation: "" };
+const EMPTY: WizardState = { title: "", description: "", location: "", capacity: 20, organizerType: "COMMUNITY", communityId: "", startDate: "", endDate: "", registrationOpensAt: "", registrationDeadline: "", requirements: "", benefits: "", responsibilities: "", picName: "", picContact: "", coverImage: "", motivation: "" };
 
 export default function CreateVolunteerProgramPage() {
   const router = useRouter();
@@ -40,6 +40,7 @@ export default function CreateVolunteerProgramPage() {
         capacity: Number(form.capacity),
         startDate: new Date(form.startDate).toISOString(),
         endDate: new Date(form.endDate).toISOString(),
+        registrationOpensAt: form.registrationOpensAt ? new Date(form.registrationOpensAt).toISOString() : null,
         registrationDeadline: form.registrationDeadline ? new Date(form.registrationDeadline).toISOString() : null,
       } as Record<string, unknown>;
       if (form.organizerType === "COMMUNITY" && form.communityId) payload.communityId = form.communityId;
@@ -48,8 +49,7 @@ export default function CreateVolunteerProgramPage() {
         ? `/volunteer-programs/communities/${form.communityId}`
         : "/volunteer-programs/independent-proposals";
       const response = await api.post(endpoint, payload);
-      const program = response.data.data;
-      return api.post(`/volunteer-programs/${program.id}/submit`).then(() => program);
+      return response.data.data;
     },
     onSuccess: (program) => router.push(`/dashboard/volunteer-programs/${program.id}`),
     onError: (requestError: any) => setError(requestError.response?.data?.message || "Gagal membuat program volunteer."),
@@ -71,6 +71,7 @@ export default function CreateVolunteerProgramPage() {
     }
     if (step === 5) {
       if (!Number.isInteger(form.capacity) || form.capacity < 1) return setError("Kuota minimal 1.");
+      if (form.registrationOpensAt && form.registrationDeadline && new Date(form.registrationOpensAt) >= new Date(form.registrationDeadline)) return setError("Tanggal buka harus sebelum batas pendaftaran.");
       if (form.registrationDeadline && new Date(form.registrationDeadline) >= new Date(form.startDate)) return setError("Batas pendaftaran harus sebelum program dimulai.");
     }
     setStep((previous) => Math.min(previous + 1, STEPS.length - 1));
@@ -99,9 +100,9 @@ export default function CreateVolunteerProgramPage() {
           {step === 2 && (<><label className={labelClass}>Lokasi Kegiatan<input className={inputClass} value={form.location} onChange={(event) => set("location", event.target.value)} placeholder="Kota atau alamat kegiatan" /></label><label className={labelClass}>Motivasi Calon Relawan (opsional)<textarea rows={3} className={inputClass} value={form.motivation} onChange={(event) => set("motivation", event.target.value)} /></label></>)}
           {step === 3 && (<div className="grid gap-4 sm:grid-cols-2"><label className={labelClass}>Mulai<input type="datetime-local" className={inputClass} value={form.startDate} onChange={(event) => set("startDate", event.target.value)} /></label><label className={labelClass}>Selesai<input type="datetime-local" className={inputClass} value={form.endDate} onChange={(event) => set("endDate", event.target.value)} /></label></div>)}
           {step === 4 && (<><label className={labelClass}>Persyaratan<textarea rows={4} className={inputClass} value={form.requirements} onChange={(event) => set("requirements", event.target.value)} placeholder="Syarat peserta, pengalaman, usia minimal, dll." /></label><label className={labelClass}>Tanggung Jawab<textarea rows={4} className={inputClass} value={form.responsibilities} onChange={(event) => set("responsibilities", event.target.value)} /></label><label className={labelClass}>Manfaat<textarea rows={4} className={inputClass} value={form.benefits} onChange={(event) => set("benefits", event.target.value)} /></label></>)}
-          {step === 5 && (<div className="grid gap-4 sm:grid-cols-2"><label className={labelClass}>Kuota Relawan<input type="number" min={1} className={inputClass} value={form.capacity} onChange={(event) => set("capacity", Number(event.target.value))} /></label><label className={labelClass}>Batas Pendaftaran<input type="datetime-local" className={inputClass} value={form.registrationDeadline} onChange={(event) => set("registrationDeadline", event.target.value)} /></label></div>)}
+           {step === 5 && (<div className="grid gap-4 sm:grid-cols-2"><label className={labelClass}>Kuota Relawan<input type="number" min={1} className={inputClass} value={form.capacity} onChange={(event) => set("capacity", Number(event.target.value))} /></label><label className={labelClass}>Buka Pendaftaran<input type="datetime-local" className={inputClass} value={form.registrationOpensAt} onChange={(event) => set("registrationOpensAt", event.target.value)} /></label><label className={labelClass}>Batas Pendaftaran<input type="datetime-local" className={inputClass} value={form.registrationDeadline} onChange={(event) => set("registrationDeadline", event.target.value)} /></label></div>)}
           {step === 6 && (<><label className={labelClass}>PIC (Nama)<input className={inputClass} value={form.picName} onChange={(event) => set("picName", event.target.value)} /></label><label className={labelClass}>Kontak PIC<input className={inputClass} value={form.picContact} onChange={(event) => set("picContact", event.target.value)} /></label></>)}
-          {step === 7 && (<div className="space-y-3 text-sm"><h2 className="font-bold text-komuna-navy">Ringkasan</h2><dl className="divide-y divide-slate-100"><div className="flex justify-between py-2"><dt className="font-bold text-slate-500">Judul</dt><dd className="text-slate-700">{form.title}</dd></div><div className="flex justify-between py-2"><dt className="font-bold text-slate-500">Jenis</dt><dd className="text-slate-700">{form.organizerType === "COMMUNITY" ? "Komunitas" : "Independent"}</dd></div><div className="flex justify-between py-2"><dt className="font-bold text-slate-500">Lokasi</dt><dd className="text-slate-700">{form.location || "-"}</dd></div><div className="flex justify-between py-2"><dt className="font-bold text-slate-500">Kuota</dt><dd className="text-slate-700">{form.capacity}</dd></div><div className="flex justify-between py-2"><dt className="font-bold text-slate-500">Batas Pendaftaran</dt><dd className="text-slate-700">{form.registrationDeadline ? new Date(form.registrationDeadline).toLocaleString("id-ID") : "-"}</dd></div></dl></div>)}
+          {step === 7 && (<div className="space-y-3 text-sm"><h2 className="font-bold text-komuna-navy">Ringkasan</h2><dl className="divide-y divide-slate-100"><div className="flex justify-between py-2"><dt className="font-bold text-slate-500">Judul</dt><dd className="text-slate-700">{form.title}</dd></div><div className="flex justify-between py-2"><dt className="font-bold text-slate-500">Jenis</dt><dd className="text-slate-700">{form.organizerType === "COMMUNITY" ? "Komunitas" : "Independent"}</dd></div><div className="flex justify-between py-2"><dt className="font-bold text-slate-500">Lokasi</dt><dd className="text-slate-700">{form.location || "-"}</dd></div><div className="flex justify-between py-2"><dt className="font-bold text-slate-500">Kuota</dt><dd className="text-slate-700">{form.capacity}</dd></div><div className="flex justify-between py-2"><dt className="font-bold text-slate-500">Buka Pendaftaran</dt><dd className="text-slate-700">{form.registrationOpensAt ? new Date(form.registrationOpensAt).toLocaleString("id-ID") : "-"}</dd></div><div className="flex justify-between py-2"><dt className="font-bold text-slate-500">Batas Pendaftaran</dt><dd className="text-slate-700">{form.registrationDeadline ? new Date(form.registrationDeadline).toLocaleString("id-ID") : "-"}</dd></div></dl></div>)}
         </div>
         <div className="flex items-center justify-between border-t border-slate-100 px-5 py-4 sm:px-6">
           <button type="button" disabled={step === 0} onClick={goBack} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 disabled:opacity-40">Kembali</button>

@@ -1,4 +1,5 @@
 import { prisma } from "@komunaid/database";
+import { isRegistrationOpen } from "./content-lifecycle";
 
 const ACTIVE_APPLICATION_STATUSES = ["PENDING", "ACCEPTED"];
 
@@ -8,15 +9,16 @@ export class VolunteerProgramApplicationError extends Error {
 
 export async function applyToVolunteerProgram(input: { programId: string; userId: string; actorRole: string; motivation?: string }) {
   return prisma.$transaction(async (tx) => {
-    const rows = await tx.$queryRaw<Array<{ id: string; status: string; capacity: number; registrationDeadline: Date | null; organizerUserId: string; deletedAt: Date | null }>>`
-      SELECT \`id\`, \`status\`, \`capacity\`, \`registrationDeadline\`, \`organizerUserId\`, \`deletedAt\`
+    const rows = await tx.$queryRaw<Array<{ id: string; status: string; capacity: number; registrationOpensAt: Date | null; registrationDeadline: Date | null; organizerUserId: string; deletedAt: Date | null }>>`
+      SELECT \`id\`, \`status\`, \`capacity\`, \`registrationOpensAt\`, \`registrationDeadline\`, \`organizerUserId\`, \`deletedAt\`
       FROM \`volunteer_programs\` WHERE \`id\` = ${input.programId} FOR UPDATE
     `;
     const program = rows[0];
     if (!program || program.deletedAt) throw new VolunteerProgramApplicationError("PROGRAM_NOT_FOUND");
     if (program.organizerUserId === input.userId) throw new VolunteerProgramApplicationError("ORGANIZER_CANNOT_APPLY");
-    if (program.status !== "REGISTRATION_OPEN") throw new VolunteerProgramApplicationError("REGISTRATION_NOT_OPEN");
-    if (program.registrationDeadline && program.registrationDeadline < new Date()) throw new VolunteerProgramApplicationError("REGISTRATION_DEADLINE_PASSED");
+    const now = new Date();
+    if (!isRegistrationOpen({ ...program, now })) throw new VolunteerProgramApplicationError("REGISTRATION_NOT_OPEN");
+    if (program.registrationDeadline && program.registrationDeadline <= now) throw new VolunteerProgramApplicationError("REGISTRATION_DEADLINE_PASSED");
 
     const existing = await tx.volunteerProgramApplication.findUnique({ where: { volunteerProgramId_userId: { volunteerProgramId: input.programId, userId: input.userId } } });
     if (existing && ACTIVE_APPLICATION_STATUSES.includes(existing.status)) throw new VolunteerProgramApplicationError("VOLUNTEER_ALREADY_APPLIED");

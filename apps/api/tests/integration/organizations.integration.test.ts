@@ -81,7 +81,7 @@ describe("Private organization access", () => {
     expect(prisma.organization.findUnique).toHaveBeenCalledWith(expect.objectContaining({
       include: expect.objectContaining({
         events: expect.objectContaining({
-          where: expect.objectContaining({ status: { in: ["PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"] }, visibility: "PUBLIC", deletedAt: null }),
+          where: expect.objectContaining({ status: { in: ["SUBMITTED", "IN_REVIEW", "APPROVED", "PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"] }, visibility: "PUBLIC", deletedAt: null }),
         }),
       }),
     }));

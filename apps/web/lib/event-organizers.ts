@@ -21,5 +21,5 @@ export function eventOrganizers(profile: { communities?: ProfileMembership[]; or
     .filter((membership) => membership.status === ACTIVE_MEMBERSHIP_STATUS && ["OWNER", "ADMIN"].includes(membership.role))
     .map((membership) => ({ id: membership.id, name: membership.name, type: "organization" as const }));
 
-  return [...communities, ...organizations];
+  return communities;
 }

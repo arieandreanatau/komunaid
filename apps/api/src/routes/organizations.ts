@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { prisma } from "@komunaid/database";
+import { EVENT_PUBLIC_STATUSES } from "../services/content-lifecycle";
 import {
   createOrganizationSchema,
   updateOrganizationSchema,
@@ -199,7 +200,7 @@ organizationRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
       },
       events: {
         where: {
-          status: { in: ["PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"] },
+          status: { in: [...EVENT_PUBLIC_STATUSES] as any },
           visibility: "PUBLIC",
           deletedAt: null,
           eventDate: { gte: new Date() },
@@ -744,7 +745,7 @@ organizationRoutes.get(
           where: { organizationId: organizationId, status: "PENDING" },
         }),
         prisma.event.count({
-          where: { organizationId, status: "PUBLISHED", eventDate: { gte: new Date() } },
+          where: { organizationId, status: { in: [...EVENT_PUBLIC_STATUSES] as any }, eventDate: { gte: new Date() } },
         }),
         prisma.membershipHistory.findMany({
           where: { organizationId },

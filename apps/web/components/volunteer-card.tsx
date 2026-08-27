@@ -37,6 +37,7 @@ export const VOLUNTEER_STATUS_MAP: Record<string, { label: string; className: st
   COMPLETED: { label: "Selesai", className: "bg-gray-200 text-gray-700" },
   CANCELLED: { label: "Dibatalkan", className: "bg-red-100 text-red-700" },
   UNDER_REVIEW: { label: "Dalam Review", className: "bg-yellow-100 text-yellow-700" },
+  SUBMITTED: { label: "Menunggu Review", className: "bg-yellow-100 text-yellow-700" },
   REVISION_REQUIRED: { label: "Perlu Revisi", className: "bg-yellow-100 text-yellow-700" },
   APPROVED: { label: "Disetujui", className: "bg-green-100 text-green-700" },
 };

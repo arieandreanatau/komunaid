@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { prisma } from "@komunaid/database";
+import { EVENT_PUBLIC_STATUSES } from "../services/content-lifecycle";
 import {
   createCommunitySchema,
   updateCommunitySchema,
@@ -34,6 +35,25 @@ import type { AuthUser } from "../middleware/auth";
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
 
 export const communityRoutes = new Hono<Env>();
+
+async function recordCommunityStatusChange(input: {
+  communityId: string;
+  fromStatus: string;
+  toStatus: string;
+  actorId: string;
+  reason?: string | null;
+}) {
+  if (!("communityStatusHistory" in prisma)) return;
+  await prisma.communityStatusHistory.create({
+    data: {
+      communityId: input.communityId,
+      fromStatus: input.fromStatus as never,
+      toStatus: input.toStatus as never,
+      actorId: input.actorId,
+      reason: input.reason || undefined,
+    },
+  });
+}
 
 // ==========================================
 // 1. LIST COMMUNITIES (Public)
@@ -411,6 +431,23 @@ communityRoutes.get(
   }
 );
 
+communityRoutes.get("/:communityId/status-history", authMiddleware, async (c) => {
+  const user = c.get("user");
+  const communityId = c.req.param("communityId") as string;
+  const community = await prisma.community.findFirst({
+    where: { id: communityId, ownerId: user.id, deletedAt: null },
+    select: { id: true },
+  });
+  if (!community) return c.json({ success: false, message: "Komunitas tidak ditemukan" }, 404);
+
+  const history = await prisma.communityStatusHistory.findMany({
+    where: { communityId },
+    orderBy: { createdAt: "asc" },
+    include: { actor: { select: { id: true, name: true } } },
+  });
+  return c.json({ success: true, data: history });
+});
+
 // ==========================================
 // 2. GET COMMUNITY BY SLUG (Public)
 // ==========================================
@@ -450,7 +487,7 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
         where: {
           deletedAt: null,
           visibility: "PUBLIC",
-          status: { in: ["PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"] },
+          status: { in: [...EVENT_PUBLIC_STATUSES] as any },
         },
         orderBy: { eventDate: "asc" },
         take: 20,
@@ -899,6 +936,13 @@ communityRoutes.post(
       afterData: { status: "PENDING" },
     });
 
+    await recordCommunityStatusChange({
+      communityId,
+      fromStatus: community.status,
+      toStatus: "PENDING",
+      actorId: authUser.id,
+    });
+
     const platformAdmins = await prisma.userRole.findMany({
       where: { role: "PLATFORM_ADMIN" },
       select: { userId: true },
@@ -1103,7 +1147,7 @@ communityRoutes.get(
           where: { communityId, status: "PENDING" },
         }),
         prisma.event.count({
-          where: { communityId, status: "PUBLISHED", eventDate: { gte: new Date() } },
+          where: { communityId, status: { in: [...EVENT_PUBLIC_STATUSES] as any }, eventDate: { gte: new Date() } },
         }),
         prisma.membershipHistory.findMany({
           where: { communityId },
@@ -2598,7 +2642,7 @@ communityRoutes.get(
       prisma.event.count({
         where: {
           communityId,
-          status: { in: ["PUBLISHED", "REGISTRATION_OPEN", "ONGOING"] },
+          status: { in: [...EVENT_PUBLIC_STATUSES] as any },
           deletedAt: null,
         },
       }),

@@ -20,13 +20,14 @@ import { sanitizeText } from "../lib/xss";
 import { createWithUniqueSlug } from "../lib/slug";
 import { sendEmail } from "../services/email";
 import { transitionVolunteerProgram, VOLUNTEER_PROGRAM_TRANSITIONS, VolunteerProgramTransitionError } from "../services/volunteer-program-transition";
+import { VOLUNTEER_PUBLIC_STATUSES, isRegistrationOpen, registrationState } from "../services/content-lifecycle";
 import { applyToVolunteerProgram, transitionVolunteerProgramApplication, VolunteerProgramApplicationError } from "../services/volunteer-program-application";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
 
 export const volunteerProgramRoutes = new Hono<Env>();
 
-const PUBLIC_STATUSES = ["SUBMITTED", "UNDER_REVIEW", "SCHEDULED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"];
+const PUBLIC_STATUSES = [...VOLUNTEER_PUBLIC_STATUSES];
 const TERMINAL_STATUSES = ["COMPLETED", "CANCELLED", "ARCHIVED"];
 const ORGANIZER_TRANSITIONS = new Set(["SCHEDULED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED", "CANCELLED", "ARCHIVED"]);
 
@@ -34,15 +35,18 @@ function parseDate(value: string) {
   return new Date(value);
 }
 
-function datesAreValid(data: { registrationDeadline?: string; startDate?: string; endDate?: string }, requireFutureStart = false) {
+function datesAreValid(data: { registrationOpensAt?: string; registrationDeadline?: string; startDate?: string; endDate?: string }, requireFutureStart = false) {
+  const opensAt = data.registrationOpensAt ? parseDate(data.registrationOpensAt) : undefined;
   const startDate = data.startDate ? parseDate(data.startDate) : undefined;
   const endDate = data.endDate ? parseDate(data.endDate) : undefined;
   const deadline = data.registrationDeadline ? parseDate(data.registrationDeadline) : undefined;
   if (startDate && (Number.isNaN(startDate.getTime()) || (requireFutureStart && startDate <= new Date()))) return false;
   if (endDate && Number.isNaN(endDate.getTime())) return false;
   if (deadline && Number.isNaN(deadline.getTime())) return false;
+  if (opensAt && Number.isNaN(opensAt.getTime())) return false;
   if (startDate && endDate && endDate <= startDate) return false;
   if (deadline && startDate && deadline >= startDate) return false;
+  if (opensAt && deadline && opensAt >= deadline) return false;
   return true;
 }
 
@@ -163,10 +167,13 @@ function detail(program: any, userId?: string, canManage = false) {
     description: program.description,
     location: program.location,
     capacity: program.capacity,
+    registrationOpensAt: program.registrationOpensAt,
     registrationDeadline: program.registrationDeadline,
     startDate: program.startDate,
     endDate: program.endDate,
     status: program.status,
+    registrationStatus: registrationState(program),
+    canApply: isRegistrationOpen(program),
     organizerType: program.organizerType,
     organizer: program.organizerType === "COMMUNITY" ? program.community : program.organizerUser,
     applicationCount: program._count.applications,
@@ -196,7 +203,7 @@ volunteerProgramRoutes.get("/", optionalAuthMiddleware, async (c) => {
   const sort = url.searchParams.get("sort") === "asc" ? "asc" : "desc";
   const orderByRaw = url.searchParams.get("orderBy") || "startDate";
   const where: any = { deletedAt: null, status: { in: PUBLIC_STATUSES } };
-  if (overrideStatus && PUBLIC_STATUSES.includes(overrideStatus)) {
+  if (overrideStatus && PUBLIC_STATUSES.includes(overrideStatus as (typeof PUBLIC_STATUSES)[number])) {
     where.status = overrideStatus;
   }
   if (search) where.OR = [{ title: { contains: search } }, { description: { contains: search } }, { location: { contains: search } }];
@@ -240,7 +247,8 @@ volunteerProgramRoutes.get("/", optionalAuthMiddleware, async (c) => {
         description: program.description,
         location: program.location,
         capacity: program.capacity,
-        registrationDeadline: program.registrationDeadline,
+         registrationOpensAt: program.registrationOpensAt,
+         registrationDeadline: program.registrationDeadline,
         startDate: program.startDate,
         endDate: program.endDate,
         status: program.status,
@@ -287,7 +295,7 @@ volunteerProgramRoutes.post("/independent-proposals", authMiddleware, validate(c
     prisma.volunteerProgram.create({
       data: {
         title: sanitizeText(data.title) ?? data.title, description: sanitizeText(data.description) ?? data.description, location: sanitizeText(data.location) ?? data.location,
-        capacity: data.capacity, registrationDeadline: data.registrationDeadline ? parseDate(data.registrationDeadline) : null,
+         capacity: data.capacity, registrationOpensAt: data.registrationOpensAt ? parseDate(data.registrationOpensAt) : null, registrationDeadline: data.registrationDeadline ? parseDate(data.registrationDeadline) : null,
         startDate: parseDate(data.startDate), endDate: parseDate(data.endDate), slug,
         organizerType: "INDEPENDENT", organizerUserId: user.id, status: "DRAFT",
       },
@@ -295,8 +303,14 @@ volunteerProgramRoutes.post("/independent-proposals", authMiddleware, validate(c
     data.title
   );
   const submitted = await transitionVolunteerProgram({ programId: program.id, expectedStatus: "DRAFT", targetStatus: "SUBMITTED", actorId: user.id, actorRole: "PROGRAM_ORGANIZER" });
-  const queued = await transitionVolunteerProgram({ programId: program.id, expectedStatus: "SUBMITTED", targetStatus: "UNDER_REVIEW", actorId: user.id, actorRole: "SYSTEM", reason: "Proposal independent masuk antrean review" });
-  return c.json({ success: true, message: "Proposal volunteer dikirim untuk ditinjau", data: queued }, 201);
+  const admins = await prisma.userRole.findMany({ where: { role: "SUPER_ADMIN" }, include: { user: { select: { email: true } } } });
+  if (admins.length) {
+    try {
+      await notifyVolunteerProgram(admins.map((admin) => ({ userId: admin.userId, title: "Volunteer Baru Menunggu Review", message: `Program volunteer "${program.title}" telah dikirim untuk review.`, link: "/admin/volunteer/review-queue" })), "APPROVAL");
+      await sendEmail({ to: admins.map((admin) => admin.user.email), subject: `Volunteer baru menunggu review: ${program.title}`, html: `<p>Program volunteer <strong>${program.title}</strong> telah dikirim untuk review.</p>` });
+    } catch { /* notification delivery is non-critical */ }
+  }
+  return c.json({ success: true, message: "Proposal volunteer dikirim untuk ditinjau", data: submitted }, 201);
 });
 
 volunteerProgramRoutes.post("/communities/:communityId", authMiddleware, validate(createCommunityVolunteerProgramSchema), async (c) => {
@@ -312,7 +326,7 @@ volunteerProgramRoutes.post("/communities/:communityId", authMiddleware, validat
     prisma.volunteerProgram.create({
       data: {
         title: sanitizeText(data.title) ?? data.title, description: sanitizeText(data.description) ?? data.description, location: sanitizeText(data.location) ?? data.location,
-        capacity: data.capacity, registrationDeadline: data.registrationDeadline ? parseDate(data.registrationDeadline) : null,
+         capacity: data.capacity, registrationOpensAt: data.registrationOpensAt ? parseDate(data.registrationOpensAt) : null, registrationDeadline: data.registrationDeadline ? parseDate(data.registrationDeadline) : null,
         startDate: parseDate(data.startDate), endDate: parseDate(data.endDate), slug,
         organizerType: "COMMUNITY", communityId, organizerUserId: user.id, status: "DRAFT",
       },
@@ -321,13 +335,14 @@ volunteerProgramRoutes.post("/communities/:communityId", authMiddleware, validat
   );
    await createAuditLog({ userId: user.id, actionType: "VOLUNTEER_PROGRAM_CREATE", resourceName: "VolunteerProgram", resourceId: program.id, afterData: { organizerType: "COMMUNITY", communityId } });
    const submitted = await transitionVolunteerProgram({ programId: program.id, expectedStatus: "DRAFT", targetStatus: "SUBMITTED", actorId: user.id, actorRole: await volunteerProgramActorRole(user.id, program) });
-   const queued = await transitionVolunteerProgram({ programId: program.id, expectedStatus: "SUBMITTED", targetStatus: "UNDER_REVIEW", actorId: user.id, actorRole: "SYSTEM", reason: "Program komunitas masuk antrean review" });
    const admins = await prisma.userRole.findMany({ where: { role: "SUPER_ADMIN" }, include: { user: { select: { email: true } } } });
-   if (admins.length) {
-     await notifyVolunteerProgram(admins.map((admin) => ({ userId: admin.userId, title: "Volunteer Baru Menunggu Review", message: `Program volunteer "${program.title}" telah dikirim untuk review.`, link: "/admin/volunteer/review-queue" })), "APPROVAL");
-     await sendEmail({ to: admins.map((admin) => admin.user.email), subject: `Volunteer baru menunggu review: ${program.title}`, html: `<p>Program volunteer <strong>${program.title}</strong> telah dikirim untuk review.</p><p><a href="${process.env.APP_URL || "http://localhost:3000"}/admin/volunteer/review-queue">Buka antrean volunteer</a></p>` });
-   }
-   return c.json({ success: true, message: "Program volunteer komunitas dikirim untuk review", data: queued }, 201);
+    if (admins.length) {
+      try {
+        await notifyVolunteerProgram(admins.map((admin) => ({ userId: admin.userId, title: "Volunteer Baru Menunggu Review", message: `Program volunteer "${program.title}" telah dikirim untuk review.`, link: "/admin/volunteer/review-queue" })), "APPROVAL");
+        await sendEmail({ to: admins.map((admin) => admin.user.email), subject: `Volunteer baru menunggu review: ${program.title}`, html: `<p>Program volunteer <strong>${program.title}</strong> telah dikirim untuk review.</p><p><a href="${process.env.APP_URL || "http://localhost:3000"}/admin/volunteer/review-queue">Buka antrean volunteer</a></p>` });
+      } catch { /* notification delivery is non-critical */ }
+    }
+    return c.json({ success: true, message: "Program volunteer komunitas dikirim untuk review", data: submitted }, 201);
 });
 
 // Scoped manager discovery. A coordinator sees programs for only communities
@@ -357,8 +372,7 @@ volunteerProgramRoutes.post("/:programId/submit", authMiddleware, async (c) => {
   if (program.status !== "DRAFT" && program.status !== "REVISION_REQUIRED") return c.json({ success: false, message: "Program tidak dapat dikirim pada status ini" }, 400);
   if (program.status === "REVISION_REQUIRED" && (!program.reviewedAt || program.updatedAt <= program.reviewedAt)) return c.json({ success: false, message: "Simpan revisi sebelum mengirim ulang" }, 400);
   const submitted = await transitionVolunteerProgram({ programId: program.id, expectedStatus: program.status, targetStatus: "SUBMITTED", actorId: user.id, actorRole: await volunteerProgramActorRole(user.id, program) });
-  const queued = await transitionVolunteerProgram({ programId: program.id, expectedStatus: "SUBMITTED", targetStatus: "UNDER_REVIEW", actorId: user.id, actorRole: "SYSTEM", reason: "Program masuk antrean review" });
-  return c.json({ success: true, data: queued });
+  return c.json({ success: true, data: submitted });
 });
 
 volunteerProgramRoutes.post("/:programId/resubmit", authMiddleware, async (c) => {
@@ -368,8 +382,7 @@ volunteerProgramRoutes.post("/:programId/resubmit", authMiddleware, async (c) =>
   if (program.organizerType !== "INDEPENDENT" || program.organizerUserId !== user.id || program.status !== "REVISION_REQUIRED") return c.json({ success: false, message: "Proposal tidak dapat dikirim ulang" }, 403);
   if (!program.reviewedAt || program.updatedAt <= program.reviewedAt) return c.json({ success: false, message: "Simpan revisi proposal sebelum mengirim ulang" }, 400);
   const submitted = await transitionVolunteerProgram({ programId: program.id, expectedStatus: "REVISION_REQUIRED", targetStatus: "SUBMITTED", actorId: user.id, actorRole: "PROGRAM_ORGANIZER", reviewNote: null });
-  const updated = await transitionVolunteerProgram({ programId: program.id, expectedStatus: submitted.status, targetStatus: "UNDER_REVIEW", actorId: user.id, actorRole: "SYSTEM", reason: "Revisi dikirim ulang" });
-  return c.json({ success: true, data: updated });
+  return c.json({ success: true, data: submitted });
 });
 
 volunteerProgramRoutes.get("/my/saved", authMiddleware, async (c) => {
@@ -387,7 +400,7 @@ volunteerProgramRoutes.get("/my/saved", authMiddleware, async (c) => {
 
 volunteerProgramRoutes.get("/admin/review-queue", authMiddleware, requireSuperAdmin(), async (c) => {
   const programs = await prisma.volunteerProgram.findMany({
-    where: { status: "UNDER_REVIEW", deletedAt: null },
+    where: { status: { in: ["SUBMITTED", "UNDER_REVIEW"] }, deletedAt: null },
     include: {
       organizerUser: { select: { id: true, name: true, email: true, avatar: true } },
       community: { select: { id: true, name: true } },
@@ -522,7 +535,7 @@ volunteerProgramRoutes.get("/detail/:slug", optionalAuthMiddleware, async (c) =>
     where: { slug: c.req.param("slug") },
     include: { community: { select: { id: true, name: true, slug: true } }, organizerUser: { select: { id: true, name: true, avatar: true } }, _count: { select: { applications: true } } },
   });
-  if (!program || program.deletedAt || !PUBLIC_STATUSES.includes(program.status)) return c.json({ success: false, message: "Program tidak ditemukan" }, 404);
+  if (!program || program.deletedAt || !PUBLIC_STATUSES.includes(program.status as (typeof PUBLIC_STATUSES)[number])) return c.json({ success: false, message: "Program tidak ditemukan" }, 404);
   const [userApplication, acceptedCount, isSaved] = await Promise.all([
     user ? prisma.volunteerProgramApplication.findUnique({ where: { volunteerProgramId_userId: { volunteerProgramId: program.id, userId: user.id } } }) : Promise.resolve(null),
     prisma.volunteerProgramApplication.count({ where: { volunteerProgramId: program.id, status: "ACCEPTED" } }),
@@ -531,7 +544,7 @@ volunteerProgramRoutes.get("/detail/:slug", optionalAuthMiddleware, async (c) =>
   const applicationCount = program._count.applications;
   return c.json({ success: true, data: {
     id: program.id, title: program.title, slug: program.slug, description: program.description, status: program.status,
-    registrationDeadline: program.registrationDeadline, activityStartDate: program.startDate, activityEndDate: program.endDate,
+    registrationOpensAt: program.registrationOpensAt, registrationDeadline: program.registrationDeadline, registrationStatus: registrationState(program), canApply: isRegistrationOpen(program), activityStartDate: program.startDate, activityEndDate: program.endDate,
     location: program.location,
     coverImage: null, thumbnail: null, createdBy: program.organizerUser,
     organizer: program.organizerType === "COMMUNITY" ? program.community : program.organizerUser,
@@ -580,6 +593,7 @@ async function discoveryPrograms(where: any, orderBy: any, take: number) {
     startDate: program.startDate,
     endDate: program.endDate,
     registrationDeadline: program.registrationDeadline,
+    registrationOpensAt: program.registrationOpensAt,
     createdAt: program.createdAt,
     capacity: program.capacity,
     organizer: program.organizerType === "COMMUNITY" ? program.community : program.organizerUser,
@@ -629,7 +643,7 @@ volunteerProgramRoutes.get("/:programId", optionalAuthMiddleware, async (c) => {
   const ownApplication = user ? await prisma.volunteerProgramApplication.findUnique({ where: { volunteerProgramId_userId: { volunteerProgramId: program.id, userId: user.id } } }) : null;
   const canViewPrivate = user ? ownsIndependentProposal || await organizerAccess(user.id, program, false) : false;
   const canManage = user ? await organizerAccess(user.id, program, true) : false;
-  if (!PUBLIC_STATUSES.includes(program.status) && !canViewPrivate && !ownApplication) return c.json({ success: false, message: "Program tidak ditemukan" }, 404);
+  if (!PUBLIC_STATUSES.includes(program.status as (typeof PUBLIC_STATUSES)[number]) && !canViewPrivate && !ownApplication) return c.json({ success: false, message: "Program tidak ditemukan" }, 404);
   return c.json({ success: true, data: detail(program, user?.id, canManage) });
 });
 
@@ -639,7 +653,7 @@ volunteerProgramRoutes.patch("/:programId", authMiddleware, validate(updateVolun
   const program = await getProgram(c.req.param("programId") as string);
   if (!program || program.deletedAt) return c.json({ success: false, message: "Program tidak ditemukan" }, 404);
   if (!(await organizerAccess(user.id, program, true)) && !isEditableIndependentProposal(user.id, program)) return c.json({ success: false, message: "Management access tidak aktif" }, 403);
-  if (!datesAreValid({ registrationDeadline: data.registrationDeadline ?? program.registrationDeadline?.toISOString(), startDate: data.startDate ?? program.startDate.toISOString(), endDate: data.endDate ?? program.endDate.toISOString() })) return c.json({ success: false, message: "Rentang jadwal program tidak valid" }, 400);
+  if (!datesAreValid({ registrationOpensAt: data.registrationOpensAt ?? program.registrationOpensAt?.toISOString(), registrationDeadline: data.registrationDeadline ?? program.registrationDeadline?.toISOString(), startDate: data.startDate ?? program.startDate.toISOString(), endDate: data.endDate ?? program.endDate.toISOString() })) return c.json({ success: false, message: "Rentang jadwal program tidak valid" }, 400);
   if (data.capacity !== undefined) {
     const accepted = await prisma.volunteerProgramApplication.count({ where: { volunteerProgramId: program.id, status: "ACCEPTED" } });
     if (data.capacity < accepted) return c.json({ success: false, message: "Kuota tidak dapat lebih kecil dari peserta yang telah diterima" }, 400);
@@ -648,7 +662,7 @@ volunteerProgramRoutes.patch("/:programId", authMiddleware, validate(updateVolun
     where: { id: program.id },
     data: {
       ...(data.title ? { title: sanitizeText(data.title) ?? data.title } : {}), ...(data.description ? { description: sanitizeText(data.description) ?? data.description } : {}), ...(data.location ? { location: sanitizeText(data.location) ?? data.location } : {}),
-      ...(data.capacity ? { capacity: data.capacity } : {}), ...(data.registrationDeadline ? { registrationDeadline: parseDate(data.registrationDeadline) } : {}),
+      ...(data.capacity ? { capacity: data.capacity } : {}), ...(data.registrationOpensAt ? { registrationOpensAt: parseDate(data.registrationOpensAt) } : {}), ...(data.registrationDeadline ? { registrationDeadline: parseDate(data.registrationDeadline) } : {}),
       ...(data.startDate ? { startDate: parseDate(data.startDate) } : {}), ...(data.endDate ? { endDate: parseDate(data.endDate) } : {}),
     },
   });
@@ -798,15 +812,24 @@ volunteerProgramRoutes.post("/:programId/review", authMiddleware, requireSuperAd
   if (program.organizerUserId === admin.id) return c.json({ success: false, message: "Superadmin tidak dapat mereview program sendiri" }, 403);
   if (!["UNDER_REVIEW", "SUBMITTED"].includes(program.status)) return c.json({ success: false, message: "Program tidak dalam antrean review" }, 400);
   const status = action === "APPROVE" ? "APPROVED" : action === "REJECT" ? "REJECTED" : "REVISION_REQUIRED";
-  const updated = await transitionVolunteerProgram({ programId: program.id, expectedStatus: program.status, targetStatus: status, actorId: admin.id, actorRole: "SUPER_ADMIN", reason: note, reviewNote: note || null, reviewedAt: new Date(), reviewedById: admin.id }).catch((error) => error instanceof VolunteerProgramTransitionError && error.message === "VOLUNTEER_PROGRAM_STATUS_CHANGED" ? null : Promise.reject(error));
+  const inReview = program.status === "SUBMITTED"
+    ? await transitionVolunteerProgram({ programId: program.id, expectedStatus: "SUBMITTED", targetStatus: "UNDER_REVIEW", actorId: admin.id, actorRole: "SUPER_ADMIN", reason: "Review diambil oleh superadmin" })
+    : program;
+  const updated = await transitionVolunteerProgram({ programId: program.id, expectedStatus: inReview.status, targetStatus: status, actorId: admin.id, actorRole: "SUPER_ADMIN", reason: note, reviewNote: note || null, reviewedAt: new Date(), reviewedById: admin.id }).catch((error) => error instanceof VolunteerProgramTransitionError && error.message === "VOLUNTEER_PROGRAM_STATUS_CHANGED" ? null : Promise.reject(error));
   if (!updated) return c.json({ success: false, message: "Program sudah direview oleh administrator lain" }, 409);
   if (action === "APPROVE") {
     await prisma.volunteerProgramOrganizerAccess.upsert({ where: { volunteerProgramId_userId: { volunteerProgramId: program.id, userId: program.organizerUserId } }, create: { volunteerProgramId: program.id, userId: program.organizerUserId, startsAt: new Date(), expiresAt: organizerAccessExpiry(program.endDate), status: "ACTIVE" }, update: { startsAt: new Date(), expiresAt: organizerAccessExpiry(program.endDate), status: "ACTIVE", revokedAt: null } });
-  } else {
-    await notifyVolunteerProgram(
-      [{ userId: program.organizerUserId, title: action === "REJECT" ? "Program Volunteer Ditolak" : "Program Volunteer Perlu Revisi", message: action === "REJECT" ? `Program volunteer "${program.title}" tidak disetujui.` : `Program volunteer "${program.title}" perlu revisi sebelum dapat dipublikasikan.`, link: `/dashboard/volunteer-programs/${program.id}` }],
-      "SYSTEM"
-    );
+  }
+  const resultLabel = action === "APPROVE" ? "disetujui" : action === "REJECT" ? "ditolak" : "memerlukan revisi";
+  await notifyVolunteerProgram(
+    [{ userId: program.organizerUserId, title: `Program Volunteer ${resultLabel}`, message: `Program volunteer "${program.title}" ${resultLabel}.${note ? ` Catatan: ${note}` : ""}`, link: `/dashboard/volunteer-programs/${program.id}` }],
+    "APPROVAL"
+  );
+  const recipient = await prisma.user.findUnique({ where: { id: program.organizerUserId }, select: { email: true } });
+  if (recipient?.email) {
+    try {
+      await sendEmail({ to: recipient.email, subject: `Status review volunteer: ${program.title}`, html: `<p>Program volunteer <strong>${program.title}</strong> ${resultLabel}.</p>${note ? `<p>Catatan: ${note}</p>` : ""}` });
+    } catch { /* notification delivery is non-critical */ }
   }
   return c.json({ success: true, data: updated });
 });

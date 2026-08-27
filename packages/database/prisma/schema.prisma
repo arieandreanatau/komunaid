@@ -69,6 +69,7 @@ model User {
   eventAgendasCreated   EventAgenda[]          @relation("EventAgendaCreator")
   eventStatusHistory    EventStatusHistory[]   @relation("EventStatusActor")
   volunteerStatusHistory VolunteerStatusHistory[] @relation("VolunteerStatusActor")
+  communityStatusHistory CommunityStatusHistory[] @relation("CommunityStatusActor")
 
   @@index([status])
   @@index([deletedAt])
@@ -148,6 +149,7 @@ model Community {
   media               CommunityMedia[]
   statistics          CommunityStatistic[]
   membershipHistories MembershipHistory[]
+  statusHistory      CommunityStatusHistory[]
   savedBy             CommunitySave[]
 
   @@index([ownerId])
@@ -170,11 +172,30 @@ enum CommunityVisibility {
 enum CommunityStatus {
   DRAFT
   PENDING
+  UNDER_REVIEW
   APPROVED
   SUSPENDED
   ARCHIVED
   REJECTED
   REVISION_REQUIRED
+}
+
+model CommunityStatusHistory {
+  id          String          @id @default(cuid())
+  communityId String
+  fromStatus  CommunityStatus
+  toStatus    CommunityStatus
+  actorId     String
+  actorRole   String?
+  reason      String?         @db.Text
+  createdAt   DateTime        @default(now())
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  actor     User      @relation("CommunityStatusActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([communityId, createdAt])
+  @@index([actorId])
+  @@map("community_status_histories")
 }
 
 model CommunityMember {
@@ -835,6 +856,7 @@ model VolunteerProgram {
   description     String?                 @db.Text
   location        String?                 @db.VarChar(200)
   capacity        Int
+  registrationOpensAt DateTime?
   registrationDeadline DateTime?
   startDate       DateTime
   endDate         DateTime
@@ -866,6 +888,8 @@ model VolunteerProgram {
   @@index([organizerUserId, status], map: "vp_organizer_user_status_idx")
   @@index([organizerType, status], map: "vp_organizer_type_status_idx")
   @@index([status, startDate], map: "vp_status_start_date_idx")
+  @@index([registrationOpensAt], map: "vp_registration_opens_at_idx")
+  @@index([registrationDeadline], map: "vp_registration_deadline_idx")
   @@index([eventId], map: "vp_event_idx")
   @@index([deletedAt], map: "vp_deleted_at_idx")
   @@map("volunteer_programs")

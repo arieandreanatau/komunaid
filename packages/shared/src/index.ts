@@ -203,7 +203,8 @@ export const communityQuerySchema = z.object({
     z
       .enum([
         "DRAFT",
-        "PENDING_REVIEW",
+        "PENDING",
+        "UNDER_REVIEW",
         "APPROVED",
         "REJECTED",
         "SUSPENDED",
@@ -368,7 +369,7 @@ export const updateOrganizationLogoSchema = z.object({
 // EVENT SCHEMAS
 // ==========================================
 
-export const createEventSchema = z.object({
+const eventFields = z.object({
   title: z.string().min(3, "Judul minimal 3 karakter").max(200, "Judul maksimal 200 karakter"),
   description: z.string().max(5000, "Deskripsi maksimal 5000 karakter").optional(),
   coverImage: z.string().url("URL cover image tidak valid").optional(),
@@ -431,7 +432,17 @@ export const createEventSchema = z.object({
     .max(10, "Maksimal 10 tiket").optional(),
 });
 
-export const updateEventSchema = createEventSchema.partial();
+export const createEventSchema = eventFields.superRefine((data, ctx) => {
+  const start = new Date(data.eventDate).getTime();
+  const end = data.endDate ? new Date(data.endDate).getTime() : null;
+  const opensAt = data.registrationOpensAt ? new Date(data.registrationOpensAt).getTime() : null;
+  const deadline = data.registrationDeadline ? new Date(data.registrationDeadline).getTime() : null;
+  if (end !== null && end <= start) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Tanggal selesai harus setelah tanggal mulai", path: ["endDate"] });
+  if (opensAt !== null && deadline !== null && opensAt >= deadline) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Tanggal buka harus sebelum batas pendaftaran", path: ["registrationOpensAt"] });
+  if (deadline !== null && deadline >= start) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Batas pendaftaran harus sebelum tanggal event", path: ["registrationDeadline"] });
+});
+
+export const updateEventSchema = eventFields.partial();
 
 export const eventQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -548,27 +559,50 @@ export const assignVolunteerSchema = z.object({
 // VOLUNTEER PROGRAM SCHEMAS
 // ==========================================
 
-const volunteerProgramFields = z.object({
+const volunteerProgramBase = z.object({
   title: z.string().min(3, "Judul minimal 3 karakter").max(200),
   description: z.string().min(10, "Deskripsi minimal 10 karakter").max(5000),
   location: z.string().min(2, "Lokasi wajib diisi").max(200),
   capacity: z.number().int().min(1, "Kuota minimal 1"),
+  registrationOpensAt: z.string().datetime("Format tanggal tidak valid").optional(),
   registrationDeadline: z.string().datetime("Format tanggal tidak valid").optional(),
   startDate: z.string().datetime("Format tanggal tidak valid"),
   endDate: z.string().datetime("Format tanggal tidak valid"),
 });
 
-export const createIndependentVolunteerProgramSchema = volunteerProgramFields;
-
-export const createCommunityVolunteerProgramSchema = volunteerProgramFields.extend({
-  communityId: z.string().min(1, "Komunitas wajib dipilih"),
+const volunteerProgramFields = volunteerProgramBase.superRefine((data, ctx) => {
+  const opensAt = data.registrationOpensAt ? new Date(data.registrationOpensAt).getTime() : null;
+  const deadline = data.registrationDeadline ? new Date(data.registrationDeadline).getTime() : null;
+  const start = new Date(data.startDate).getTime();
+  const end = new Date(data.endDate).getTime();
+  if (opensAt !== null && deadline !== null && opensAt >= deadline) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Tanggal buka harus sebelum batas pendaftaran", path: ["registrationOpensAt"] });
+  if (deadline !== null && deadline >= start) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Batas pendaftaran harus sebelum mulai kegiatan", path: ["registrationDeadline"] });
+  if (start >= end) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Tanggal selesai harus setelah tanggal mulai", path: ["endDate"] });
 });
 
-export const updateVolunteerProgramSchema = volunteerProgramFields.partial();
+export const createIndependentVolunteerProgramSchema = volunteerProgramFields;
+
+export const createCommunityVolunteerProgramSchema = volunteerProgramBase.extend({
+  communityId: z.string().min(1, "Komunitas wajib dipilih"),
+}).superRefine((data, ctx) => {
+  const opensAt = data.registrationOpensAt ? new Date(data.registrationOpensAt).getTime() : null;
+  const deadline = data.registrationDeadline ? new Date(data.registrationDeadline).getTime() : null;
+  const start = new Date(data.startDate).getTime();
+  const end = new Date(data.endDate).getTime();
+  if (opensAt !== null && deadline !== null && opensAt >= deadline) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Tanggal buka harus sebelum batas pendaftaran", path: ["registrationOpensAt"] });
+  if (deadline !== null && deadline >= start) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Batas pendaftaran harus sebelum mulai kegiatan", path: ["registrationDeadline"] });
+  if (start >= end) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Tanggal selesai harus setelah tanggal mulai", path: ["endDate"] });
+});
+
+export const updateVolunteerProgramSchema = volunteerProgramBase.partial();
 
 export const reviewVolunteerProgramSchema = z.object({
   action: z.enum(["APPROVE", "REJECT", "REQUEST_REVISION"]),
   note: z.string().max(2000).optional(),
+}).superRefine((data, ctx) => {
+  if (["REJECT", "REQUEST_REVISION"].includes(data.action) && !data.note?.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Catatan reviewer wajib diisi", path: ["note"] });
+  }
 });
 
 export const transitionVolunteerProgramSchema = z.object({

@@ -110,8 +110,8 @@ describe("Volunteer program route authorization", () => {
     expect(update.status).toBe(200);
     const resubmitted = await app.request("/api/v1/volunteer-programs/program-1/resubmit", { method: "POST", headers: authHeaders(accessToken, true) });
     expect(resubmitted.status).toBe(200);
-    expect(prisma.volunteerProgramStatusHistory.create).toHaveBeenCalledTimes(2);
-    expect(current.status).toBe("UNDER_REVIEW");
+    expect(prisma.volunteerProgramStatusHistory.create).toHaveBeenCalledTimes(1);
+    expect(current.status).toBe("SUBMITTED");
   });
 
   it("returns conflict when another superadmin already reviewed proposal", async () => {

@@ -9,6 +9,25 @@ import type { AuthUser } from "../../middleware/auth";
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
 export const communitiesRoutes = new Hono<Env>();
 
+async function recordCommunityStatusChange(
+  communityId: string,
+  fromStatus: string,
+  toStatus: string,
+  actorId: string,
+  reason?: string | null,
+) {
+  if (!("communityStatusHistory" in prisma)) return;
+  await prisma.communityStatusHistory.create({
+    data: {
+      communityId,
+      fromStatus: fromStatus as never,
+      toStatus: toStatus as never,
+      actorId,
+      reason: reason || undefined,
+    },
+  });
+}
+
 function pagination(url: string) {
   const u = new URL(url);
   const page = Math.max(1, parseInt(u.searchParams.get("page") || "1"));
@@ -92,13 +111,13 @@ communitiesRoutes.get("/communities/review-queue", async (c) => {
     ];
   }
   if (status && status !== "ALL") {
-    if (["PENDING", "REVISION_REQUIRED"].includes(status)) {
+    if (["PENDING", "UNDER_REVIEW", "REVISION_REQUIRED"].includes(status)) {
       where.status = status;
     } else {
-      where.status = { in: ["PENDING", "REVISION_REQUIRED"] };
+      where.status = { in: ["PENDING", "UNDER_REVIEW", "REVISION_REQUIRED"] };
     }
   } else {
-    where.status = { in: ["PENDING", "REVISION_REQUIRED"] };
+    where.status = { in: ["PENDING", "UNDER_REVIEW", "REVISION_REQUIRED"] };
   }
 
   const allowedSort: Record<string, string> = { createdAt: "createdAt", name: "name", status: "status", submittedAt: "submittedAt" };
@@ -193,7 +212,7 @@ communitiesRoutes.put("/communities/:communityId/approve", async (c) => {
     return c.json({ success: false, message: "Komunitas tidak ditemukan" }, 404);
   }
 
-  if (!["PENDING", "REVISION_REQUIRED"].includes(community.status)) {
+  if (!["PENDING", "UNDER_REVIEW", "REVISION_REQUIRED"].includes(community.status)) {
     return c.json({ success: false, message: "Hanya komunitas pending/revisi yang dapat disetujui" }, 400);
   }
 
@@ -203,6 +222,7 @@ communitiesRoutes.put("/communities/:communityId/approve", async (c) => {
     where: { id: communityId },
     data: { status: "APPROVED", reviewedAt: new Date(), adminNote: null },
   });
+  await recordCommunityStatusChange(communityId, community.status, "APPROVED", authUser.id);
 
   const ownerMember = await prisma.communityMember.findFirst({
     where: { communityId, role: "OWNER" },
@@ -261,6 +281,7 @@ communitiesRoutes.put("/communities/:communityId/suspend", async (c) => {
     where: { id: communityId },
     data: { status: "SUSPENDED" },
   });
+  await recordCommunityStatusChange(communityId, community.status, "SUSPENDED", authUser.id);
 
   await createAuditLog({
     userId: authUser.id,
@@ -309,6 +330,7 @@ communitiesRoutes.put("/communities/:communityId/restore", async (c) => {
     where: { id: communityId },
     data: { status: "APPROVED" },
   });
+  await recordCommunityStatusChange(communityId, community.status, "APPROVED", authUser.id);
 
   await createAuditLog({
     userId: authUser.id,
@@ -351,6 +373,7 @@ communitiesRoutes.patch("/communities/:communityId/reject", validate(adminAction
     where: { id: communityId },
     data: { status: "REJECTED", adminNote: note || null, reviewedAt: new Date() },
   });
+  await recordCommunityStatusChange(communityId, community.status, "REJECTED", authUser.id, note);
 
   await prisma.notification.create({
     data: {
@@ -395,7 +418,7 @@ communitiesRoutes.patch("/communities/:communityId/request-revision", validate(a
     return c.json({ success: false, message: "Komunitas tidak ditemukan" }, 404);
   }
 
-  if (!["PENDING"].includes(community.status)) {
+  if (!["PENDING", "UNDER_REVIEW"].includes(community.status)) {
     return c.json({ success: false, message: "Hanya komunitas pending yang dapat diminta revisi" }, 400);
   }
 
@@ -403,6 +426,7 @@ communitiesRoutes.patch("/communities/:communityId/request-revision", validate(a
     where: { id: communityId },
     data: { status: "REVISION_REQUIRED", adminNote: note || null, reviewedAt: new Date() },
   });
+  await recordCommunityStatusChange(communityId, community.status, "REVISION_REQUIRED", authUser.id, note);
 
   await prisma.notification.create({
     data: {

@@ -102,15 +102,25 @@ const roleBadge: Record<string, string> = {
 };
 
 const statusBadge: Record<string, string> = {
+  DRAFT: "bg-slate-100 text-slate-700",
   PENDING: "bg-amber-100 text-amber-700",
+  UNDER_REVIEW: "bg-blue-100 text-blue-700",
   APPROVED: "bg-emerald-100 text-emerald-700",
   REJECTED: "bg-red-100 text-red-700",
+  REVISION_REQUIRED: "bg-orange-100 text-orange-700",
+  SUSPENDED: "bg-red-100 text-red-700",
+  ARCHIVED: "bg-slate-100 text-slate-700",
 };
 
 const statusLabel: Record<string, string> = {
+  DRAFT: "Draft",
   PENDING: "Menunggu",
+  UNDER_REVIEW: "Sedang direview",
   APPROVED: "Disetujui",
   REJECTED: "Ditolak",
+  REVISION_REQUIRED: "Perlu revisi",
+  SUSPENDED: "Ditangguhkan",
+  ARCHIVED: "Diarsipkan",
 };
 
 function formatActivityDetails(details: unknown): string | null {
@@ -730,6 +740,20 @@ function RingkasanTab({
 }) {
   return (
     <div className="space-y-6">
+      {community.status !== "APPROVED" && (
+        <div className={`rounded-xl border p-4 ${statusBadge[community.status] || "bg-slate-100 text-slate-700"}`} role="status">
+          <p className="text-sm font-bold">{statusLabel[community.status] || community.status}</p>
+          <p className="mt-1 text-sm opacity-90">
+            {community.status === "REVISION_REQUIRED"
+              ? "Perbarui data berdasarkan catatan reviewer, lalu kirim ulang."
+              : community.status === "DRAFT"
+                ? "Lengkapi profil komunitas sebelum dikirim untuk review."
+                : community.status === "SUSPENDED"
+                  ? "Komunitas tidak tampil publik sampai pembatasan dicabut."
+                  : "Status komunitas menentukan akses dan tindakan yang tersedia."}
+          </p>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
         {[
           ["Anggota", community.memberCount],
@@ -737,7 +761,7 @@ function RingkasanTab({
           ["Event", activeEvents],
           ["Volunteer", 0],
           ["Aktivitas", recentActivity.length],
-          ["Status", community.status === "ACTIVE" ? "Aktif" : community.status],
+          ["Status", statusLabel[community.status] || community.status],
         ].map(([label, value]) => (
           <div key={label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <p className="truncate text-xs font-medium text-slate-500">{label}</p>
@@ -753,10 +777,10 @@ function RingkasanTab({
             <Link href={`/dashboard/communities/${communityPath}/requests`} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-slate-700 hover:text-komuna-blue">
               Permintaan anggota <span className="font-bold text-amber-700">{pendingRequests}</span>
             </Link>
-            <Link href="#" className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-slate-700 hover:text-komuna-blue">
+             <Link href="/dashboard/events" className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-slate-700 hover:text-komuna-blue">
               Event menunggu review <span className="font-bold text-slate-500">0</span>
             </Link>
-            <Link href="#" className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-slate-700 hover:text-komuna-blue">
+             <Link href={`/dashboard/communities/${communityPath}/volunteer`} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-slate-700 hover:text-komuna-blue">
               Volunteer menunggu review <span className="font-bold text-slate-500">0</span>
             </Link>
           </div>

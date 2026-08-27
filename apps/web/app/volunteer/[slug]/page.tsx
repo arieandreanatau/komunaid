@@ -16,6 +16,8 @@ interface VolunteerProgramDetail {
   slug: string;
   description: string;
   status: string;
+  canApply?: boolean;
+  registrationOpensAt: string | null;
   location: string | null;
   registrationDeadline: string | null;
   activityStartDate: string;
@@ -285,7 +287,8 @@ export default function VolunteerDetailPage() {
   const deadlinePassed = opportunity.registrationDeadline ? new Date(opportunity.registrationDeadline).getTime() < Date.now() : false;
   const quotaFull = opportunity.slotsLeft <= 0;
   const hasActiveApp = Boolean(userApp && ["PENDING", "ACCEPTED"].includes(userApp.status));
-  const canApply = !hasActiveApp && opportunity.status === "REGISTRATION_OPEN" && !deadlinePassed && !quotaFull;
+  const canApply = !hasActiveApp && opportunity.canApply === true && !deadlinePassed && !quotaFull;
+  const registrationOpensAt = opportunity.registrationOpensAt ? formatDate(opportunity.registrationOpensAt) : null;
 
   return (
     <div className="min-h-screen flex flex-col bg-komuna-cream">
@@ -309,7 +312,7 @@ export default function VolunteerDetailPage() {
             </Link>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
             <div className="h-44 relative bg-gradient-to-br from-komuna-teal to-komuna-blue flex items-center justify-center">
               <span className="text-white text-6xl font-bold opacity-30">{opportunity.title.slice(0, 1)}</span>
               <span className={`absolute top-3 left-3 px-2.5 py-1 text-xs font-bold rounded-full bg-white/90 ${badgeClass(STATUS_STYLES, opportunity.status)}`}>
@@ -317,7 +320,13 @@ export default function VolunteerDetailPage() {
               </span>
             </div>
 
-            <div className="p-6">
+              <div className="p-6">
+                {(opportunity.status === "SUBMITTED" || opportunity.status === "UNDER_REVIEW") && (
+                  <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">Program ini sudah tampil untuk informasi publik, tetapi masih dalam proses review platform. Pendaftaran belum dibuka.</div>
+                )}
+                {(opportunity.status === "APPROVED" || opportunity.status === "SCHEDULED") && (
+                  <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">Program telah disetujui. {registrationOpensAt ? `Pendaftaran dibuka pada ${registrationOpensAt}.` : "Pendaftaran belum dibuka."}</div>
+                )}
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <h1 className="text-2xl font-bold text-komuna-navy">{opportunity.title}</h1>
