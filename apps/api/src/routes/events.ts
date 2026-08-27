@@ -10,6 +10,7 @@ import { xssSanitize, sanitizeText } from "../lib/xss";
 import { createWithUniqueSlug } from "../lib/slug";
 import { slugify } from "@komunaid/utils";
 import type { AuthUser } from "../middleware/auth";
+import { sendEmail } from "../services/email";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
 
@@ -46,7 +47,7 @@ async function canManageEvent(role: string | null, userId: string, event: any): 
 const VALID_TRANSITIONS: Record<string, string[]> = {
   DRAFT: ["SUBMITTED", "CANCELLED"],
   SUBMITTED: ["IN_REVIEW", "CANCELLED"],
-  IN_REVIEW: ["REVISION_REQUESTED", "APPROVED", "CANCELLED"],
+  IN_REVIEW: ["REVISION_REQUESTED", "REJECTED", "APPROVED", "CANCELLED"],
   REVISION_REQUESTED: ["RESUBMITTED", "CANCELLED"],
   RESUBMITTED: ["IN_REVIEW", "CANCELLED"],
   APPROVED: ["PUBLISHED", "CANCELLED"],
@@ -111,7 +112,7 @@ eventRoutes.get("/", optionalAuthMiddleware, validate(eventQuerySchema, "query")
   const where: any = {
     deletedAt: null,
     visibility: "PUBLIC",
-    status: { in: ["PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"] },
+    status: { in: ["SUBMITTED", "IN_REVIEW", "PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"] },
   };
 
   if (q.search) {
@@ -125,7 +126,7 @@ if (q.communityId) where.communityId = q.communityId;
   if (q.organizationId) where.organizationId = q.organizationId;
   if (q.categoryId) where.categories = { some: { categoryId: q.categoryId } };
   if (q.locationType) where.locationType = q.locationType;
-  if (q.status && ["PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"].includes(q.status)) {
+  if (q.status && ["SUBMITTED", "IN_REVIEW", "PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"].includes(q.status)) {
     where.status = q.status;
   }
 
@@ -173,7 +174,8 @@ if (q.communityId) where.communityId = q.communityId;
       allowWaitlist: e.allowWaitlist,
       status: e.status,
       visibility: e.visibility,
-      registeredCount: e._count.registrations,
+       registeredCount: e._count.registrations,
+       canRegister: e.status === "REGISTRATION_OPEN",
       community: e.community,
       organization: e.organization,
       createdBy: e.createdBy,
@@ -197,7 +199,7 @@ eventRoutes.get("/popular/upcoming", async (c) => {
   const eventWhere: Prisma.EventWhereInput = {
     deletedAt: null,
     visibility: "PUBLIC" as const,
-    status: { in: ["PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED"] },
+    status: { in: ["SUBMITTED", "IN_REVIEW", "PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED"] },
     eventDate: { gte: new Date() },
   };
   const ranked = await prisma.eventRegistration.groupBy({
@@ -309,7 +311,7 @@ eventRoutes.get("/featured", async (c) => {
     where: {
       deletedAt: null,
       visibility: "PUBLIC",
-      status: { in: ["PUBLISHED", "REGISTRATION_OPEN"] },
+    status: { in: ["SUBMITTED", "IN_REVIEW", "PUBLISHED", "REGISTRATION_OPEN"] },
     },
     include: {
       community: { select: { id: true, name: true, slug: true, logo: true } },
@@ -375,7 +377,7 @@ eventRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
 
   const role = user ? await getEventOrganizerRole(user.id, event) : null;
   const isOrganizer = user ? await canManageEvent(role, user.id, event) : false;
-  const isPublicEvent = event.visibility === "PUBLIC" && ["PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"].includes(event.status);
+  const isPublicEvent = event.visibility === "PUBLIC" && ["SUBMITTED", "IN_REVIEW", "PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"].includes(event.status);
   if (!isPublicEvent && !isOrganizer) {
     return c.json({ success: false, message: "Event tidak ditemukan" }, 404);
   }
@@ -603,6 +605,16 @@ eventRoutes.post("/", authMiddleware, validate(createEventSchema), async (c) => 
     afterData: { title: event.title, slug: event.slug, status: event.status },
   });
 
+  const submitted = await transitionEvent(event, "SUBMITTED", authUser.id, { submittedAt: new Date() });
+  const queued = await transitionEvent(submitted, "IN_REVIEW", authUser.id, { reason: "Event masuk antrean review" });
+  const admins = await prisma.userRole.findMany({ where: { role: "SUPER_ADMIN" }, include: { user: { select: { email: true } } } });
+  if (admins.length) {
+    await prisma.notification.createMany({
+      data: admins.map((admin) => ({ userId: admin.userId, title: "Event Baru Menunggu Review", message: `Event "${event.title}" telah dikirim untuk review.`, type: "APPROVAL" as const, link: `/admin/events/events` })),
+    });
+    await sendEmail({ to: admins.map((admin) => admin.user.email), subject: `Event baru menunggu review: ${event.title}`, html: `<p>Event <strong>${event.title}</strong> telah dikirim untuk review.</p><p><a href="${process.env.APP_URL || "http://localhost:3000"}/admin/events/events">Buka antrean event</a></p>` });
+  }
+
   return c.json({
     success: true,
     message: "Event berhasil dibuat",
@@ -610,7 +622,8 @@ eventRoutes.post("/", authMiddleware, validate(createEventSchema), async (c) => 
       id: event.id,
       title: event.title,
       slug: event.slug,
-      status: event.status,
+        status: queued.status,
+        canRegister: false,
       community: event.community,
       organization: event.organization,
       categories: event.categories.map((c) => c.category),
@@ -880,7 +893,7 @@ eventRoutes.post("/:eventId/review", authMiddleware, requireSuperAdmin(), valida
   if (!event || event.deletedAt) return c.json({ success: false, message: "Event tidak ditemukan" }, 404);
   if (event.createdById === reviewer.id) return c.json({ success: false, message: "Reviewer tidak dapat mereview event miliknya sendiri" }, 403);
 
-  const targetStatus = action === "APPROVE" ? "APPROVED" : action === "REJECT" ? "CANCELLED" : "REVISION_REQUESTED";
+  const targetStatus = action === "APPROVE" ? "APPROVED" : action === "REJECT" ? "REJECTED" : "REVISION_REQUESTED";
   const allowed = event.status === "SUBMITTED" || event.status === "RESUBMITTED";
   if (!allowed) return c.json({ success: false, message: "Event tidak dalam antrean review" }, 400);
 
@@ -899,6 +912,7 @@ eventRoutes.post("/:eventId/review", authMiddleware, requireSuperAdmin(), valida
     beforeData: { status: event.status },
     afterData: { status: targetStatus, action, note: note || null },
   });
+
   return c.json({ success: true, message: "Review event berhasil disimpan", data: { id: updated.id, status: updated.status } });
 });
 

@@ -18,6 +18,7 @@ import { validate } from "../middleware/validate";
 import { createAuditLog } from "../services/audit";
 import { sanitizeText } from "../lib/xss";
 import { createWithUniqueSlug } from "../lib/slug";
+import { sendEmail } from "../services/email";
 import { transitionVolunteerProgram, VOLUNTEER_PROGRAM_TRANSITIONS, VolunteerProgramTransitionError } from "../services/volunteer-program-transition";
 import { applyToVolunteerProgram, transitionVolunteerProgramApplication, VolunteerProgramApplicationError } from "../services/volunteer-program-application";
 
@@ -25,7 +26,7 @@ type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } 
 
 export const volunteerProgramRoutes = new Hono<Env>();
 
-const PUBLIC_STATUSES = ["SCHEDULED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"];
+const PUBLIC_STATUSES = ["SUBMITTED", "UNDER_REVIEW", "SCHEDULED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"];
 const TERMINAL_STATUSES = ["COMPLETED", "CANCELLED", "ARCHIVED"];
 const ORGANIZER_TRANSITIONS = new Set(["SCHEDULED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED", "CANCELLED", "ARCHIVED"]);
 
@@ -33,10 +34,13 @@ function parseDate(value: string) {
   return new Date(value);
 }
 
-function datesAreValid(data: { registrationDeadline?: string; startDate?: string; endDate?: string }) {
+function datesAreValid(data: { registrationDeadline?: string; startDate?: string; endDate?: string }, requireFutureStart = false) {
   const startDate = data.startDate ? parseDate(data.startDate) : undefined;
   const endDate = data.endDate ? parseDate(data.endDate) : undefined;
   const deadline = data.registrationDeadline ? parseDate(data.registrationDeadline) : undefined;
+  if (startDate && (Number.isNaN(startDate.getTime()) || (requireFutureStart && startDate <= new Date()))) return false;
+  if (endDate && Number.isNaN(endDate.getTime())) return false;
+  if (deadline && Number.isNaN(deadline.getTime())) return false;
   if (startDate && endDate && endDate <= startDate) return false;
   if (deadline && startDate && deadline >= startDate) return false;
   return true;
@@ -278,8 +282,8 @@ volunteerProgramRoutes.get("/my", authMiddleware, async (c) => {
 volunteerProgramRoutes.post("/independent-proposals", authMiddleware, validate(createIndependentVolunteerProgramSchema), async (c) => {
   const user = c.get("user");
   const data = c.get("validated");
-  if (!datesAreValid(data)) return c.json({ success: false, message: "Rentang jadwal program tidak valid" }, 400);
-  const program = await createWithUniqueSlug((slug) =>
+  if (!datesAreValid(data, true)) return c.json({ success: false, message: "Rentang jadwal program tidak valid" }, 400);
+   const program = await createWithUniqueSlug((slug) =>
     prisma.volunteerProgram.create({
       data: {
         title: sanitizeText(data.title) ?? data.title, description: sanitizeText(data.description) ?? data.description, location: sanitizeText(data.location) ?? data.location,
@@ -301,7 +305,7 @@ volunteerProgramRoutes.post("/communities/:communityId", authMiddleware, validat
   const data = c.get("validated");
   if (communityId !== data.communityId) return c.json({ success: false, message: "Konteks komunitas tidak cocok" }, 400);
   if (!(await communityVolunteerPermission(user.id, communityId))) return c.json({ success: false, message: "Tidak memiliki volunteer.create pada komunitas ini" }, 403);
-  if (!datesAreValid(data)) return c.json({ success: false, message: "Rentang jadwal program tidak valid" }, 400);
+  if (!datesAreValid(data, true)) return c.json({ success: false, message: "Rentang jadwal program tidak valid" }, 400);
   const community = await prisma.community.findFirst({ where: { id: communityId, status: "APPROVED", deletedAt: null } });
   if (!community) return c.json({ success: false, message: "Komunitas tidak aktif" }, 404);
   const program = await createWithUniqueSlug((slug) =>
@@ -315,8 +319,15 @@ volunteerProgramRoutes.post("/communities/:communityId", authMiddleware, validat
     }),
     data.title
   );
-  await createAuditLog({ userId: user.id, actionType: "VOLUNTEER_PROGRAM_CREATE", resourceName: "VolunteerProgram", resourceId: program.id, afterData: { organizerType: "COMMUNITY", communityId } });
-  return c.json({ success: true, message: "Program volunteer komunitas dibuat", data: program }, 201);
+   await createAuditLog({ userId: user.id, actionType: "VOLUNTEER_PROGRAM_CREATE", resourceName: "VolunteerProgram", resourceId: program.id, afterData: { organizerType: "COMMUNITY", communityId } });
+   const submitted = await transitionVolunteerProgram({ programId: program.id, expectedStatus: "DRAFT", targetStatus: "SUBMITTED", actorId: user.id, actorRole: await volunteerProgramActorRole(user.id, program) });
+   const queued = await transitionVolunteerProgram({ programId: program.id, expectedStatus: "SUBMITTED", targetStatus: "UNDER_REVIEW", actorId: user.id, actorRole: "SYSTEM", reason: "Program komunitas masuk antrean review" });
+   const admins = await prisma.userRole.findMany({ where: { role: "SUPER_ADMIN" }, include: { user: { select: { email: true } } } });
+   if (admins.length) {
+     await notifyVolunteerProgram(admins.map((admin) => ({ userId: admin.userId, title: "Volunteer Baru Menunggu Review", message: `Program volunteer "${program.title}" telah dikirim untuk review.`, link: "/admin/volunteer/review-queue" })), "APPROVAL");
+     await sendEmail({ to: admins.map((admin) => admin.user.email), subject: `Volunteer baru menunggu review: ${program.title}`, html: `<p>Program volunteer <strong>${program.title}</strong> telah dikirim untuk review.</p><p><a href="${process.env.APP_URL || "http://localhost:3000"}/admin/volunteer/review-queue">Buka antrean volunteer</a></p>` });
+   }
+   return c.json({ success: true, message: "Program volunteer komunitas dikirim untuk review", data: queued }, 201);
 });
 
 // Scoped manager discovery. A coordinator sees programs for only communities
