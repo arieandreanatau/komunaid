@@ -12,6 +12,7 @@ import {
   handleJoinRequestSchema,
   isMemberListPublic,
   isEventListPublic,
+  requiresJoinApproval,
 } from "@komunaid/shared";
 import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth";
 import {
@@ -1249,7 +1250,7 @@ organizationRoutes.post(
       where: { organizationId },
     });
 
-    if (settings?.requireApproval) {
+    if (requiresJoinApproval(settings)) {
       const existingRequest = await prisma.joinRequest.findFirst({
         where: {
           organizationId,

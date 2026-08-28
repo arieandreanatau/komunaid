@@ -44,13 +44,35 @@ function valuesEqual(a: unknown, b: unknown): boolean {
 }
 
 /** Matches a single `field: condition` pair from a Prisma-style `where`. */
-function matchField(record: AnyRecord, key: string, cond: unknown): boolean {
+function matchField(
+  record: AnyRecord,
+  key: string,
+  cond: unknown,
+  relations: Record<string, RelationConfig>,
+  store?: Map<string, Map<string, AnyRecord>>
+): boolean {
   if (cond === undefined) return true;
 
   if (isPlainObject(cond)) {
-    if ("in" in cond) return Array.isArray(cond.in) && cond.in.some((v: unknown) => valuesEqual(record[key], v));
-    if ("notIn" in cond) return !(Array.isArray(cond.notIn) && cond.notIn.some((v: unknown) => valuesEqual(record[key], v)));
-    if ("not" in cond) return !valuesEqual(record[key], cond.not);
+    // Real Prisma/SQL semantics: `col IN (...)`, `col NOT IN (...)` and
+    // `col <> value` all evaluate to UNKNOWN (not TRUE) when `col` is NULL,
+    // so a record whose field is null/undefined is never returned by `in`,
+    // `notIn` or `not` -- regardless of whether the list/value itself
+    // contains null. `{ field: null }` (no operator) or `{ field: { not: null } }`
+    // remain the only ways to test nullness, and are handled by the
+    // `equals`/plain-value fallthrough and the `not`-null case below.
+    if ("in" in cond) {
+      if (record[key] == null) return false;
+      return Array.isArray(cond.in) && cond.in.some((v: unknown) => valuesEqual(record[key], v));
+    }
+    if ("notIn" in cond) {
+      if (record[key] == null) return false;
+      return !(Array.isArray(cond.notIn) && cond.notIn.some((v: unknown) => valuesEqual(record[key], v)));
+    }
+    if ("not" in cond) {
+      if (record[key] == null) return false;
+      return !valuesEqual(record[key], cond.not);
+    }
     if ("equals" in cond) return valuesEqual(record[key], cond.equals);
     if ("contains" in cond) return typeof record[key] === "string" && record[key].includes(cond.contains);
     if ("gte" in cond && !(record[key] >= cond.gte)) return false;
@@ -59,38 +81,75 @@ function matchField(record: AnyRecord, key: string, cond: unknown): boolean {
     if ("lt" in cond && !(record[key] < cond.lt)) return false;
     if (["gte", "lte", "gt", "lt"].some((op) => op in cond)) return true;
 
+    // Relation filter, e.g. `organization.findMany({ where: { settings: {
+    // showEventList: false } } })`. This MUST be checked before the
+    // compound-unique-key fallback below: a row can carry a plain embedded
+    // field of the same name as a relation (builders seed `settings: null`
+    // as a placeholder), and that embedded field must never shadow the real
+    // joined-table match -- doing so would make a nested relation `where`
+    // silently pass by matching a value nobody actually put through the
+    // relation. Only a to-one (`many: false`) relation with no joined row
+    // fails to match here; a to-many relation matches like an implicit
+    // `some`, which is all every current caller of a bare nested object needs.
+    const rel = relations[key];
+    if (rel && store) {
+      const target = store.get(rel.table);
+      const joined = target ? Array.from(target.values()).filter((r) => r[rel.fk] === record.id) : [];
+      const childRelations = RELATIONS[rel.table as keyof typeof RELATIONS] || {};
+      if (rel.many === false) {
+        const joinedRow = joined[0];
+        return joinedRow ? matchesWhere(joinedRow, cond, childRelations, store) : false;
+      }
+      return joined.some((r) => matchesWhere(r, cond, childRelations, store));
+    }
+
     // Not a recognized filter operator: this is very likely a compound-unique
     // key filter, e.g. `communityId_userId: { communityId, userId }`, where the
     // record itself stores the flattened fields rather than the compound key.
     if (!(key in record)) {
-      return matchesWhere(record, cond);
+      return matchesWhere(record, cond, relations, store);
     }
     if (record[key] == null) return false;
-    return matchesWhere(record[key], cond);
+    return matchesWhere(record[key], cond, relations, store);
   }
 
   return valuesEqual(record[key], cond);
 }
 
-export function matchesWhere(record: AnyRecord, where?: AnyRecord | null): boolean {
+/**
+ * `relations`/`store` are optional so every pre-existing external call site
+ * (this function is exported for direct use by test files) keeps working
+ * unchanged -- omitting them just means a nested relation `where` falls back
+ * to the old compound-key/embedded-field matching instead of a real join.
+ * `createTable`'s internal call sites always pass both, which is what makes
+ * relation `where` filters (e.g. `settings: { showEventList: false }`)
+ * resolve through the actual joined table rather than a row's inert
+ * placeholder field of the same name.
+ */
+export function matchesWhere(
+  record: AnyRecord,
+  where?: AnyRecord | null,
+  relations: Record<string, RelationConfig> = {},
+  store?: Map<string, Map<string, AnyRecord>>
+): boolean {
   if (!where) return true;
   for (const [key, cond] of Object.entries(where)) {
     if (key === "AND") {
       const clauses = Array.isArray(cond) ? cond : [cond];
-      if (!clauses.every((w: AnyRecord) => matchesWhere(record, w))) return false;
+      if (!clauses.every((w: AnyRecord) => matchesWhere(record, w, relations, store))) return false;
       continue;
     }
     if (key === "OR") {
       const clauses = Array.isArray(cond) ? cond : [cond];
-      if (!clauses.some((w: AnyRecord) => matchesWhere(record, w))) return false;
+      if (!clauses.some((w: AnyRecord) => matchesWhere(record, w, relations, store))) return false;
       continue;
     }
     if (key === "NOT") {
       const clauses = Array.isArray(cond) ? cond : [cond];
-      if (clauses.some((w: AnyRecord) => matchesWhere(record, w))) return false;
+      if (clauses.some((w: AnyRecord) => matchesWhere(record, w, relations, store))) return false;
       continue;
     }
-    if (!matchField(record, key, cond)) return false;
+    if (!matchField(record, key, cond, relations, store)) return false;
   }
   return true;
 }
@@ -181,7 +240,7 @@ function createTable(
   function matchOne(where: AnyRecord | undefined): AnyRecord | undefined {
     if (!where) return undefined;
     if (where.id !== undefined && Object.keys(where).length === 1) return rows.get(where.id);
-    return all().find((row) => matchesWhere(row, where));
+    return all().find((row) => matchesWhere(row, where, relations, store));
   }
 
   function stripRelationWrites(data: AnyRecord): { clean: AnyRecord; pending: Array<{ relKey: string; payload: AnyRecord[] }> } {
@@ -225,7 +284,10 @@ function createTable(
       if (rel) {
         const target = store.get(rel.table);
         let joined = target ? Array.from(target.values()).filter((r) => r[rel.fk] === row.id) : [];
-        if (isPlainObject(val) && val.where) joined = joined.filter((r) => matchesWhere(r, val.where));
+        if (isPlainObject(val) && val.where) {
+          const childRelations = RELATIONS[rel.table as keyof typeof RELATIONS] || {};
+          joined = joined.filter((r) => matchesWhere(r, val.where, childRelations, store));
+        }
         result[key] = rel.many === false ? joined[0] ?? null : joined;
         continue;
       }
@@ -280,17 +342,17 @@ function createTable(
       return fillIncludes(row, include, select);
     },
     findFirst: async ({ where, include, select, orderBy }: AnyRecord = {}) => {
-      const matched = applyOrderBy(all().filter((r) => matchesWhere(r, where)), orderBy);
+      const matched = applyOrderBy(all().filter((r) => matchesWhere(r, where, relations, store)), orderBy);
       const row = matched[0];
       return row ? fillIncludes(row, include, select) : null;
     },
     findMany: async ({ where, include, select, orderBy, skip, take }: AnyRecord = {}) => {
-      let matched = applyOrderBy(all().filter((r) => matchesWhere(r, where)), orderBy);
+      let matched = applyOrderBy(all().filter((r) => matchesWhere(r, where, relations, store)), orderBy);
       if (typeof skip === "number") matched = matched.slice(skip);
       if (typeof take === "number") matched = matched.slice(0, take);
       return matched.map((r) => fillIncludes(r, include, select));
     },
-    count: async ({ where }: AnyRecord = {}) => all().filter((r) => matchesWhere(r, where)).length,
+    count: async ({ where }: AnyRecord = {}) => all().filter((r) => matchesWhere(r, where, relations, store)).length,
     create: async ({ data, include, select }: AnyRecord) => fillIncludes(insertRow(data), include, select),
     createMany: async ({ data }: AnyRecord) => {
       const items = Array.isArray(data) ? data : [data];
@@ -305,7 +367,7 @@ function createTable(
       return fillIncludes(row, include, select);
     },
     updateMany: async ({ where, data }: AnyRecord) => {
-      const matched = all().filter((r) => matchesWhere(r, where));
+      const matched = all().filter((r) => matchesWhere(r, where, relations, store));
       const { clean } = stripRelationWrites(data);
       for (const row of matched) applyData(row, clean);
       return { count: matched.length };
@@ -316,7 +378,7 @@ function createTable(
       return row ?? null;
     },
     deleteMany: async ({ where }: AnyRecord = {}) => {
-      const matched = all().filter((r) => matchesWhere(r, where));
+      const matched = all().filter((r) => matchesWhere(r, where, relations, store));
       for (const row of matched) rows.delete(row.id);
       return { count: matched.length };
     },
@@ -382,8 +444,10 @@ const TABLE_NAMES = [
   "communityMedia",
   "communityCategory",
   "communityTag",
+  "forumReply",
   "organization",
   "organizationMember",
+  "organizationSettings",
   "event",
   "eventRegistration",
   "eventSave",
@@ -430,6 +494,7 @@ const RELATIONS: Partial<Record<(typeof TABLE_NAMES)[number], Record<string, Rel
   organization: {
     members: { table: "organizationMember", fk: "organizationId" },
     events: { table: "event", fk: "organizationId" },
+    settings: { table: "organizationSettings", fk: "organizationId", many: false },
   },
 };
 
@@ -438,6 +503,7 @@ const TABLE_DEFAULTS: Partial<Record<(typeof TABLE_NAMES)[number], AnyRecord>> =
   user: { tokenVersion: 0, status: "ACTIVE" },
   community: { status: "DRAFT", visibility: "PUBLIC" },
   event: { status: "DRAFT", visibility: "PUBLIC" },
+  joinRequest: { status: "PENDING" },
 };
 
 export interface FakeDb {

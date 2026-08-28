@@ -208,6 +208,43 @@ describe("User Routes", () => {
       expect(body.data.user.pastCommunities).toHaveLength(0);
     });
 
+    // Ticket #15 (spec #12): the list that feeds the context switcher and the
+    // "Komunitas Saya" manage entry point must use the exact same predicate
+    // (isCommunityOfficer, packages/shared/src/permissions.ts) that
+    // requireCommunityOfficer (apps/api/src/middleware/rbac.ts) uses to gate
+    // workspace entry, so it can never promise a door that is actually locked.
+    it("managedCommunities includes every officer role (OWNER, ADMIN, EVENT_MANAGER, VOLUNTEER_COORDINATOR) and excludes plain MEMBER", async () => {
+      const token = await generateToken({ sub: "u1", email: "a@b.com", name: "A", username: "a", type: "access" });
+      mockAuth({
+        id: "u1", name: "A", username: "a", email: "a@b.com", phone: null, bio: null,
+        location: null, avatar: null, status: "ACTIVE",
+        roles: [], interests: [],
+        joinedCommunities: [
+          { community: { id: "c-owner", name: "Owner Co", slug: "owner-co", logo: null, status: "APPROVED" }, role: "OWNER", status: "ACTIVE", deletedAt: null },
+          { community: { id: "c-admin", name: "Admin Co", slug: "admin-co", logo: null, status: "APPROVED" }, role: "ADMIN", status: "ACTIVE", deletedAt: null },
+          { community: { id: "c-em", name: "EM Co", slug: "em-co", logo: null, status: "APPROVED" }, role: "EVENT_MANAGER", status: "ACTIVE", deletedAt: null },
+          { community: { id: "c-vc", name: "VC Co", slug: "vc-co", logo: null, status: "APPROVED" }, role: "VOLUNTEER_COORDINATOR", status: "ACTIVE", deletedAt: null },
+          { community: { id: "c-member", name: "Member Co", slug: "member-co", logo: null, status: "APPROVED" }, role: "MEMBER", status: "ACTIVE", deletedAt: null },
+        ],
+        organizationMembers: [], registeredEvents: [], notifications: [],
+        createdAt: new Date(),
+      });
+      (prisma.notification.count as any).mockResolvedValue(0);
+
+      const res = await app.request("/users/profile", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await res.json();
+
+      const managedIds = body.data.user.managedCommunities.map((c: any) => c.id).sort();
+      expect(managedIds).toEqual(["c-admin", "c-em", "c-owner", "c-vc"]);
+      expect(managedIds).not.toContain("c-member");
+      // "Dibuat" (createdCommunities) stays OWNER-only -- managedCommunities
+      // is the separate, wider "can actually open the workspace" set added
+      // alongside it, not a redefinition of "created".
+      expect(body.data.user.createdCommunities.map((c: any) => c.id)).toEqual(["c-owner"]);
+    });
+
     it("should separate communities that the user previously followed", async () => {
       const token = await generateToken({ sub: "u1", email: "a@b.com", name: "A", username: "a", type: "access" });
       const leftAt = new Date("2026-07-01T00:00:00.000Z");

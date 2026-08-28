@@ -70,11 +70,129 @@ async function transitionEvent(
 }
 
 // ==========================================
+// Settings-switch visibility for public event listings
+// ==========================================
+
+interface HiddenEventListIds {
+  communityIds: string[];
+  organizationIds: string[];
+}
+
+/**
+ * Communities/organizations whose showEventList switch is off, narrowed by
+ * the requesting user's own memberships so an active member or the owner of
+ * one of these entities still sees its events -- "hiding is outward, not
+ * inward" (settings-policy.ts). Mirrors the gate already applied to the
+ * embedded event lists on GET /communities/:slug and GET /organizations/:slug
+ * (commit 3da65bc, D5) for the standalone public listing routes below
+ * (GET /, /popular/upcoming, /featured), which never read the switch at all.
+ *
+ * `showEventList: false` is a direct DB filter, not a re-implementation of
+ * isEventListPublic's null-check: a community that never saved a settings
+ * row simply has no matching communitySettings row (so it's never added to
+ * the hidden set), and an organization whose settings relation is null fails
+ * the nested `settings: { showEventList: false }` match the same way -- both
+ * reach isEventListPublic(null)'s default-to-public outcome through the
+ * shape of the query, not a hand-rolled `=== null`/`?? true` check in this
+ * file. This is a bulk pre-filter feeding a Prisma `where` (required to keep
+ * paginatedResponse()'s `total` honest -- see withEventListVisibility below),
+ * not a per-row read of one resolved settings object, which is why it
+ * doesn't call isEventListPublic() itself the way the detail endpoints do:
+ * there is no single record to pass it here.
+ *
+ * CommunitySettings is queried directly (its own table); Organization is
+ * queried via its `settings` relation filter. Both are equally valid real-
+ * Prisma queries for the same result -- the split exists only because the
+ * shared test fixture (apps/api/tests/support/fake-prisma.ts) models
+ * organization settings as an embedded field on the organization row rather
+ * than a joined table the way it models community settings.
+ */
+async function hiddenEventListEntityIds(userId?: string): Promise<HiddenEventListIds> {
+  const [communitiesOff, organizationsOff] = await Promise.all([
+    prisma.communitySettings.findMany({ where: { showEventList: false }, select: { communityId: true } }),
+    prisma.organization.findMany({ where: { settings: { showEventList: false } }, select: { id: true } }),
+  ]);
+
+  let communityIds = communitiesOff.map((s: { communityId: string }) => s.communityId);
+  let organizationIds = organizationsOff.map((o: { id: string }) => o.id);
+
+  if (userId && (communityIds.length > 0 || organizationIds.length > 0)) {
+    const [ownedCommunities, memberCommunities, ownedOrganizations, memberOrganizations] = await Promise.all([
+      communityIds.length
+        ? prisma.community.findMany({ where: { id: { in: communityIds }, ownerId: userId }, select: { id: true } })
+        : Promise.resolve([] as { id: string }[]),
+      communityIds.length
+        ? prisma.communityMember.findMany({
+            where: { communityId: { in: communityIds }, userId, status: "ACTIVE", deletedAt: null },
+            select: { communityId: true },
+          })
+        : Promise.resolve([] as { communityId: string }[]),
+      organizationIds.length
+        ? prisma.organization.findMany({ where: { id: { in: organizationIds }, ownerId: userId }, select: { id: true } })
+        : Promise.resolve([] as { id: string }[]),
+      organizationIds.length
+        ? prisma.organizationMember.findMany({
+            where: { organizationId: { in: organizationIds }, userId, status: "ACTIVE", deletedAt: null },
+            select: { organizationId: true },
+          })
+        : Promise.resolve([] as { organizationId: string }[]),
+    ]);
+
+    const visibleCommunityIds = new Set<string>([
+      ...ownedCommunities.map((c: { id: string }) => c.id),
+      ...memberCommunities.map((m: { communityId: string }) => m.communityId),
+    ]);
+    const visibleOrganizationIds = new Set<string>([
+      ...ownedOrganizations.map((o: { id: string }) => o.id),
+      ...memberOrganizations.map((m: { organizationId: string }) => m.organizationId),
+    ]);
+
+    communityIds = communityIds.filter((id) => !visibleCommunityIds.has(id));
+    organizationIds = organizationIds.filter((id) => !visibleOrganizationIds.has(id));
+  }
+
+  return { communityIds, organizationIds };
+}
+
+/**
+ * Folds hiddenEventListEntityIds() into an existing Event `where` via `AND`,
+ * so it composes with any prior top-level `communityId`/`organizationId`
+ * equality filter (e.g. GET /'s `?communityId=` query param) instead of
+ * overwriting it -- and so every query built from the same base `where`
+ * (list + count, or the ranked/fallback pair on /popular/upcoming) applies
+ * the identical filter, keeping paginatedResponse()'s `total` honest rather
+ * than lying about a post-query-filtered page.
+ */
+function withEventListVisibility(where: Prisma.EventWhereInput, hidden: HiddenEventListIds): Prisma.EventWhereInput {
+  const extra: Prisma.EventWhereInput[] = [];
+  // Event.communityId and Event.organizationId are both nullable -- an event
+  // belongs to a community OR an organization, so one of the two columns is
+  // NULL on essentially every row. Prisma's `notIn` (like SQL `NOT IN`) never
+  // returns a row whose column is NULL, so a bare `{ communityId: { notIn } }`
+  // would silently drop every organization-owned event the instant ANY
+  // community's showEventList switch went off, and vice versa. The explicit
+  // `{ field: null }` branch keeps those NULL rows in, which is what makes
+  // this an "exclude these specific ids" filter instead of an accidental
+  // "exclude every row that doesn't have this column set" filter.
+  if (hidden.communityIds.length > 0) {
+    extra.push({ OR: [{ communityId: null }, { communityId: { notIn: hidden.communityIds } }] });
+  }
+  if (hidden.organizationIds.length > 0) {
+    extra.push({ OR: [{ organizationId: null }, { organizationId: { notIn: hidden.organizationIds } }] });
+  }
+  if (extra.length === 0) return where;
+  const existingAnd = (where as { AND?: unknown }).AND;
+  const andArr = Array.isArray(existingAnd) ? existingAnd : existingAnd ? [existingAnd] : [];
+  return { ...where, AND: [...andArr, ...extra] };
+}
+
+// ==========================================
 // 1. LIST EVENTS (Public)
 // ==========================================
 
 eventRoutes.get("/", optionalAuthMiddleware, validate(eventQuerySchema, "query"), async (c) => {
   const q = c.get("validated");
+  const user = c.get("user");
   const page = q.page as number;
   const limit = q.limit as number;
 
@@ -100,6 +218,9 @@ if (q.communityId) where.communityId = q.communityId;
     where.eventDate = { gte: new Date() };
   }
 
+  const hidden = await hiddenEventListEntityIds(user?.id);
+  const visibleWhere = withEventListVisibility(where, hidden);
+
   const orderBy: any =
     q.orderBy === "eventDate"
       ? { eventDate: q.sort as "asc" | "desc" }
@@ -107,7 +228,7 @@ if (q.communityId) where.communityId = q.communityId;
 
   const [events, total] = await Promise.all([
     prisma.event.findMany({
-      where,
+      where: visibleWhere,
       include: {
         community: { select: { id: true, name: true, slug: true, logo: true } },
         organization: { select: { id: true, name: true, slug: true, logo: true } },
@@ -119,7 +240,7 @@ if (q.communityId) where.communityId = q.communityId;
       skip: (page - 1) * limit,
       take: limit,
     }),
-    prisma.event.count({ where }),
+    prisma.event.count({ where: visibleWhere }),
   ]);
 
   return c.json({
@@ -161,11 +282,16 @@ if (q.communityId) where.communityId = q.communityId;
 // POPULAR UPCOMING EVENTS (Public)
 // ==========================================
 
-eventRoutes.get("/popular/upcoming", async (c) => {
-  const eventWhere: Prisma.EventWhereInput = {
-    ...publicScope("event", { statuses: ["SUBMITTED", "IN_REVIEW", "PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED"] }),
-    eventDate: { gte: new Date() },
-  };
+eventRoutes.get("/popular/upcoming", optionalAuthMiddleware, async (c) => {
+  const user = c.get("user");
+  const hidden = await hiddenEventListEntityIds(user?.id);
+  const eventWhere: Prisma.EventWhereInput = withEventListVisibility(
+    {
+      ...publicScope("event", { statuses: ["SUBMITTED", "IN_REVIEW", "PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED"] }),
+      eventDate: { gte: new Date() },
+    },
+    hidden
+  );
   const ranked = await prisma.eventRegistration.groupBy({
     by: ["eventId"],
     where: { status: "CONFIRMED", event: eventWhere },
@@ -270,9 +396,14 @@ eventRoutes.get("/my/saved", authMiddleware, async (c) => {
 // FEATURED EVENTS (Public) - newest published
 // ==========================================
 
-eventRoutes.get("/featured", async (c) => {
+eventRoutes.get("/featured", optionalAuthMiddleware, async (c) => {
+  const user = c.get("user");
+  const hidden = await hiddenEventListEntityIds(user?.id);
   const events = await prisma.event.findMany({
-    where: publicScope("event", { statuses: ["SUBMITTED", "IN_REVIEW", "PUBLISHED", "REGISTRATION_OPEN"] }),
+    where: withEventListVisibility(
+      publicScope("event", { statuses: ["SUBMITTED", "IN_REVIEW", "PUBLISHED", "REGISTRATION_OPEN"] }),
+      hidden
+    ),
     include: {
       community: { select: { id: true, name: true, slug: true, logo: true } },
       organization: { select: { id: true, name: true, slug: true, logo: true } },

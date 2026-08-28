@@ -25,7 +25,22 @@ import type {
   CommunitySettingsToggles,
   Tab,
 } from "@/components/community/types";
-import { tabs } from "@/components/community/types";
+import { tabs, canOpenTab } from "@/components/community/types";
+
+// Route path segment per tab -- a plain constant, not derived from props/state,
+// so it can be shared between the (currently dead, see D8/community-dashboard-route
+// history) nav render and the tab-access redirect below.
+const canonicalTabPath: Record<Tab, string> = {
+  ringkasan: "overview",
+  profil: "profile",
+  event: "events",
+  pengurus: "pengurus",
+  anggota: "members",
+  permintaan: "requests",
+  pengaturan: "settings",
+  media: "media",
+  insight: "insights",
+};
 
 export function CommunityDashboardRoute({
   tab,
@@ -286,6 +301,19 @@ export function CommunityDashboardRoute({
     }
   }, [authLoading, isAuthenticated, communityId, fetchDashboard]);
 
+  // The visible tabs must equal the openable tabs (ticket #14, spec #12):
+  // once the viewer's real role is known, send anyone sitting on a tab
+  // route their role can't open to a tab it can -- "anggota" is a safe
+  // landing spot because viewMembers is open to every community role that
+  // can reach the workspace at all (requireCommunityOfficer already
+  // excludes plain MEMBER and non-members).
+  useEffect(() => {
+    if (!dashboard) return;
+    if (!canOpenTab(role, tab)) {
+      router.replace(`/dashboard/communities/${communityPath}/${canonicalTabPath.anggota}`);
+    }
+  }, [dashboard, role, tab, communityPath, router]);
+
   useEffect(() => {
     if (tab === "anggota") fetchMembers();
   }, [tab, fetchMembers]);
@@ -482,28 +510,21 @@ export function CommunityDashboardRoute({
 
   if (!dashboard) return null;
 
+  // The redirect effect above sends a role sitting on a tab it can't open
+  // to one it can -- render nothing for the one frame that takes, rather
+  // than flashing a tab whose data the viewer has no authority over.
+  if (!canOpenTab(role, tab)) return null;
+
   const { community, pendingRequests, activeEvents, recentActivity } = dashboard;
 
   // Every tab below only renders once fetchDashboard() above has already
-  // succeeded, and GET /communities/:id/dashboard requires
-  // requireCommunityAdmin (apps/api/src/routes/communities.ts) -- so anyone
-  // who reaches this point today holds OWNER or ADMIN in this community.
-  // `role` is the viewer's real membership role from the dashboard payload
-  // (state above); each tab derives its own affordances from it via can(),
-  // rather than the shell precomputing a single "canManage" flag that
-  // conflates distinct actions (editSettings vs. manageMedia vs.
-  // changeMemberRole vs. manageDangerZone).
-  const canonicalTabPath: Record<Tab, string> = {
-    ringkasan: "overview",
-    profil: "profile",
-    event: "events",
-    pengurus: "pengurus",
-    anggota: "members",
-    permintaan: "requests",
-    pengaturan: "settings",
-    media: "media",
-    insight: "insights",
-  };
+  // succeeded and canOpenTab(role, tab) has passed -- `role` is the
+  // viewer's real membership role from the dashboard payload (state
+  // above); each tab derives its own affordances from it via can(), rather
+  // than the shell precomputing a single "canManage" flag that conflates
+  // distinct actions (editSettings vs. manageMedia vs. changeMemberRole vs.
+  // manageDangerZone).
+  const visibleTabs = tabs.filter((navTab) => canOpenTab(role, navTab.key));
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -524,7 +545,7 @@ export function CommunityDashboardRoute({
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Komunitas</p>
             </div>
 
-            {tabs.map((navTab) => (
+            {visibleTabs.map((navTab) => (
               <Link
                 key={navTab.key}
                 href={`/dashboard/communities/${communityPath}/${canonicalTabPath[navTab.key]}`}
@@ -609,7 +630,7 @@ export function CommunityDashboardRoute({
             </div>
 
             <div className="hidden">
-              {tabs.map((navTab) => (
+              {visibleTabs.map((navTab) => (
                 <Link
                   key={navTab.key}
                   href={`/dashboard/communities/${communityPath}/${canonicalTabPath[navTab.key]}`}
@@ -632,6 +653,7 @@ export function CommunityDashboardRoute({
                 pendingRequests={pendingRequests}
                 activeEvents={activeEvents}
                 recentActivity={recentActivity}
+                role={role}
               />
             )}
 

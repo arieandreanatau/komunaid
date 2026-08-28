@@ -20,11 +20,17 @@ import {
   forumReplyQuerySchema,
   isMemberListPublic,
   isEventListPublic,
+  can,
+  canMembersPost,
+  requiresJoinApproval,
+  isCommunityOfficer,
 } from "@komunaid/shared";
+import type { CommunityRole } from "@komunaid/shared";
 import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth";
 import {
   requireCommunityOwner,
   requireCommunityAdmin,
+  requireCommunityOfficer,
 } from "../middleware/rbac";
 import { validate } from "../middleware/validate";
 import { createAuditLog, AuditActions } from "../services/audit";
@@ -35,7 +41,16 @@ import type { AuthUser } from "../middleware/auth";
 import { transitionCommunity } from "../services/lifecycle-transition";
 import { activeScope, publicScope } from "../lib/visibility-scope";
 
-type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
+type Env = {
+  Variables: {
+    user: AuthUser;
+    validated: any;
+    userRoles: string[];
+    // Set by requireCommunityOfficer (middleware/rbac.ts) -- consumed by
+    // the dashboard route, see "6. GET COMMUNITY DASHBOARD" below.
+    communityRole: CommunityRole | null;
+  };
+};
 
 export const communityRoutes = new Hono<Env>();
 
@@ -1067,10 +1082,18 @@ communityRoutes.post(
 communityRoutes.get(
   "/:communityId/dashboard",
   authMiddleware,
-  requireCommunityAdmin,
+  // Ticket #14 (spec #12): open the workspace to every community officer,
+  // not just OWNER/ADMIN. requireCommunityOfficer stashes the resolved
+  // membership role on the context as `communityRole` -- read below instead
+  // of re-querying communityMember, which the previous (ticket #13) version
+  // of this handler had to do because the guard at the time
+  // (requireCommunityAdmin) didn't expose the role. Every mutation route
+  // below this one keeps its original requireCommunityAdmin/
+  // requireCommunityOwner guard unchanged.
+  requireCommunityOfficer,
   async (c) => {
     const communityId = c.req.param("communityId") as string;
-    const authUser = c.get("user");
+    const role = c.get("communityRole");
 
     const community = await prisma.community.findUnique({
       where: { id: communityId },
@@ -1090,31 +1113,42 @@ communityRoutes.get(
       return c.json({ success: false, message: "Komunitas tidak ditemukan" }, 404);
     }
 
-    const [pendingJoinRequestCount, activeEventCount, recentActivity, viewerMembership] =
-      await Promise.all([
-        prisma.joinRequest.count({
-          where: { communityId, status: "PENDING" },
-        }),
-        prisma.event.count({
-          where: { communityId, status: "PUBLISHED", eventDate: { gte: new Date() } },
-        }),
-        prisma.membershipHistory.findMany({
-          where: { communityId },
-          include: {
-            user: { select: { id: true, name: true, avatar: true } },
-          },
-          orderBy: { createdAt: "desc" },
-          take: 10,
-        }),
-        // requireCommunityAdmin already verified this membership exists and is
-        // ACTIVE/non-deleted -- re-queried here (rather than threaded through
-        // context) to surface the viewer's actual role to the response
-        // without touching the shared guard middleware.
-        prisma.communityMember.findUnique({
-          where: { communityId_userId: { communityId, userId: authUser.id } },
-          select: { role: true },
-        }),
-      ]);
+    // The payload is trimmed by the viewer's actual authority, not by what
+    // the web client happens to hide: an EVENT_MANAGER or
+    // VOLUNTEER_COORDINATOR now reaches this route, but must not receive
+    // data reserved for roles that can act on it. Each can() check below
+    // mirrors the guard on the route that actually owns that data:
+    //  - pendingJoinRequestCount -- GET/PUT .../join-requests is
+    //    requireCommunityAdmin, i.e. can(role, "handleJoinRequests").
+    //  - recentActivity (membership join/leave/role-change history) is the
+    //    same class of member-administration data as .../members/history,
+    //    which is requireCommunityAdmin, i.e. can(role, "manageMembers").
+    //  - communityInfo.settings (the raw CommunitySettings row) is what
+    //    GET/PUT .../settings returns, also requireCommunityAdmin, i.e.
+    //    can(role, "editSettings").
+    // memberCount and activeEventCount stay unconditional: they're plain
+    // aggregate counts, no more sensitive than what viewMembers already
+    // exposes to every community role.
+    const canHandleJoinRequests = can(role, "handleJoinRequests");
+    const canManageMembers = can(role, "manageMembers");
+    const canEditSettings = can(role, "editSettings");
+
+    const [pendingJoinRequestCount, activeEventCount, recentActivity] = await Promise.all([
+      prisma.joinRequest.count({
+        where: { communityId, status: "PENDING" },
+      }),
+      prisma.event.count({
+        where: { communityId, status: "PUBLISHED", eventDate: { gte: new Date() } },
+      }),
+      prisma.membershipHistory.findMany({
+        where: { communityId },
+        include: {
+          user: { select: { id: true, name: true, avatar: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      }),
+    ]);
 
     return c.json({
       success: true,
@@ -1123,7 +1157,7 @@ communityRoutes.get(
         // client derives every tab/action gate from this via can() in
         // packages/shared/src/permissions.ts, never from an ownership
         // boolean or a local role comparison.
-        userRole: viewerMembership?.role ?? null,
+        userRole: role,
         communityInfo: {
           id: community.id,
           name: community.name,
@@ -1138,24 +1172,26 @@ communityRoutes.get(
           status: community.status,
           visibility: community.visibility,
           owner: community.owner,
-          settings: community.settings,
+          settings: canEditSettings ? community.settings : null,
           tags: community.tags.map((t) => t.tag),
           createdAt: community.createdAt,
         },
         memberCount: community._count.members,
-        pendingJoinRequestCount,
+        pendingJoinRequestCount: canHandleJoinRequests ? pendingJoinRequestCount : 0,
         activeEventCount,
-        recentActivity: recentActivity.map((a) => ({
-          id: a.id,
-          userId: a.userId,
-          user: a.user,
-          action: a.action,
-          oldRole: a.oldRole,
-          newRole: a.newRole,
-          details: a.details,
-          performedBy: a.performedBy,
-          createdAt: a.createdAt,
-        })),
+        recentActivity: canManageMembers
+          ? recentActivity.map((a) => ({
+              id: a.id,
+              userId: a.userId,
+              user: a.user,
+              action: a.action,
+              oldRole: a.oldRole,
+              newRole: a.newRole,
+              details: a.details,
+              performedBy: a.performedBy,
+              createdAt: a.createdAt,
+            }))
+          : [],
       },
     });
   }
@@ -1550,6 +1586,7 @@ communityRoutes.post(
 
     const community = await prisma.community.findUnique({
       where: { id: communityId },
+      include: { settings: true },
     });
 
     if (!community || community.deletedAt) {
@@ -1563,6 +1600,11 @@ communityRoutes.post(
     if (community.visibility === "PRIVATE") {
       return c.json({ success: false, message: "Komunitas ini bersifat privat" }, 403);
     }
+
+    // requireApproval may only ADD a review gate, never remove one: when it is
+    // false (or the settings row was never saved) this stays byte-for-byte the
+    // existing membershipType-only branch below.
+    const needsReview = requiresJoinApproval(community.settings) || community.membershipType !== "OPEN";
 
     const existingMember = await prisma.communityMember.findUnique({
       where: {
@@ -1589,7 +1631,7 @@ communityRoutes.post(
             },
           },
           data: {
-            status: community.membershipType === "OPEN" ? "ACTIVE" : "PENDING",
+            status: needsReview ? "PENDING" : "ACTIVE",
             role: "MEMBER",
             deletedAt: null,
             joinedAt: new Date(),
@@ -1615,16 +1657,16 @@ communityRoutes.post(
 
         return c.json({
           success: true,
-          message: community.membershipType === "OPEN"
-            ? "Berhasil bergabung kembali"
-            : "Permintaan bergabung telah dikirim",
+          message: needsReview
+            ? "Permintaan bergabung telah dikirim"
+            : "Berhasil bergabung kembali",
           data: { membership: reactivated },
         });
       }
       return c.json({ success: false, message: "Sudah menjadi anggota" }, 409);
     }
 
-    if (community.membershipType === "OPEN") {
+    if (!needsReview) {
       const member = await prisma.communityMember.create({
         data: {
           communityId,
@@ -2809,6 +2851,7 @@ communityRoutes.post(
 
     const community = await prisma.community.findUnique({
       where: { id: communityId },
+      include: { settings: true },
     });
 
     if (!community || community.deletedAt) {
@@ -2827,12 +2870,20 @@ communityRoutes.post(
 
     const isMember = Boolean(membership && membership.status === "ACTIVE" && !membership.deletedAt);
     const isAdmin = isMember && ["OWNER", "ADMIN"].includes(membership!.role);
+    const isOwner = community.ownerId === authUser.id;
+    const isOfficer = isOwner || (isMember && isCommunityOfficer(membership!.role));
 
     if (data.type === "FORUM_POST") {
-      if (!isMember && community.ownerId !== authUser.id) {
+      if (!isMember && !isOwner) {
         return c.json({ success: false, message: "Hanya anggota yang dapat membuat thread forum" }, 403);
       }
-    } else if (!isAdmin && community.ownerId !== authUser.id) {
+      if (!isOfficer && !canMembersPost(community.settings)) {
+        return c.json(
+          { success: false, message: "Posting anggota telah dinonaktifkan oleh pengurus komunitas" },
+          403
+        );
+      }
+    } else if (!isAdmin && !isOwner) {
       return c.json({ success: false, message: "Anda tidak memiliki akses untuk membuat media" }, 403);
     }
 
@@ -3049,13 +3100,31 @@ communityRoutes.post(
       return c.json({ success: false, message: "Thread tidak ditemukan" }, 404);
     }
 
-    const isMember = await prisma.communityMember.findFirst({
-      where: { communityId, userId: authUser.id, status: "ACTIVE", ...activeScope("communityMember") },
-      select: { id: true },
-    });
+    const [membership, community] = await Promise.all([
+      prisma.communityMember.findFirst({
+        where: { communityId, userId: authUser.id, status: "ACTIVE", ...activeScope("communityMember") },
+        select: { id: true, role: true },
+      }),
+      prisma.community.findUnique({
+        where: { id: communityId },
+        select: { ownerId: true, settings: true },
+      }),
+    ]);
+
+    const isMember = Boolean(membership);
 
     if (!isMember && thread.createdById !== authUser.id) {
       return c.json({ success: false, message: "Hanya anggota yang dapat membalas forum" }, 403);
+    }
+
+    const isOfficer =
+      community?.ownerId === authUser.id || (isMember && isCommunityOfficer(membership!.role));
+
+    if (isMember && !isOfficer && !canMembersPost(community?.settings)) {
+      return c.json(
+        { success: false, message: "Balasan anggota telah dinonaktifkan oleh pengurus komunitas" },
+        403
+      );
     }
 
     const reply = await prisma.forumReply.create({

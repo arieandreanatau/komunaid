@@ -12,6 +12,7 @@ vi.mock("@komunaid/database", () => {
 import {
   requireCommunityOwner,
   requireCommunityAdmin,
+  requireCommunityOfficer,
   requireOrganizationOwner,
   requireOrganizationAdmin,
 } from "../../../src/middleware/rbac";
@@ -29,6 +30,7 @@ describe("Community & Organization RBAC Middleware", () => {
         if (key === "user") return { id: "user-1" };
         return undefined;
       }),
+      set: vi.fn(),
       req: {
         param: vi.fn((name: string) => {
           if (name === "communityId") return "comm-1";
@@ -147,6 +149,105 @@ describe("Community & Organization RBAC Middleware", () => {
     it("should throw Forbidden when no membership", async () => {
       (prisma.communityMember.findUnique as any).mockResolvedValue(null);
       await expect(requireCommunityAdmin(mockContext, mockNext)).rejects.toThrow("Forbidden");
+    });
+  });
+
+  describe("requireCommunityOfficer", () => {
+    it("passes and stashes the role for OWNER", async () => {
+      (prisma.communityMember.findUnique as any).mockResolvedValue({
+        role: "OWNER",
+        status: "ACTIVE",
+      });
+      await requireCommunityOfficer(mockContext, mockNext);
+      expect(mockNext).toHaveBeenCalled();
+      expect(mockContext.set).toHaveBeenCalledWith("communityRole", "OWNER");
+    });
+
+    it("passes and stashes the role for ADMIN", async () => {
+      (prisma.communityMember.findUnique as any).mockResolvedValue({
+        role: "ADMIN",
+        status: "ACTIVE",
+      });
+      await requireCommunityOfficer(mockContext, mockNext);
+      expect(mockNext).toHaveBeenCalled();
+      expect(mockContext.set).toHaveBeenCalledWith("communityRole", "ADMIN");
+    });
+
+    it("passes and stashes the role for EVENT_MANAGER (ticket #14, spec #12)", async () => {
+      (prisma.communityMember.findUnique as any).mockResolvedValue({
+        role: "EVENT_MANAGER",
+        status: "ACTIVE",
+      });
+      await requireCommunityOfficer(mockContext, mockNext);
+      expect(mockNext).toHaveBeenCalled();
+      expect(mockContext.set).toHaveBeenCalledWith("communityRole", "EVENT_MANAGER");
+    });
+
+    it("passes and stashes the role for VOLUNTEER_COORDINATOR (ticket #14, spec #12)", async () => {
+      (prisma.communityMember.findUnique as any).mockResolvedValue({
+        role: "VOLUNTEER_COORDINATOR",
+        status: "ACTIVE",
+      });
+      await requireCommunityOfficer(mockContext, mockNext);
+      expect(mockNext).toHaveBeenCalled();
+      expect(mockContext.set).toHaveBeenCalledWith("communityRole", "VOLUNTEER_COORDINATOR");
+    });
+
+    it("throws Forbidden and never calls next for a plain MEMBER", async () => {
+      (prisma.communityMember.findUnique as any).mockResolvedValue({
+        role: "MEMBER",
+        status: "ACTIVE",
+      });
+      await expect(requireCommunityOfficer(mockContext, mockNext)).rejects.toThrow("Forbidden");
+      expect(mockNext).not.toHaveBeenCalled();
+      expect(mockContext.set).not.toHaveBeenCalled();
+    });
+
+    it("throws Forbidden when no membership is found (non-member)", async () => {
+      (prisma.communityMember.findUnique as any).mockResolvedValue(null);
+      await expect(requireCommunityOfficer(mockContext, mockNext)).rejects.toThrow("Forbidden");
+      expect(mockNext).not.toHaveBeenCalled();
+    });
+
+    it("throws Forbidden when no user", async () => {
+      mockContext.get.mockReturnValue(undefined);
+      await expect(requireCommunityOfficer(mockContext, mockNext)).rejects.toThrow("Forbidden");
+    });
+
+    it("throws Forbidden when status is not ACTIVE, even for an officer role", async () => {
+      (prisma.communityMember.findUnique as any).mockResolvedValue({
+        role: "EVENT_MANAGER",
+        status: "SUSPENDED",
+      });
+      await expect(requireCommunityOfficer(mockContext, mockNext)).rejects.toThrow("Forbidden");
+    });
+
+    it("throws Forbidden when the membership is soft-deleted, even for an officer role", async () => {
+      (prisma.communityMember.findUnique as any).mockResolvedValue({
+        role: "VOLUNTEER_COORDINATOR",
+        status: "ACTIVE",
+        deletedAt: new Date(),
+      });
+      await expect(requireCommunityOfficer(mockContext, mockNext)).rejects.toThrow("Forbidden");
+    });
+
+    it("falls back to the query param for communityId", async () => {
+      mockContext.req.param.mockReturnValue(undefined);
+      mockContext.req.query.mockReturnValue("comm-query");
+      (prisma.communityMember.findUnique as any).mockResolvedValue({
+        role: "ADMIN",
+        status: "ACTIVE",
+      });
+      await requireCommunityOfficer(mockContext, mockNext);
+      expect(mockNext).toHaveBeenCalled();
+      expect(prisma.communityMember.findUnique).toHaveBeenCalledWith({
+        where: {
+          communityId_userId: {
+            communityId: "comm-query",
+            userId: "user-1",
+          },
+        },
+      });
     });
   });
 
