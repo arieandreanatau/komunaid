@@ -20,6 +20,7 @@ import {
   forumReplyQuerySchema,
   isMemberListPublic,
   isEventListPublic,
+  isVisibleToPublic,
   can,
   canMembersPost,
   requiresJoinApproval,
@@ -531,8 +532,8 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
     }
   }
 
-  const membersVisible = isMemberListPublic(community.settings) || canViewPrivateMembers;
-  const eventsVisible = isEventListPublic(community.settings) || canViewPrivateMembers;
+  const membersVisible = isVisibleToPublic(isMemberListPublic(community.settings), canViewPrivateMembers);
+  const eventsVisible = isVisibleToPublic(isEventListPublic(community.settings), canViewPrivateMembers);
 
   const officers = await prisma.communityMember.findMany({
     where: { communityId: community.id, status: "ACTIVE", ...activeScope("communityMember"), role: { not: "MEMBER" } },
@@ -2878,10 +2879,7 @@ communityRoutes.post(
         return c.json({ success: false, message: "Hanya anggota yang dapat membuat thread forum" }, 403);
       }
       if (!isOfficer && !canMembersPost(community.settings)) {
-        return c.json(
-          { success: false, message: "Posting anggota telah dinonaktifkan oleh pengurus komunitas" },
-          403
-        );
+        throw new Error("Forbidden");
       }
     } else if (!isAdmin && !isOwner) {
       return c.json({ success: false, message: "Anda tidak memiliki akses untuk membuat media" }, 403);
@@ -3121,10 +3119,7 @@ communityRoutes.post(
       community?.ownerId === authUser.id || (isMember && isCommunityOfficer(membership!.role));
 
     if (isMember && !isOfficer && !canMembersPost(community?.settings)) {
-      return c.json(
-        { success: false, message: "Balasan anggota telah dinonaktifkan oleh pengurus komunitas" },
-        403
-      );
+      throw new Error("Forbidden");
     }
 
     const reply = await prisma.forumReply.create({

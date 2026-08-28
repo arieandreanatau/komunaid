@@ -12,6 +12,7 @@ import {
   handleJoinRequestSchema,
   isMemberListPublic,
   isEventListPublic,
+  isVisibleToPublic,
   requiresJoinApproval,
 } from "@komunaid/shared";
 import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth";
@@ -270,8 +271,8 @@ organizationRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
     canViewPrivateMembers = user.id === organization.ownerId || Boolean(membership && membership.status === "ACTIVE" && membership.deletedAt === null);
   }
 
-  const membersVisible = isMemberListPublic(organization.settings) || canViewPrivateMembers;
-  const eventsVisible = isEventListPublic(organization.settings) || canViewPrivateMembers;
+  const membersVisible = isVisibleToPublic(isMemberListPublic(organization.settings), canViewPrivateMembers);
+  const eventsVisible = isVisibleToPublic(isEventListPublic(organization.settings), canViewPrivateMembers);
 
   return c.json({
     success: true,

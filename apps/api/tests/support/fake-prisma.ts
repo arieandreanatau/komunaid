@@ -464,6 +464,9 @@ const TABLE_NAMES = [
   "loginHistory",
   "report",
   "setting",
+  "userInterest",
+  "communitySave",
+  "volunteerProgramSave",
   "volunteerOpportunity",
   "volunteerPosition",
   "volunteerApplication",
@@ -479,6 +482,11 @@ const TABLE_NAMES = [
 const RELATIONS: Partial<Record<(typeof TABLE_NAMES)[number], Record<string, RelationConfig>>> = {
   user: {
     roles: { table: "userRole", fk: "userId" },
+    interests: { table: "userInterest", fk: "userId" },
+    joinedCommunities: { table: "communityMember", fk: "userId" },
+    organizationMembers: { table: "organizationMember", fk: "userId" },
+    registeredEvents: { table: "eventRegistration", fk: "userId" },
+    notifications: { table: "notification", fk: "userId" },
   },
   community: {
     members: { table: "communityMember", fk: "communityId" },
