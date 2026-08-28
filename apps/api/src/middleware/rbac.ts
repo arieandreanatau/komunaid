@@ -1,7 +1,6 @@
 import { Context, Next } from "hono";
 import { prisma } from "@komunaid/database";
-
-type PlatformRole = "SUPER_ADMIN" | "PLATFORM_ADMIN" | "MEMBER";
+import { isAtLeastCommunityRole, type PlatformRole } from "@komunaid/shared";
 
 const roleCache = new Map<string, { roles: string[]; expiresAt: number }>();
 const ROLE_CACHE_TTL = 10 * 1000; // 10 seconds
@@ -97,7 +96,7 @@ export async function requireCommunityOwner(c: Context, next: Next) {
     },
   });
 
-  if (!membership || membership.role !== "OWNER" || membership.status !== "ACTIVE" || membership.deletedAt != null) {
+  if (!membership || !isAtLeastCommunityRole(membership.role, "OWNER") || membership.status !== "ACTIVE" || membership.deletedAt != null) {
     throw new Error("Forbidden");
   }
 
@@ -121,7 +120,7 @@ export async function requireCommunityAdmin(c: Context, next: Next) {
     },
   });
 
-  if (!membership || !["OWNER", "ADMIN"].includes(membership.role) || membership.status !== "ACTIVE" || membership.deletedAt != null) {
+  if (!membership || !isAtLeastCommunityRole(membership.role, "ADMIN") || membership.status !== "ACTIVE" || membership.deletedAt != null) {
     throw new Error("Forbidden");
   }
 

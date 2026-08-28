@@ -13,6 +13,7 @@ import {
 } from "./navigation";
 import { ContextSwitcher } from "./context-switcher";
 import { api } from "@/lib/api";
+import { isCommunityOfficer } from "@komunaid/shared";
 
 const SIDEBAR_COLLAPSE_KEY = "komuna-sidebar-collapsed";
 
@@ -86,8 +87,12 @@ export function GlobalSidebar({
 
   useEffect(() => {
     if (profile?.communities) {
+      // "OFFICER" was never a real role the server issues (see
+      // @komunaid/shared's permissions module) -- isCommunityOfficer
+      // expresses the same "any role above plain MEMBER" intent using only
+      // real CommunityRole values.
       const managed = profile.communities.filter((c) =>
-        ["OWNER", "ADMIN", "EVENT_MANAGER", "VOLUNTEER_COORDINATOR", "OFFICER"].includes(c.role)
+        isCommunityOfficer(c.role)
       ).map((c) => ({
         id: c.id,
         name: c.name,

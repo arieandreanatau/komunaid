@@ -1,9 +1,19 @@
+import { can, type CommunityAction } from "@komunaid/shared";
+
 export interface NavItem {
   href: string;
   label: string;
   icon: string;
   badge?: number;
-  permission?: string[];
+  /**
+   * Gate this item on @komunaid/shared's `can()` predicate instead of a raw
+   * role list. Previously this was `permission?: string[]` compared against
+   * a locally-invented `ROLE_HIERARCHY` that included a phantom `OFFICER`
+   * role (never issued by the server -- see packages/shared/src/permissions.ts's
+   * module comment). Gating on the action the item actually requires keeps
+   * this file from drifting from apps/api's real authorization rules again.
+   */
+  action?: CommunityAction;
 }
 
 export interface NavSection {
@@ -12,23 +22,8 @@ export interface NavSection {
   items: NavItem[];
 }
 
-const ROLE_HIERARCHY: Record<string, number> = {
-  OWNER: 4,
-  ADMIN: 3,
-  EVENT_MANAGER: 2,
-  VOLUNTEER_COORDINATOR: 2,
-  OFFICER: 2,
-  MEMBER: 1,
-};
-
-function hasPermission(userRole: string, requiredRoles: string[]): boolean {
-  if (requiredRoles.length === 0) return true;
-  const userLevel = ROLE_HIERARCHY[userRole] ?? 0;
-  return requiredRoles.some((role) => userLevel >= (ROLE_HIERARCHY[role] ?? 0));
-}
-
 export function filterByPermission(items: NavItem[], userRole: string): NavItem[] {
-  return items.filter((item) => !item.permission || hasPermission(userRole, item.permission));
+  return items.filter((item) => !item.action || can(userRole, item.action));
 }
 
 const ICONS = {
@@ -125,7 +120,7 @@ export function getCommunityNavigation(communityId: string, role: string): NavSe
       items: [
         { href: `${base}/overview`, label: "Overview", icon: ICONS.overview },
         { href: `${base}/profile`, label: "Profil Komunitas", icon: ICONS.communityProfile },
-        { href: `${base}/requests`, label: "Permintaan", icon: ICONS.submissions, permission: ["OWNER", "ADMIN", "OFFICER"] },
+        { href: `${base}/requests`, label: "Permintaan", icon: ICONS.submissions, action: "handleJoinRequests" },
       ],
     },
     {
@@ -140,7 +135,7 @@ export function getCommunityNavigation(communityId: string, role: string): NavSe
       id: "people",
       label: "People",
       items: [
-        { href: `${base}/pengurus`, label: "Pengurus", icon: ICONS.people, permission: ["OWNER", "ADMIN", "OFFICER"] },
+        { href: `${base}/pengurus`, label: "Pengurus", icon: ICONS.people, action: "managePengurus" },
         { href: `${base}/members`, label: "Anggota", icon: ICONS.members },
       ],
     },
@@ -148,8 +143,8 @@ export function getCommunityNavigation(communityId: string, role: string): NavSe
       id: "content",
       label: "Community Content",
       items: [
-        { href: `${base}/media`, label: "Media", icon: ICONS.media, permission: ["OWNER", "ADMIN", "OFFICER"] },
-        { href: `${base}/insights`, label: "Aktivitas", icon: ICONS.insight, permission: ["OWNER", "ADMIN"] },
+        { href: `${base}/media`, label: "Media", icon: ICONS.media, action: "manageMedia" },
+        { href: `${base}/insights`, label: "Aktivitas", icon: ICONS.insight, action: "viewInsights" },
       ],
     },
     {
@@ -163,7 +158,7 @@ export function getCommunityNavigation(communityId: string, role: string): NavSe
       id: "management",
       label: "Management",
       items: [
-        { href: `${base}/settings`, label: "Pengaturan", icon: ICONS.settings, permission: ["OWNER", "ADMIN"] },
+        { href: `${base}/settings`, label: "Pengaturan", icon: ICONS.settings, action: "editSettings" },
       ],
     },
   ];

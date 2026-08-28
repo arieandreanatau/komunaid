@@ -6,19 +6,27 @@ import Link from "next/link";
 import { useContextStore, type CommunityContext } from "./context-store";
 import { useAuth } from "@/components/auth-provider";
 import { Avatar } from "@/components/ui/avatar";
+import { isCommunityRole, type CommunityRole } from "@komunaid/shared";
 
 interface ContextSwitcherProps {
   collapsed?: boolean;
 }
 
-const ROLE_LABELS: Record<string, string> = {
+// Typed against CommunityRole (from @komunaid/shared) rather than a bare
+// `Record<string, string>` so this can't silently grow a phantom key like
+// the old `OFFICER` entry -- adding a role here that isn't in the canonical
+// list, or missing one that is, is now a compile error.
+const ROLE_LABELS: Record<CommunityRole, string> = {
   OWNER: "Owner",
   ADMIN: "Admin",
   EVENT_MANAGER: "Manajer Event",
   VOLUNTEER_COORDINATOR: "Koordinator Volunteer",
-  OFFICER: "Officer",
   MEMBER: "Member",
 };
+
+function roleLabel(role: string): string {
+  return isCommunityRole(role) ? ROLE_LABELS[role] : role;
+}
 
 function ContextLogo({ src, name, size = "sm" }: { src?: string | null; name: string; size?: "sm" | "md" }) {
   const dims = size === "sm" ? "h-8 w-8" : "h-10 w-10";
@@ -100,7 +108,7 @@ export function ContextSwitcher({ collapsed = false }: ContextSwitcherProps) {
     return managedCommunities.filter(
       (c) =>
         c.name.toLowerCase().includes(q) ||
-        (ROLE_LABELS[c.role] || c.role).toLowerCase().includes(q)
+        roleLabel(c.role).toLowerCase().includes(q)
     );
   }, [managedCommunities, search]);
 
@@ -158,7 +166,7 @@ export function ContextSwitcher({ collapsed = false }: ContextSwitcherProps) {
 
   const currentRole = activeContextType === "personal"
     ? "Personal"
-    : ROLE_LABELS[activeCommunity?.role || ""] || activeCommunity?.role || "Member";
+    : activeCommunity?.role ? roleLabel(activeCommunity.role) : "Member";
 
   if (collapsed) {
     return (
@@ -282,7 +290,7 @@ function CommunityRow({
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold leading-tight">{community.name}</p>
         <p className="truncate text-xs text-slate-500 leading-tight mt-0.5">
-          {ROLE_LABELS[community.role] || community.role}
+          {roleLabel(community.role)}
         </p>
       </div>
       {active ? (
