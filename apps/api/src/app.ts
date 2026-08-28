@@ -23,6 +23,8 @@ import { masterDataRoutes } from "./routes/master-data";
 import { uploadRoutes } from "./routes/upload";
 import { orgStructureRoutes } from "./routes/org-structure";
 import { contactMessageRoutes } from "./routes/contact-messages";
+import { cronRoutes } from "./routes/cron";
+import { LifecycleTransitionError } from "./services/lifecycle-transition";
 
 const log = createChildLogger("server");
 
@@ -130,6 +132,7 @@ api.route("/master-data", masterDataRoutes);
 api.route("/upload", uploadRoutes);
 api.route("/organization-structure", orgStructureRoutes);
 api.route("/contact-messages", contactMessageRoutes);
+api.route("/cron", cronRoutes);
 
 // OpenAPI JSON spec
 app.get("/api/v1/docs/openapi.json", (c) => {
@@ -170,7 +173,11 @@ app.get("/api/v1/docs", (c) => {
 app.route("/api/v1", api);
 
 app.onError((err, c) => {
-  const isExpected = err.message === "Unauthorized" || err.message === "Forbidden" || err.message === "Not Found";
+  const isExpected =
+    err.message === "Unauthorized" ||
+    err.message === "Forbidden" ||
+    err.message === "Not Found" ||
+    err instanceof LifecycleTransitionError;
 
   try {
     if (isExpected) {
@@ -192,6 +199,10 @@ app.onError((err, c) => {
 
   if (err.message === "Not Found") {
     return c.json({ success: false, error: { code: "NOT_FOUND", message: "Not Found" } }, 404);
+  }
+
+  if (err instanceof LifecycleTransitionError) {
+    return c.json({ success: false, error: { code: err.code, message: "Status telah berubah, silakan muat ulang" } }, 409);
   }
 
   return c.json(

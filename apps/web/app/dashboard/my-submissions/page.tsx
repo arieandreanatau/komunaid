@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useAuth } from "@/components/auth-provider";
-import api from "@/lib/api";
+import { apiPost } from "@/lib/api";
+import { useApiPaginatedQuery } from "@/hooks/useApi";
 import { Pagination } from "@/components/pagination";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -27,17 +28,6 @@ interface Submission {
   memberCount: number;
   createdAt: string;
   updatedAt: string;
-}
-
-interface PaginatedResponse {
-  success: boolean;
-  data: Submission[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
 }
 
 type StatusFilter = "" | "DRAFT" | "PENDING" | "APPROVED" | "REJECTED" | "REVISION_REQUIRED";
@@ -244,47 +234,33 @@ export default function MySubmissionsPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { addToast } = useToast();
 
-  const [submissions, setSubmissions] = useState<Submission[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<StatusFilter>("");
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [submitTarget, setSubmitTarget] = useState<Submission | null>(null);
 
-  const fetchSubmissions = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const { data } = await api.get("/communities/my/submissions", {
-        params: {
-          page,
-          limit: 10,
-          status: activeTab || undefined,
-        },
-      });
-      const result: PaginatedResponse = data;
-      setSubmissions(result.data);
-      setTotalPages(result.pagination.totalPages);
-    } catch (err: any) {
-      setError(err?.response?.data?.message || "Gagal memuat data pengajuan.");
-    } finally {
-      setLoading(false);
-    }
-  }, [page, activeTab]);
+  const {
+    data: submissionsPage,
+    isLoading: loading,
+    error: queryError,
+    refetch: fetchSubmissions,
+  } = useApiPaginatedQuery<Submission>({
+    url: "/communities/my/submissions",
+    params: { page, limit: 10, status: activeTab || undefined },
+    enabled: !authLoading && isAuthenticated,
+  });
 
-  useEffect(() => {
-    if (!authLoading && isAuthenticated) {
-      fetchSubmissions();
-    }
-  }, [authLoading, isAuthenticated, fetchSubmissions]);
+  const submissions = submissionsPage?.data ?? [];
+  const totalPages = submissionsPage?.pagination.totalPages ?? 1;
+  const error = queryError
+    ? ((queryError as any)?.response?.data?.message ?? "Gagal memuat data pengajuan.")
+    : null;
 
   const handleSubmit = async () => {
     if (!submitTarget) return;
     try {
       setSubmittingId(submitTarget.id);
-      await api.post(`/communities/${submitTarget.id}/submit`);
+      await apiPost(`/communities/${submitTarget.id}/submit`);
       await fetchSubmissions();
       addToast("Pengajuan komunitas berhasil dikirim.", "success");
     } catch (err: any) {
@@ -454,7 +430,7 @@ export default function MySubmissionsPage() {
                       {submission.status === "DRAFT" && (
                         <>
                           <Link
-                            href={`/communities/${submission.slug}/edit`}
+                            href={`/dashboard/communities/${submission.slug}/settings`}
                             className="px-4 py-2 text-sm font-medium text-komuna-blue border border-komuna-blue/30 rounded-lg hover:bg-komuna-blue/5 transition-colors"
                           >
                             Edit
@@ -475,7 +451,7 @@ export default function MySubmissionsPage() {
                       {submission.status === "REVISION_REQUIRED" && (
                         <>
                           <Link
-                            href={`/communities/${submission.slug}/edit`}
+                            href={`/dashboard/communities/${submission.slug}/settings`}
                             className="px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors"
                           >
                             Perbaiki Pengajuan
@@ -495,7 +471,7 @@ export default function MySubmissionsPage() {
 
                       {submission.status === "REJECTED" && (
                         <Link
-                          href={`/communities/${submission.slug}/edit`}
+                          href={`/dashboard/communities/${submission.slug}/settings`}
                           className="px-4 py-2 text-sm font-medium text-white bg-komuna-blue rounded-lg hover:bg-komuna-navy transition-colors"
                         >
                           Ajukan Revisi

@@ -5,28 +5,15 @@ import { SignJWT } from "jose";
 const JWT_SECRET = new TextEncoder().encode("test-integration-secret");
 process.env.JWT_SECRET = "test-integration-secret";
 
-vi.mock("@komunaid/database", () => {
-  const prisma: any = {
-    user: { findUnique: vi.fn() },
-    userRole: { findMany: vi.fn(async () => []) },
-    communityMember: { findUnique: vi.fn() },
-    organizationMember: { findUnique: vi.fn() },
-    volunteerOpportunity: { findUnique: vi.fn(), update: vi.fn() },
-    volunteerPosition: { updateMany: vi.fn(), create: vi.fn(), findMany: vi.fn(), findUnique: vi.fn() },
-    volunteerApplication: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), updateMany: vi.fn(), delete: vi.fn(), count: vi.fn() },
-    notification: { create: vi.fn(), createMany: vi.fn() },
-    auditLog: { create: vi.fn() },
-    activityHistory: { create: vi.fn() },
-    $queryRaw: vi.fn(),
-    $transaction: vi.fn(),
-  };
+vi.mock("@komunaid/database", async () => {
+  const { prisma } = await import("../support/mock");
   return { prisma };
 });
 
 vi.mock("pino", () => ({ default: vi.fn(() => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), child: vi.fn().mockReturnThis() })) }));
 vi.mock("pino-pretty", () => ({ default: vi.fn(() => ({})) }));
 
-import { prisma } from "@komunaid/database";
+import { prisma, db } from "../support/mock";
 import { volunteerRoutes } from "../../src/routes/volunteers";
 
 async function token() {
@@ -37,6 +24,7 @@ async function token() {
 describe("Volunteer opportunity position isolation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    db.reset();
     (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
     (prisma.volunteerOpportunity.findUnique as any).mockResolvedValue({
       id: "opportunity-1", title: "Opportunity", status: "DRAFT", deletedAt: null,

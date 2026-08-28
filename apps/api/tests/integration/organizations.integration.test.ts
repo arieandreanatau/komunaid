@@ -5,20 +5,15 @@ import { SignJWT } from "jose";
 const JWT_SECRET = new TextEncoder().encode("test-integration-secret");
 process.env.JWT_SECRET = "test-integration-secret";
 
-vi.mock("@komunaid/database", () => {
-  const prisma: any = {
-    user: { findUnique: vi.fn() },
-    organization: { findUnique: vi.fn() },
-    organizationMember: { findUnique: vi.fn(), findFirst: vi.fn(), findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
-    joinRequest: { findUnique: vi.fn(), update: vi.fn() },
-  };
+vi.mock("@komunaid/database", async () => {
+  const { prisma } = await import("../support/mock");
   return { prisma };
 });
 
 vi.mock("pino", () => ({ default: vi.fn(() => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), child: vi.fn().mockReturnThis() })) }));
 vi.mock("pino-pretty", () => ({ default: vi.fn(() => ({})) }));
 
-import { prisma } from "@komunaid/database";
+import { prisma, db } from "../support/mock";
 import { organizationRoutes } from "../../src/routes/organizations";
 
 async function token() {
@@ -29,6 +24,7 @@ async function token() {
 describe("Private organization access", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    db.reset();
     (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
     (prisma.organization.findUnique as any).mockResolvedValue({
       id: "org-1", ownerId: "user-1", status: "APPROVED", visibility: "PRIVATE", deletedAt: null,

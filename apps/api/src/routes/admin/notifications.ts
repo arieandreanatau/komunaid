@@ -5,6 +5,7 @@ import { validate } from "../../middleware/validate";
 import { adminBroadcastNotificationSchema } from "@komunaid/shared";
 import { createAuditLog, AuditActions } from "../../services/audit";
 import type { AuthUser } from "../../middleware/auth";
+import { activeScope } from "../../lib/visibility-scope";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
 export const notificationsRoutes = new Hono<Env>();
@@ -70,7 +71,7 @@ notificationsRoutes.post("/notifications/broadcast", requireSuperAdmin(), valida
     targetRoles?: string[];
   };
 
-  const where: Record<string, any> = { deletedAt: null };
+  const where: Record<string, any> = { ...activeScope("user") };
   if (targetRoles && targetRoles.length > 0) {
     where.roles = { some: { role: { in: targetRoles } } };
   }

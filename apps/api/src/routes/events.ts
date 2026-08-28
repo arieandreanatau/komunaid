@@ -11,57 +11,22 @@ import { createWithUniqueSlug } from "../lib/slug";
 import { slugify } from "@komunaid/utils";
 import type { AuthUser } from "../middleware/auth";
 import { sendEmail } from "../services/email";
+import { transitionEvent as transitionEventLifecycle, EVENT_TRANSITIONS } from "../services/lifecycle-transition";
+import { activeScope, publicScope, PUBLIC_EVENT_STATUSES } from "../lib/visibility-scope";
+import { getEventOrganizerRole, isSuperAdmin, canManageEvent } from "../lib/organizer-authorization";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
 
 export const eventRoutes = new Hono<Env>();
 
-async function getEventOrganizerRole(userId: string, event: any): Promise<string | null> {
-  if (event.communityId) {
-    const membership = await prisma.communityMember.findUnique({
-      where: { communityId_userId: { communityId: event.communityId, userId } },
-    });
-    return membership?.status === "ACTIVE" && membership.deletedAt === null ? membership.role : null;
-  }
-  if (event.organizationId) {
-    const membership = await prisma.organizationMember.findUnique({
-      where: { organizationId_userId: { organizationId: event.organizationId, userId } },
-    });
-    return membership?.status === "ACTIVE" && membership.deletedAt === null ? membership.role : null;
-  }
-  return null;
-}
+// getEventOrganizerRole / isSuperAdmin / canManageEvent now live in
+// ../lib/organizer-authorization.ts -- this file and routes/volunteers.ts
+// used to carry byte-identical copies.
 
-async function isSuperAdmin(userId: string): Promise<boolean> {
-  const roles = await prisma.userRole.findMany({ where: { userId }, select: { role: true } });
-  return roles.some((r) => r.role === "SUPER_ADMIN");
-}
-
-async function canManageEvent(role: string | null, userId: string, event: any): Promise<boolean> {
-  if (await isSuperAdmin(userId)) return true;
-  if (!role) return false;
-  if (["OWNER", "ADMIN", "EVENT_MANAGER"].includes(role)) return true;
-  return false;
-}
-
-const VALID_TRANSITIONS: Record<string, string[]> = {
-  DRAFT: ["SUBMITTED", "CANCELLED"],
-  SUBMITTED: ["IN_REVIEW", "CANCELLED"],
-  IN_REVIEW: ["REVISION_REQUESTED", "REJECTED", "APPROVED", "CANCELLED"],
-  REVISION_REQUESTED: ["RESUBMITTED", "CANCELLED"],
-  RESUBMITTED: ["IN_REVIEW", "CANCELLED"],
-  APPROVED: ["PUBLISHED", "CANCELLED"],
-  PUBLISHED: ["REGISTRATION_OPEN", "CANCELLED", "ARCHIVED"],
-  REGISTRATION_OPEN: ["REGISTRATION_CLOSED", "CANCELLED"],
-  REGISTRATION_CLOSED: ["ONGOING", "CANCELLED"],
-  ONGOING: ["COMPLETED", "CANCELLED"],
-  COMPLETED: ["ARCHIVED"],
-  CANCELLED: [],
-  ARCHIVED: [],
-};
-
+// Canonical transition table now lives in services/lifecycle-transition.ts
+// (EVENT_TRANSITIONS) — this used to be a second, drifted copy.
 function isValidTransition(from: string, to: string): boolean {
-  return VALID_TRANSITIONS[from]?.includes(to) ?? false;
+  return EVENT_TRANSITIONS[from]?.includes(to) ?? false;
 }
 
 async function actorRole(userId: string, event: any): Promise<string> {
@@ -69,33 +34,38 @@ async function actorRole(userId: string, event: any): Promise<string> {
   return (await getEventOrganizerRole(userId, event)) || "UNKNOWN";
 }
 
+// Thin adapter over the shared lifecycle-transition service, kept so the 12
+// call sites below don't need to change shape. This now runs the guarded
+// transaction + EventStatusHistory row + AuditLog row (previously written
+// separately, inconsistently, at each call site) in one place, and throws
+// LifecycleTransitionError on a lost race instead of a bare Error — app.ts's
+// onError maps that to 409 for every caller, public or admin.
 async function transitionEvent(
   event: any,
   toStatus: string,
   actorId: string,
-  options: { reason?: string; submittedAt?: Date | null; reviewedAt?: Date | null; reviewedById?: string | null; reviewNote?: string | null } = {}
+  options: {
+    reason?: string;
+    submittedAt?: Date | null;
+    reviewedAt?: Date | null;
+    reviewedById?: string | null;
+    reviewNote?: string | null;
+    auditAction?: string;
+  } = {}
 ) {
   const role = await actorRole(actorId, event);
-  const { reason, ...eventData } = options;
-  return prisma.$transaction(async (tx) => {
-    const changed = await tx.event.updateMany({
-      where: { id: event.id, status: event.status, deletedAt: null },
-      data: { status: toStatus as any, ...eventData },
-    });
-    if (changed.count !== 1) throw new Error("EVENT_STATUS_CHANGED");
-    await tx.eventStatusHistory.create({
-      data: {
-        eventId: event.id,
-        fromStatus: event.status as any,
-        toStatus: toStatus as any,
-        actorId,
-        actorRole: role,
-        reason: reason || null,
-      },
-    });
-    const updated = await tx.event.findUnique({ where: { id: event.id } });
-    if (!updated) throw new Error("EVENT_NOT_FOUND");
-    return updated;
+  return transitionEventLifecycle({
+    eventId: event.id,
+    expectedStatus: event.status,
+    targetStatus: toStatus,
+    actorId,
+    actorRole: role,
+    reason: options.reason ?? null,
+    submittedAt: options.submittedAt,
+    reviewedAt: options.reviewedAt,
+    reviewedById: options.reviewedById,
+    reviewNote: options.reviewNote,
+    auditAction: options.auditAction,
   });
 }
 
@@ -109,11 +79,7 @@ eventRoutes.get("/", optionalAuthMiddleware, validate(eventQuerySchema, "query")
   const limit = q.limit as number;
 
   // Public discovery never exposes another organizer's private or internal event.
-  const where: any = {
-    deletedAt: null,
-    visibility: "PUBLIC",
-    status: { in: ["SUBMITTED", "IN_REVIEW", "PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"] },
-  };
+  const where: any = { ...publicScope("event") };
 
   if (q.search) {
     where.OR = [
@@ -126,7 +92,7 @@ if (q.communityId) where.communityId = q.communityId;
   if (q.organizationId) where.organizationId = q.organizationId;
   if (q.categoryId) where.categories = { some: { categoryId: q.categoryId } };
   if (q.locationType) where.locationType = q.locationType;
-  if (q.status && ["SUBMITTED", "IN_REVIEW", "PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"].includes(q.status)) {
+  if (q.status && (PUBLIC_EVENT_STATUSES as readonly string[]).includes(q.status)) {
     where.status = q.status;
   }
 
@@ -197,9 +163,7 @@ if (q.communityId) where.communityId = q.communityId;
 
 eventRoutes.get("/popular/upcoming", async (c) => {
   const eventWhere: Prisma.EventWhereInput = {
-    deletedAt: null,
-    visibility: "PUBLIC" as const,
-    status: { in: ["SUBMITTED", "IN_REVIEW", "PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED"] },
+    ...publicScope("event", { statuses: ["SUBMITTED", "IN_REVIEW", "PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED"] }),
     eventDate: { gte: new Date() },
   };
   const ranked = await prisma.eventRegistration.groupBy({
@@ -262,7 +226,7 @@ eventRoutes.get("/my/saved", authMiddleware, async (c) => {
   const url = new URL(c.req.url);
   const page = Math.max(1, parseInt(url.searchParams.get("page") || "1") || 1);
   const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") || "20") || 20));
-  const where = { userId: authUser.id, event: { deletedAt: null } };
+  const where = { userId: authUser.id, event: activeScope("event") };
 
   const [savedEvents, total] = await Promise.all([
     prisma.eventSave.findMany({
@@ -308,11 +272,7 @@ eventRoutes.get("/my/saved", authMiddleware, async (c) => {
 
 eventRoutes.get("/featured", async (c) => {
   const events = await prisma.event.findMany({
-    where: {
-      deletedAt: null,
-      visibility: "PUBLIC",
-    status: { in: ["SUBMITTED", "IN_REVIEW", "PUBLISHED", "REGISTRATION_OPEN"] },
-    },
+    where: publicScope("event", { statuses: ["SUBMITTED", "IN_REVIEW", "PUBLISHED", "REGISTRATION_OPEN"] }),
     include: {
       community: { select: { id: true, name: true, slug: true, logo: true } },
       organization: { select: { id: true, name: true, slug: true, logo: true } },
@@ -377,7 +337,7 @@ eventRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
 
   const role = user ? await getEventOrganizerRole(user.id, event) : null;
   const isOrganizer = user ? await canManageEvent(role, user.id, event) : false;
-  const isPublicEvent = event.visibility === "PUBLIC" && ["SUBMITTED", "IN_REVIEW", "PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"].includes(event.status);
+  const isPublicEvent = event.visibility === "PUBLIC" && (PUBLIC_EVENT_STATUSES as readonly string[]).includes(event.status);
   if (!isPublicEvent && !isOrganizer) {
     return c.json({ success: false, message: "Event tidak ditemukan" }, 404);
   }
@@ -447,7 +407,7 @@ eventRoutes.post("/:eventId/save", authMiddleware, async (c) => {
   const authUser = c.get("user");
   const eventId = c.req.param("eventId") as string;
   const event = await prisma.event.findFirst({
-    where: { id: eventId, deletedAt: null },
+    where: { id: eventId, ...activeScope("event") },
     select: { id: true },
   });
 
@@ -866,15 +826,6 @@ eventRoutes.post("/:eventId/submit", authMiddleware, async (c) => {
 
   const updated = await transitionEvent(event, targetStatus, authUser.id, { submittedAt: new Date(), reviewNote: null, reviewedAt: null, reviewedById: null });
 
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.EVENT_UPDATE,
-    resourceName: "Event",
-    resourceId: eventId,
-    beforeData: { status: event.status },
-    afterData: { status: targetStatus },
-  });
-
   return c.json({
     success: true,
     message: targetStatus === "RESUBMITTED" ? "Event berhasil dikirim ulang untuk ditinjau" : "Event berhasil dikirim untuk ditinjau",
@@ -904,14 +855,6 @@ eventRoutes.post("/:eventId/review", authMiddleware, requireSuperAdmin(), valida
     reviewNote: note || null,
     reason: note,
   });
-  await createAuditLog({
-    userId: reviewer.id,
-    actionType: AuditActions.EVENT_UPDATE,
-    resourceName: "Event",
-    resourceId: event.id,
-    beforeData: { status: event.status },
-    afterData: { status: targetStatus, action, note: note || null },
-  });
 
   return c.json({ success: true, message: "Review event berhasil disimpan", data: { id: updated.id, status: updated.status } });
 });
@@ -926,8 +869,7 @@ eventRoutes.post("/:eventId/publish", authMiddleware, requireSuperAdmin(), async
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event || event.deletedAt) return c.json({ success: false, message: "Event tidak ditemukan" }, 404);
   if (!isValidTransition(event.status, "PUBLISHED")) return c.json({ success: false, message: `Tidak dapat publish dari status ${event.status}` }, 400);
-  const updated = await transitionEvent(event, "PUBLISHED", authUser.id);
-  await createAuditLog({ userId: authUser.id, actionType: AuditActions.EVENT_PUBLISH, resourceName: "Event", resourceId: eventId, beforeData: { status: event.status }, afterData: { status: "PUBLISHED" } });
+  const updated = await transitionEvent(event, "PUBLISHED", authUser.id, { auditAction: AuditActions.EVENT_PUBLISH });
   return c.json({ success: true, message: "Event berhasil dipublikasikan", data: { id: updated.id, status: updated.status } });
 });
 
@@ -953,16 +895,7 @@ eventRoutes.post("/:eventId/open-registration", authMiddleware, async (c) => {
     return c.json({ success: false, message: `Tidak dapat membuka registrasi dari status ${event.status}` }, 400);
   }
 
-  const updated = await transitionEvent(event, "REGISTRATION_OPEN", authUser.id);
-
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.EVENT_PUBLISH,
-    resourceName: "Event",
-    resourceId: eventId,
-    beforeData: { status: event.status },
-    afterData: { status: "REGISTRATION_OPEN" },
-  });
+  const updated = await transitionEvent(event, "REGISTRATION_OPEN", authUser.id, { auditAction: AuditActions.EVENT_PUBLISH });
 
   return c.json({
     success: true,
@@ -993,16 +926,7 @@ eventRoutes.post("/:eventId/close-registration", authMiddleware, async (c) => {
     return c.json({ success: false, message: `Tidak dapat menutup registrasi dari status ${event.status}` }, 400);
   }
 
-  const updated = await transitionEvent(event, "REGISTRATION_CLOSED", authUser.id);
-
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.EVENT_PUBLISH,
-    resourceName: "Event",
-    resourceId: eventId,
-    beforeData: { status: event.status },
-    afterData: { status: "REGISTRATION_CLOSED" },
-  });
+  const updated = await transitionEvent(event, "REGISTRATION_CLOSED", authUser.id, { auditAction: AuditActions.EVENT_PUBLISH });
 
   return c.json({
     success: true,
@@ -1033,16 +957,7 @@ eventRoutes.post("/:eventId/start", authMiddleware, async (c) => {
     return c.json({ success: false, message: `Tidak dapat memulai event dari status ${event.status}` }, 400);
   }
 
-  const updated = await transitionEvent(event, "ONGOING", authUser.id);
-
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.EVENT_PUBLISH,
-    resourceName: "Event",
-    resourceId: eventId,
-    beforeData: { status: event.status },
-    afterData: { status: "ONGOING" },
-  });
+  const updated = await transitionEvent(event, "ONGOING", authUser.id, { auditAction: AuditActions.EVENT_PUBLISH });
 
   return c.json({
     success: true,
@@ -1073,16 +988,7 @@ eventRoutes.post("/:eventId/complete", authMiddleware, async (c) => {
     return c.json({ success: false, message: `Tidak dapat menyelesaikan event dari status ${event.status}` }, 400);
   }
 
-  const updated = await transitionEvent(event, "COMPLETED", authUser.id);
-
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.EVENT_PUBLISH,
-    resourceName: "Event",
-    resourceId: eventId,
-    beforeData: { status: event.status },
-    afterData: { status: "COMPLETED" },
-  });
+  const updated = await transitionEvent(event, "COMPLETED", authUser.id, { auditAction: AuditActions.EVENT_PUBLISH });
 
   return c.json({
     success: true,
@@ -1113,33 +1019,14 @@ eventRoutes.post("/:eventId/cancel", authMiddleware, async (c) => {
     return c.json({ success: false, message: `Tidak dapat membatalkan event dari status ${event.status}` }, 400);
   }
 
+  // transitionEvent's CANCELLED cascade (inside the same guarded transaction)
+  // already cancels active registrations and notifies those registrants.
   const updated = await transitionEvent(event, "CANCELLED", authUser.id, { reason: "Event dibatalkan" });
-
-  const registrations = await prisma.eventRegistration.findMany({
-    where: { eventId, status: { in: ["CONFIRMED", "PENDING", "WAITLISTED"] } },
-  });
-
-  if (registrations.length > 0) {
-    await prisma.eventRegistration.updateMany({
-      where: { eventId, status: { in: ["CONFIRMED", "PENDING", "WAITLISTED"] } },
-      data: { status: "CANCELLED" },
-    });
-
-    await prisma.notification.createMany({
-      data: registrations.map((r) => ({
-        userId: r.userId,
-        title: "Event Dibatalkan",
-        message: `Event "${event.title}" telah dibatalkan oleh penyelenggara.`,
-        type: "EVENT" as const,
-        link: `/events/${event.slug}`,
-      })),
-    });
-  }
 
   // Cascade: cancel volunteer opportunities tied to this event and
   // reject pending/accepted volunteer applications (audit trail preserved).
   const opportunities = await prisma.volunteerOpportunity.findMany({
-    where: { eventId, deletedAt: null },
+    where: { eventId, ...activeScope("volunteerOpportunity") },
   });
   if (opportunities.length > 0) {
     const opportunityIds = opportunities.map((o) => o.id);
@@ -1176,15 +1063,6 @@ eventRoutes.post("/:eventId/cancel", authMiddleware, async (c) => {
     }
   }
 
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.EVENT_CANCEL,
-    resourceName: "Event",
-    resourceId: eventId,
-    beforeData: { status: event.status },
-    afterData: { status: "CANCELLED" },
-  });
-
   return c.json({
     success: true,
     message: "Event berhasil dibatalkan",
@@ -1215,15 +1093,6 @@ eventRoutes.post("/:eventId/archive", authMiddleware, async (c) => {
   }
 
   const updated = await transitionEvent(event, "ARCHIVED", authUser.id);
-
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.EVENT_ARCHIVE,
-    resourceName: "Event",
-    resourceId: eventId,
-    beforeData: { status: event.status },
-    afterData: { status: "ARCHIVED" },
-  });
 
   return c.json({
     success: true,
@@ -2024,7 +1893,7 @@ eventRoutes.get("/my/created", authMiddleware, async (c) => {
 
   const where: any = {
     createdById: authUser.id,
-    deletedAt: null,
+    ...activeScope("event"),
   };
 
   if (status) where.status = status;
@@ -2082,7 +1951,7 @@ eventRoutes.get("/my/registered", authMiddleware, async (c) => {
 
   const where: any = {
     userId: authUser.id,
-    event: { deletedAt: null },
+    event: activeScope("event"),
   };
 
   if (status) where.status = status;

@@ -1,5 +1,10 @@
 import { prisma } from "@komunaid/database";
 
+// Under the serverless (Vercel) topology nothing calls this on its own — there is
+// no long-lived process to hold a setInterval. It requires an external scheduler;
+// see apps/api/src/services/scheduled-work.ts, apps/api/src/routes/cron.ts and
+// the "crons" entry in vercel.json.
+
 const ROLLOVER_BATCH = 100;
 
 async function transitionEventStatus(input: {

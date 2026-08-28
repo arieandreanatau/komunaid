@@ -1,4 +1,5 @@
 import { MAX_LIMIT, DEFAULT_LIMIT } from "@komunaid/constants";
+import type { PaginatedResponse } from "@komunaid/shared";
 
 export function parsePagination(
   url: string,
@@ -19,7 +20,12 @@ export function parsePagination(
   return { page, limit, search, sort, orderBy, skip: (page - 1) * limit };
 }
 
-export function paginatedResponse(data: any[], total: number, page: number, limit: number) {
+export function paginatedResponse<T>(
+  data: T[],
+  total: number,
+  page: number,
+  limit: number,
+): PaginatedResponse<T> {
   return {
     success: true,
     data,

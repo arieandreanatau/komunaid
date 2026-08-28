@@ -19,14 +19,18 @@ import { createAuditLog } from "../services/audit";
 import { sanitizeText } from "../lib/xss";
 import { createWithUniqueSlug } from "../lib/slug";
 import { sendEmail } from "../services/email";
-import { transitionVolunteerProgram, VOLUNTEER_PROGRAM_TRANSITIONS, VolunteerProgramTransitionError } from "../services/volunteer-program-transition";
+import { transitionVolunteerProgram, VOLUNTEER_PROGRAM_TRANSITIONS, LifecycleTransitionError as VolunteerProgramTransitionError } from "../services/lifecycle-transition";
 import { applyToVolunteerProgram, transitionVolunteerProgramApplication, VolunteerProgramApplicationError } from "../services/volunteer-program-application";
+import { activeScope, publicScope, PUBLIC_VOLUNTEER_PROGRAM_STATUSES } from "../lib/visibility-scope";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
 
 export const volunteerProgramRoutes = new Hono<Env>();
 
-const PUBLIC_STATUSES = ["SUBMITTED", "UNDER_REVIEW", "SCHEDULED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"];
+// Re-exported from the shared scope module so this file's existing call
+// sites (PUBLIC_STATUSES.includes(...) checks) don't all need renaming —
+// the canonical list lives in lib/visibility-scope.ts.
+const PUBLIC_STATUSES: readonly string[] = PUBLIC_VOLUNTEER_PROGRAM_STATUSES;
 const TERMINAL_STATUSES = ["COMPLETED", "CANCELLED", "ARCHIVED"];
 const ORGANIZER_TRANSITIONS = new Set(["SCHEDULED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED", "CANCELLED", "ARCHIVED"]);
 
@@ -121,7 +125,7 @@ async function programNotifRecipients(program: { organizerType: string; communit
   let recipients = new Set<string>();
   if (program.organizerType === "COMMUNITY" && program.communityId) {
     const managers = await prisma.communityMember.findMany({
-      where: { communityId: program.communityId, status: "ACTIVE", deletedAt: null, role: { in: ["OWNER", "ADMIN", "VOLUNTEER_COORDINATOR"] } },
+      where: { communityId: program.communityId, status: "ACTIVE", ...activeScope("communityMember"), role: { in: ["OWNER", "ADMIN", "VOLUNTEER_COORDINATOR"] } },
       select: { userId: true },
     });
     managers.forEach((m) => recipients.add(m.userId));
@@ -195,7 +199,7 @@ volunteerProgramRoutes.get("/", optionalAuthMiddleware, async (c) => {
   const upcomingParam = url.searchParams.get("upcoming")?.trim();
   const sort = url.searchParams.get("sort") === "asc" ? "asc" : "desc";
   const orderByRaw = url.searchParams.get("orderBy") || "startDate";
-  const where: any = { deletedAt: null, status: { in: PUBLIC_STATUSES } };
+  const where: any = { ...publicScope("volunteerProgram") };
   if (overrideStatus && PUBLIC_STATUSES.includes(overrideStatus)) {
     where.status = overrideStatus;
   }
@@ -271,7 +275,7 @@ volunteerProgramRoutes.get("/my", authMiddleware, async (c) => {
       orderBy: { createdAt: "desc" },
     }),
     prisma.volunteerProgram.findMany({
-      where: { organizerUserId: user.id, deletedAt: null },
+      where: { organizerUserId: user.id, ...activeScope("volunteerProgram") },
       include: { accesses: { where: { userId: user.id } }, _count: { select: { applications: true } } },
       orderBy: { updatedAt: "desc" },
     }),
@@ -306,7 +310,7 @@ volunteerProgramRoutes.post("/communities/:communityId", authMiddleware, validat
   if (communityId !== data.communityId) return c.json({ success: false, message: "Konteks komunitas tidak cocok" }, 400);
   if (!(await communityVolunteerPermission(user.id, communityId))) return c.json({ success: false, message: "Tidak memiliki volunteer.create pada komunitas ini" }, 403);
   if (!datesAreValid(data, true)) return c.json({ success: false, message: "Rentang jadwal program tidak valid" }, 400);
-  const community = await prisma.community.findFirst({ where: { id: communityId, status: "APPROVED", deletedAt: null } });
+  const community = await prisma.community.findFirst({ where: { id: communityId, status: "APPROVED", ...activeScope("community") } });
   if (!community) return c.json({ success: false, message: "Komunitas tidak aktif" }, 404);
   const program = await createWithUniqueSlug((slug) =>
     prisma.volunteerProgram.create({
@@ -337,7 +341,7 @@ volunteerProgramRoutes.get("/communities/:communityId", authMiddleware, async (c
   const communityId = c.req.param("communityId") as string;
   if (!(await communityVolunteerPermission(user.id, communityId))) return c.json({ success: false, message: "Tidak memiliki volunteer.view pada komunitas ini" }, 403);
   const programs = await prisma.volunteerProgram.findMany({
-    where: { communityId, organizerType: "COMMUNITY", deletedAt: null },
+    where: { communityId, organizerType: "COMMUNITY", ...activeScope("volunteerProgram") },
     include: { _count: { select: { applications: true } } },
     orderBy: { updatedAt: "desc" },
   });
@@ -377,7 +381,7 @@ volunteerProgramRoutes.get("/my/saved", authMiddleware, async (c) => {
   const url = new URL(c.req.url);
   const page = Math.max(1, Number(url.searchParams.get("page") || 1));
   const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") || 20)));
-  const where = { userId: user.id, volunteerProgram: { deletedAt: null } };
+  const where = { userId: user.id, volunteerProgram: activeScope("volunteerProgram") };
   const [saved, total] = await Promise.all([
     prisma.volunteerProgramSave.findMany({ where, include: { volunteerProgram: { select: { id: true, title: true, slug: true, description: true, status: true, startDate: true, endDate: true, location: true } } }, orderBy: { createdAt: "desc" }, skip: (page - 1) * limit, take: limit }),
     prisma.volunteerProgramSave.count({ where }),
@@ -387,7 +391,7 @@ volunteerProgramRoutes.get("/my/saved", authMiddleware, async (c) => {
 
 volunteerProgramRoutes.get("/admin/review-queue", authMiddleware, requireSuperAdmin(), async (c) => {
   const programs = await prisma.volunteerProgram.findMany({
-    where: { status: "UNDER_REVIEW", deletedAt: null },
+    where: { status: "UNDER_REVIEW", ...activeScope("volunteerProgram") },
     include: {
       organizerUser: { select: { id: true, name: true, email: true, avatar: true } },
       community: { select: { id: true, name: true } },
@@ -401,7 +405,7 @@ volunteerProgramRoutes.get("/admin/review-queue", authMiddleware, requireSuperAd
 // system: aggregate stats, program registry, applications and attendance.
 volunteerProgramRoutes.get("/admin/stats", authMiddleware, requireSuperAdmin(), async (c) => {
   const [totalPrograms, activeVolunteers, pendingApplications, totalApplications, totalAttended, totalRegistrations] = await Promise.all([
-    prisma.volunteerProgram.count({ where: { deletedAt: null } }),
+    prisma.volunteerProgram.count({ where: activeScope("volunteerProgram") }),
     prisma.volunteerProgramParticipation.count({ where: { status: { in: ["UPCOMING", "COMPLETED"] } } }),
     prisma.volunteerProgramApplication.count({ where: { status: "PENDING" } }),
     prisma.volunteerProgramApplication.count(),
@@ -417,7 +421,7 @@ volunteerProgramRoutes.get("/admin/programs", authMiddleware, requireSuperAdmin(
   const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") || 20)));
   const status = url.searchParams.get("status") || "";
   const search = url.searchParams.get("search")?.trim() || "";
-  const where: Record<string, any> = { deletedAt: null };
+  const where: Record<string, any> = { ...activeScope("volunteerProgram") };
   if (status && status !== "ALL") where.status = status;
   if (search) where.OR = [{ title: { contains: search } }, { location: { contains: search } }];
   const [programs, total] = await Promise.all([
@@ -545,7 +549,7 @@ volunteerProgramRoutes.get("/detail/:slug", optionalAuthMiddleware, async (c) =>
 volunteerProgramRoutes.post("/:programId/save", authMiddleware, async (c) => {
   const user = c.get("user");
   const volunteerProgramId = c.req.param("programId") as string;
-  const program = await prisma.volunteerProgram.findFirst({ where: { id: volunteerProgramId, deletedAt: null }, select: { id: true } });
+  const program = await prisma.volunteerProgram.findFirst({ where: { id: volunteerProgramId, ...activeScope("volunteerProgram") }, select: { id: true } });
   if (!program) return c.json({ success: false, message: "Program volunteer tidak ditemukan" }, 404);
   await prisma.volunteerProgramSave.upsert({ where: { volunteerProgramId_userId: { volunteerProgramId, userId: user.id } }, create: { volunteerProgramId, userId: user.id }, update: {} });
   return c.json({ success: true, message: "Volunteer berhasil disimpan" });
@@ -588,7 +592,7 @@ async function discoveryPrograms(where: any, orderBy: any, take: number) {
   }));
 }
 
-const PUBLIC_WHERE = (): any => ({ deletedAt: null, status: { in: PUBLIC_STATUSES } });
+const PUBLIC_WHERE = (): any => publicScope("volunteerProgram");
 
 const discoveryCache = new Map<string, { expiresAt: number; data: unknown }>();
 const DISCOVERY_TTL_MS = 60_000;
@@ -612,7 +616,7 @@ volunteerProgramRoutes.get("/popular", async (c) => {
 });
 
 volunteerProgramRoutes.get("/featured", async (c) => {
-  const featured = await cachedDiscovery("vp-featured", () => discoveryPrograms({ ...PUBLIC_WHERE(), status: { in: ["SCHEDULED", "REGISTRATION_OPEN"] }, startDate: { gte: new Date() } }, { startDate: "asc" }, 6));
+  const featured = await cachedDiscovery("vp-featured", () => discoveryPrograms({ ...publicScope("volunteerProgram", { statuses: ["SCHEDULED", "REGISTRATION_OPEN"] }), startDate: { gte: new Date() } }, { startDate: "asc" }, 6));
   return c.json({ success: true, data: featured });
 });
 

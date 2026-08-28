@@ -7,6 +7,7 @@ import { validate } from "../middleware/validate";
 import { createAuditLog, AuditActions } from "../services/audit";
 import { parsePagination, paginatedResponse } from "../lib/pagination";
 import type { AuthUser } from "../middleware/auth";
+import { activeScope } from "../lib/visibility-scope";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
 
@@ -26,6 +27,7 @@ reportRoutes.post("/", authMiddleware, validate(createReportSchema), async (c) =
       targetType: data.targetType,
       targetId: data.targetId,
       status: { in: [REPORT_STATUSES.OPEN, REPORT_STATUSES.UNDER_REVIEW] },
+      ...activeScope("report"),
     },
   });
 
@@ -71,12 +73,12 @@ reportRoutes.get("/my", authMiddleware, async (c) => {
 
   const [reports, total] = await Promise.all([
     prisma.report.findMany({
-      where: { reporterId: authUser.id },
+      where: { reporterId: authUser.id, ...activeScope("report") },
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * limit,
       take: limit,
     }),
-    prisma.report.count({ where: { reporterId: authUser.id } }),
+    prisma.report.count({ where: { reporterId: authUser.id, ...activeScope("report") } }),
   ]);
 
   return c.json(paginatedResponse(reports, total, page, limit));
@@ -91,7 +93,7 @@ reportRoutes.get("/:reportId", authMiddleware, async (c) => {
   const reportId = c.req.param("reportId") as string;
 
   const report = await prisma.report.findUnique({
-    where: { id: reportId },
+    where: { id: reportId, deletedAt: activeScope("report").deletedAt },
   });
 
   if (!report) {

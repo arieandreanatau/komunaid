@@ -6,80 +6,8 @@ const JWT_SECRET = new TextEncoder().encode("test-integration-secret");
 
 process.env.JWT_SECRET = "test-integration-secret";
 
-vi.mock("@komunaid/database", () => {
-  const users = new Map<string, any>();
-  let idCounter = 1;
-  const createId = () => `id-${idCounter++}`;
-
-  const prisma = {
-    user: {
-      findUnique: vi.fn(async ({ where }: any) => {
-        if (where.email) return Array.from(users.values()).find((u) => u.email === where.email) || null;
-        if (where.username) return Array.from(users.values()).find((u) => u.username === where.username) || null;
-        if (where.id) return users.get(where.id) || null;
-        return null;
-      }),
-      findMany: vi.fn(async () => Array.from(users.values())),
-      create: vi.fn(async ({ data }: any) => {
-        const id = createId();
-        const user = {
-          ...data,
-          id,
-          tokenVersion: 0,
-          status: "ACTIVE",
-          deletedAt: null,
-          avatar: null,
-          phone: null,
-          bio: null,
-          location: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          roles: data.roles?.create ? [{ role: data.roles.create.role }] : [],
-          interests: [],
-        };
-        users.set(id, user);
-        return user;
-      }),
-      update: vi.fn(async ({ where, data }: any) => {
-        const user = users.get(where.id);
-        if (!user) throw new Error("Not found");
-        Object.assign(user, data);
-        return user;
-      }),
-      updateMany: vi.fn(async ({ where, data }: any) => {
-        const user = users.get(where.id);
-        if (!user || (where.tokenVersion !== undefined && user.tokenVersion !== where.tokenVersion)) {
-          return { count: 0 };
-        }
-        user.password = data.password ?? user.password;
-        if (data.tokenVersion?.increment) {
-          user.tokenVersion += data.tokenVersion.increment;
-        }
-        return { count: 1 };
-      }),
-    },
-    userRole: { findMany: vi.fn(async () => []) },
-    communityMember: { findUnique: vi.fn(async () => null), count: vi.fn(async () => 0) },
-    organizationMember: { findUnique: vi.fn(async () => null), count: vi.fn(async () => 0) },
-    auditLog: { create: vi.fn(async () => ({})), findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
-    loginHistory: { create: vi.fn(async () => ({})) },
-    activityHistory: { create: vi.fn(async () => ({})) },
-    notification: { create: vi.fn(async () => ({})), createMany: vi.fn(async () => ({ count: 0 })) },
-    refreshToken: {
-      create: vi.fn(async () => ({})),
-      findUnique: vi.fn(async () => null),
-      findMany: vi.fn(async () => []),
-      updateMany: vi.fn(async () => ({ count: 0 })),
-      deleteMany: vi.fn(async () => ({ count: 0 })),
-      groupBy: vi.fn(async () => []),
-    },
-    $transaction: vi.fn(async (fn: any) => {
-      if (typeof fn === "function") return fn(prisma);
-      return Promise.all(fn);
-    }),
-    $queryRaw: vi.fn(async () => []),
-  };
-
+vi.mock("@komunaid/database", async () => {
+  const { prisma } = await import("../support/mock");
   return { prisma };
 });
 
@@ -101,7 +29,7 @@ vi.mock("pino", () => ({
 
 vi.mock("pino-pretty", () => ({ default: vi.fn(() => ({})) }));
 
-import { prisma } from "@komunaid/database";
+import { prisma, db } from "../support/mock";
 import { authRoutes } from "../../src/routes/auth";
 import { generateResetToken } from "../../src/middleware/auth";
 import bcrypt from "bcryptjs";
@@ -119,6 +47,7 @@ describe("Auth Integration Tests", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    db.reset();
     app = new Hono();
     app.onError((err, c) => {
       if (err.message === "Unauthorized") {

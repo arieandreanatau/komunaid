@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { prisma } from "@komunaid/database";
 import { updateProfileSchema, updateInterestsSchema } from "@komunaid/shared";
-import { COMMUNITY_STATUSES, ALLOWED_IMAGE_TYPES } from "@komunaid/constants";
+import { ALLOWED_IMAGE_TYPES } from "@komunaid/constants";
 import { authMiddleware } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import { createAuditLog, AuditActions } from "../services/audit";
@@ -9,6 +9,7 @@ import { parsePagination, paginatedResponse } from "../lib/pagination";
 import { sanitizeText } from "../lib/xss";
 import { createChildLogger } from "../lib/logger";
 import type { AuthUser } from "../middleware/auth";
+import { activeScope, publicScope } from "../lib/visibility-scope";
 
 const log = createChildLogger("users");
 
@@ -30,7 +31,7 @@ userRoutes.get("/profile", authMiddleware, async (c) => {
       interests: true,
       joinedCommunities: {
         where: {
-          community: { deletedAt: null },
+          community: activeScope("community"),
         },
         include: {
           community: {
@@ -41,8 +42,8 @@ userRoutes.get("/profile", authMiddleware, async (c) => {
       organizationMembers: {
         where: {
           status: "ACTIVE",
-          deletedAt: null,
-          organization: { deletedAt: null },
+          ...activeScope("organizationMember"),
+          organization: activeScope("organization"),
         },
         include: {
           organization: {
@@ -54,7 +55,7 @@ userRoutes.get("/profile", authMiddleware, async (c) => {
         where: {
           status: { in: ["PENDING", "CONFIRMED", "WAITLISTED"] },
           event: {
-            deletedAt: null,
+            ...activeScope("event"),
             status: { notIn: ["CANCELLED", "ARCHIVED"] },
           },
         },
@@ -77,7 +78,7 @@ userRoutes.get("/profile", authMiddleware, async (c) => {
   let savedEventsRaw: { event: { id: string; title: string; slug: string; coverImage: string | null; eventDate: Date; status: string }; createdAt: Date }[] = [];
   try {
     savedEventsRaw = (await prisma.eventSave.findMany({
-      where: { userId: authUser.id, event: { deletedAt: null } },
+      where: { userId: authUser.id, event: activeScope("event") },
       include: {
         event: {
           select: { id: true, title: true, slug: true, coverImage: true, eventDate: true, status: true },
@@ -102,16 +103,16 @@ userRoutes.get("/profile", authMiddleware, async (c) => {
       where: {
         userId: authUser.id,
         status: { in: ["PENDING", "CONFIRMED", "WAITLISTED"] },
-        event: { deletedAt: null, status: { notIn: ["CANCELLED", "ARCHIVED"] } },
+        event: { ...activeScope("event"), status: { notIn: ["CANCELLED", "ARCHIVED"] } },
       },
     }),
     prisma.eventSave.count({
-      where: { userId: authUser.id, event: { deletedAt: null } },
+      where: { userId: authUser.id, event: activeScope("event") },
     }).catch(() => 0),
   ]);
   const [savedCommunitiesCount, savedVolunteerProgramsCount] = await Promise.all([
-    prisma.communitySave.count({ where: { userId: authUser.id, community: { deletedAt: null } } }).catch(() => 0),
-    prisma.volunteerProgramSave.count({ where: { userId: authUser.id, volunteerProgram: { deletedAt: null } } }).catch(() => 0),
+    prisma.communitySave.count({ where: { userId: authUser.id, community: activeScope("community") } }).catch(() => 0),
+    prisma.volunteerProgramSave.count({ where: { userId: authUser.id, volunteerProgram: activeScope("volunteerProgram") } }).catch(() => 0),
   ]);
 
   const mapCommunity = (membership: (typeof user.joinedCommunities)[number]) => ({
@@ -622,7 +623,7 @@ userRoutes.get("/:id", async (c) => {
   const id = c.req.param("id");
 
   const user = await prisma.user.findUnique({
-    where: { id, deletedAt: null },
+    where: { id, deletedAt: activeScope("user").deletedAt },
     select: {
       id: true,
       name: true,
@@ -637,7 +638,10 @@ userRoutes.get("/:id", async (c) => {
             select: { id: true, name: true, slug: true, logo: true },
           },
         },
-        where: { community: { status: COMMUNITY_STATUSES.APPROVED } },
+        // Was `{ status: APPROVED }` only — missing deletedAt/visibility meant a
+        // soft-deleted or PRIVATE community a user had joined could leak onto
+        // this public profile endpoint. See task report ("genuine visibility leak").
+        where: { community: publicScope("community") },
         take: 10,
       },
     },

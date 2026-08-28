@@ -5,93 +5,8 @@ const JWT_SECRET = new TextEncoder().encode("test-integration-secret");
 process.env.JWT_SECRET = "test-integration-secret";
 process.env.CSRF_SECRET = "test-csrf-secret";
 
-// In-memory data
-const users = new Map<string, any>();
-const memberships = new Map<string, any>(); // key `${communityId}:${userId}`
-const communities = new Map<string, any>();
-
-vi.mock("@komunaid/database", () => {
-  const prisma: any = {
-    user: {
-      findUnique: vi.fn(async ({ where, include }: any) => {
-        if (where.id) {
-          const u = users.get(where.id);
-          if (!u) return null;
-          await new Promise((r) => setTimeout(r, 1));
-          if (include?.roles) return { ...u, roles: u.roleList || [] };
-          return { ...u };
-        }
-        return null;
-      }),
-      findMany: vi.fn(async () => []),
-      count: vi.fn(async () => 0),
-      update: vi.fn(async ({ where, data }: any) => {
-        const u = users.get(where.id);
-        Object.assign(u, data);
-        return { ...u };
-      }),
-    },
-    userRole: {
-      findMany: vi.fn(async ({ where }: any) => (users.get(where.userId)?.roleList || [])),
-      findFirst: vi.fn(async () => null),
-      count: vi.fn(async () => 1),
-      deleteMany: vi.fn(async () => ({ count: 1 })),
-      create: vi.fn(async ({ data }: any) => ({ ...data })),
-    },
-    community: {
-      findUnique: vi.fn(async ({ where }: any) => (where.id ? (communities.get(where.id) || null) : null)),
-      findMany: vi.fn(async () => Array.from(communities.values())),
-      count: vi.fn(async () => communities.size),
-      update: vi.fn(async ({ where, data }: any) => {
-        const c = communities.get(where.id);
-        Object.assign(c, data);
-        return { ...c };
-      }),
-      create: vi.fn(async ({ data }: any) => ({ id: "comm-new", ...data })),
-      deleteMany: vi.fn(async () => ({ count: 0 })),
-    },
-    communityMember: {
-      findUnique: vi.fn(async ({ where, include }: any) => {
-        if (where.communityId_userId) {
-          const m = memberships.get(`${where.communityId_userId.communityId}:${where.communityId_userId.userId}`) || null;
-          if (!m) return null;
-          if (include?.user) return { ...m, user: { id: m.userId, name: m.userId } };
-          return { ...m };
-        }
-        if (where.id) {
-          return Array.from(memberships.values()).find((m) => m.id === where.id) || null;
-        }
-        return null;
-      }),
-      findMany: vi.fn(async () => Array.from(memberships.values())),
-      findFirst: vi.fn(async () => null),
-      count: vi.fn(async () => 0),
-      create: vi.fn(async ({ data }: any) => ({ id: "member-new", ...data })),
-      update: vi.fn(async ({ where, data }: any) => ({ id: where.id, ...data })),
-    },
-    organization: { findUnique: vi.fn(async () => null), findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
-    organizationMember: { findUnique: vi.fn(async () => null), findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
-    event: {
-      findUnique: vi.fn(async () => null),
-      findMany: vi.fn(async () => []),
-      count: vi.fn(async () => 0),
-      create: vi.fn(async ({ data }: any) => ({ id: "event-new", ...data })),
-    },
-    category: { findUnique: vi.fn(async () => null), create: vi.fn(async () => ({})) },
-    communityCategory: { deleteMany: vi.fn(async () => ({ count: 0 })), createMany: vi.fn(async () => ({ count: 0 })), create: vi.fn(async () => ({})) },
-    communityTag: { deleteMany: vi.fn(async () => ({ count: 0 })), createMany: vi.fn(async () => ({ count: 0 })) },
-    auditLog: { create: vi.fn(async () => ({})), findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
-    notification: { create: vi.fn(async () => ({})), createMany: vi.fn(async () => ({ count: 0 })) },
-    activityHistory: { create: vi.fn(async () => ({})) },
-    membershipHistory: { create: vi.fn(async () => ({})), findMany: vi.fn(async () => []) },
-    setting: { findMany: vi.fn(async () => []), upsert: vi.fn(async ({ create }: any) => create) },
-    report: { count: vi.fn(async () => 0), findMany: vi.fn(async () => []), findUnique: vi.fn(async () => null) },
-    communitySettings: { findUnique: vi.fn(async () => null) },
-    communityMedia: { findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
-    joinRequest: { findFirst: vi.fn(async () => null), findMany: vi.fn(async () => []) },
-    volunteerOpportunity: { findUnique: vi.fn(async () => null), findMany: vi.fn(async () => []) },
-    volunteerStatusHistory: { create: vi.fn(async () => ({})), findMany: vi.fn(async () => []) },
-  };
+vi.mock("@komunaid/database", async () => {
+  const { prisma } = await import("../support/mock");
   return { prisma };
 });
 
@@ -100,14 +15,15 @@ vi.mock("pino-pretty", () => ({ default: vi.fn(() => ({})) }));
 vi.mock("resend", () => ({ Resend: vi.fn().mockImplementation(() => ({ emails: { send: vi.fn(async () => ({})) } })) }));
 vi.mock("nodemailer", () => ({ default: { createTransport: vi.fn(() => ({ sendMail: vi.fn(async () => ({})) })) } }));
 
-import { prisma } from "@komunaid/database";
+import { db } from "../support/mock";
+import { aUser, aCommunity } from "../support/builders";
 import { invalidateRoleCache } from "../../src/middleware/rbac";
 import app from "../../src/app";
 
 const CSRF_TOKEN = "c".repeat(64);
 
 async function token(id: string, roles: string[], claims: { status?: string; deletedAt?: boolean } = {}) {
-  const u = users.get(id) || {};
+  const u = db.tables.user.all().find((x) => x.id === id) || {};
   return new SignJWT({ sub: id, email: u.email || `${id}@test.local`, name: id, username: id, roles, type: "access", ...(claims.status === "SUSPENDED" ? {} : {}), tokenVersion: 0 })
     .setProtectedHeader({ alg: "HS256" }).setIssuedAt().setExpirationTime("15m").sign(JWT_SECRET);
 }
@@ -119,28 +35,31 @@ function headers(accessToken: string, mutation = false): Record<string, string> 
   return { Authorization: `Bearer ${accessToken}` };
 }
 
+/** `fields.roleList` (a legacy shape from the old hand-rolled mock) still drives which
+ *  platform roles get seeded into the real `userRole` table — everything else becomes
+ *  a scalar field on the seeded user row. */
 async function seedUser(id: string, fields: any = {}) {
-  users.set(id, { id, name: id, username: id, email: `${id}@test.local`, status: "ACTIVE", deletedAt: null, tokenVersion: 0, roleList: [{ userId: id, role: "MEMBER" }], ...fields });
+  const { roleList, ...userFields } = fields;
+  aUser(db, { id, name: id, username: id, email: `${id}@test.local`, ...userFields });
+  const roles = roleList || [{ userId: id, role: "MEMBER" }];
+  for (const r of roles) db.tables.userRole.seed({ userId: id, role: r.role });
 }
 
 async function seedCommunity(id: string, ownerId: string, fields: any = {}) {
-  communities.set(id, {
+  aCommunity(db, {
     id, name: id, slug: id, description: "d", status: "APPROVED", visibility: "PUBLIC", membershipType: "OPEN",
-    ownerId, deletedAt: null, createdAt: new Date(), updatedAt: new Date(), _count: { members: 1, events: 0 }, ...fields,
-  });
-  memberships.set(`${id}:${ownerId}`, { id: `mem-${id}-${ownerId}`, communityId: id, userId: ownerId, role: "OWNER", status: "ACTIVE", deletedAt: null });
+    ownerId, _count: { members: 1, events: 0 }, ...fields,
+  }).withMember({ id: ownerId }, { id: `mem-${id}-${ownerId}`, role: "OWNER", status: "ACTIVE" });
 }
 
 async function seedMember(communityId: string, userId: string, role: string) {
-  memberships.set(`${communityId}:${userId}`, { id: `mem-${communityId}-${userId}`, communityId, userId, role, status: "ACTIVE", deletedAt: null });
+  db.tables.communityMember.seed({ id: `mem-${communityId}-${userId}`, communityId, userId, role, status: "ACTIVE", deletedAt: null });
 }
 
 describe("08b — RBAC privilege escalation (horizontal & vertical)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    users.clear();
-    memberships.clear();
-    communities.clear();
+    db.reset();
     invalidateRoleCache("admin-a");
     invalidateRoleCache("admin-b");
     invalidateRoleCache("member-1");

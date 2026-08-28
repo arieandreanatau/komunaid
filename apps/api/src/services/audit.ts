@@ -66,6 +66,40 @@ export async function createAuditLog(entry: AuditLogEntry): Promise<void> {
 }
 
 /**
+ * Convenience wrapper over `createAuditLog` for the extremely common "diff
+ * two plain objects and log them" shape (dozens of call sites hand-assemble
+ * `beforeData`/`afterData` inline). Pass the entry plus a `before`/`after`
+ * snapshot instead of pre-shaping those two fields yourself — this only
+ * reshapes the call; `createAuditLog` still does the actual insert (and the
+ * actor-role cache/resolution above is untouched).
+ */
+export async function logAuditSnapshot(
+  entry: Omit<AuditLogEntry, "beforeData" | "afterData">,
+  snapshot: { before?: Record<string, unknown> | null; after?: Record<string, unknown> | null }
+): Promise<void> {
+  return createAuditLog({
+    ...entry,
+    beforeData: snapshot.before ?? null,
+    afterData: snapshot.after ?? null,
+  });
+}
+
+/**
+ * Picks a fixed set of keys off an entity row into a plain snapshot object —
+ * `snapshotFields(community, ["status", "visibility"])` instead of
+ * `{ status: community.status, visibility: community.visibility }` by hand.
+ * Meant to build the `before`/`after` snapshots passed to `logAuditSnapshot`.
+ */
+export function snapshotFields<T extends Record<string, unknown>, K extends keyof T>(
+  entity: T,
+  fields: readonly K[]
+): Pick<T, K> {
+  const snapshot = {} as Pick<T, K>;
+  for (const field of fields) snapshot[field] = entity[field];
+  return snapshot;
+}
+
+/**
  * Read audit logs for a specific resource.
  * Audit logs are READ ONLY - this is the only allowed read operation.
  */

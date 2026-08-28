@@ -5,109 +5,8 @@ import { SignJWT } from "jose";
 const JWT_SECRET = new TextEncoder().encode("test-integration-secret");
 process.env.JWT_SECRET = "test-integration-secret";
 
-vi.mock("@komunaid/database", () => {
-  const events = new Map<string, any>();
-  const registrations = new Map<string, any>();
-  const savedEvents = new Map<string, any>();
-  let idCounter = 1;
-  const createId = () => `event-${idCounter++}`;
-
-  const prisma = {
-    event: {
-      findUnique: vi.fn(async ({ where }: any) => {
-        if (where.id) return events.get(where.id) || null;
-        if (where.slug) return Array.from(events.values()).find((e) => e.slug === where.slug) || null;
-        return null;
-      }),
-      findMany: vi.fn(async () => Array.from(events.values())),
-      create: vi.fn(async ({ data }: any) => {
-        const id = createId();
-        const event = {
-          id, title: data.title, slug: data.slug || data.title.toLowerCase().replace(/\s+/g, "-"),
-          description: data.description || null, status: data.status || "DRAFT",
-          visibility: data.visibility || "PUBLIC", deletedAt: null,
-          coverImage: null, thumbnail: null, location: data.location || null,
-          locationType: data.locationType || "PHYSICAL", isOnline: data.isOnline || false,
-          onlineUrl: null, meetingUrl: null, eventDate: data.eventDate || new Date(),
-          endDate: data.endDate || null, timezone: "Asia/Jakarta", quota: data.quota || 100,
-          allowWaitlist: data.allowWaitlist || false, contactName: null, contactEmail: null,
-          contactPhone: null, gallery: null, communityId: data.communityId || null,
-          organizationId: data.organizationId || null, createdById: data.createdById,
-          createdAt: new Date(), updatedAt: new Date(), _count: { registrations: 0 },
-          community: null, organization: null,
-          createdBy: { id: data.createdById, name: "Creator", avatar: null },
-          categories: [], registrations: [],
-        };
-        events.set(id, event);
-        return event;
-      }),
-      update: vi.fn(async ({ where, data }: any) => {
-        const e = events.get(where.id);
-        if (!e) throw new Error("Not found");
-        Object.assign(e, data);
-        return e;
-      }),
-      updateMany: vi.fn(async ({ where, data }: any) => {
-        const e = events.get(where.id);
-        // Handler-specific tests override findUnique and do not share a DB fixture.
-        // Treat conditional writes as successful; race behavior has dedicated tests.
-        if (e) Object.assign(e, data);
-        return { count: 1 };
-      }),
-      count: vi.fn(async () => events.size),
-      findFirst: vi.fn(async ({ where }: any) => events.get(where.id) || null),
-    },
-    eventRegistration: {
-      findUnique: vi.fn(async ({ where }: any) => {
-        if (where.eventId_userId) {
-          return Array.from(registrations.values()).find(
-            (r) => r.eventId === where.eventId_userId.eventId && r.userId === where.eventId_userId.userId
-          ) || null;
-        }
-        if (where.id) return Array.from(registrations.values()).find((r) => r.id === where.id) || null;
-        return null;
-      }),
-      findMany: vi.fn(async () => Array.from(registrations.values())),
-      create: vi.fn(async ({ data }: any) => {
-        const id = `reg-${Date.now()}`;
-        const reg = { id, ...data, registeredAt: new Date(), attendance: null, checkedInAt: null, checkedOutAt: null, notes: null };
-        registrations.set(id, reg);
-        return reg;
-      }),
-      update: vi.fn(async ({ where, data }: any) => {
-        const r = Array.from(registrations.values()).find((reg) => reg.id === where.id);
-        if (r) Object.assign(r, data);
-        return r;
-      }),
-      delete: vi.fn(), count: vi.fn(async () => registrations.size),
-      groupBy: vi.fn(async () => []), updateMany: vi.fn(async () => ({ count: 0 })),
-    },
-    eventSave: {
-      findUnique: vi.fn(async ({ where }: any) => savedEvents.get(`${where.eventId_userId.eventId}:${where.eventId_userId.userId}`) || null),
-      findMany: vi.fn(async () => Array.from(savedEvents.values())),
-      count: vi.fn(async () => savedEvents.size),
-      upsert: vi.fn(async ({ where, create }: any) => {
-        const key = `${where.eventId_userId.eventId}:${where.eventId_userId.userId}`;
-        const saved = savedEvents.get(key) || { id: `save-${savedEvents.size + 1}`, ...create, createdAt: new Date() };
-        savedEvents.set(key, saved);
-        return saved;
-      }),
-      deleteMany: vi.fn(async ({ where }: any) => ({ count: savedEvents.delete(`${where.eventId}:${where.userId}`) ? 1 : 0 })),
-    },
-    communityMember: { findUnique: vi.fn(async () => null) },
-    organizationMember: { findUnique: vi.fn(async () => null) },
-    userRole: { findMany: vi.fn(async () => []) },
-    auditLog: { create: vi.fn(async () => ({})) },
-    activityHistory: { create: vi.fn(async () => ({})) },
-    notification: { create: vi.fn(async () => ({})), createMany: vi.fn(async () => ({ count: 0 })) },
-    volunteerOpportunity: { findMany: vi.fn(async () => []), updateMany: vi.fn(async () => ({ count: 0 })) },
-    volunteerApplication: { findMany: vi.fn(async () => []), updateMany: vi.fn(async () => ({ count: 0 })) },
-    eventCategory: { deleteMany: vi.fn(async () => ({ count: 0 })), createMany: vi.fn(async () => ({ count: 0 })) },
-    eventStatusHistory: { create: vi.fn(async ({ data }: any) => ({ id: `history-${Date.now()}`, ...data })) },
-    user: { findUnique: vi.fn(async () => null) },
-    $transaction: vi.fn(async (fn: any) => { if (typeof fn === "function") return fn(prisma); return Promise.all(fn); }),
-    $queryRaw: vi.fn(async () => []),
-  };
+vi.mock("@komunaid/database", async () => {
+  const { prisma } = await import("../support/mock");
   return { prisma };
 });
 
@@ -124,8 +23,10 @@ vi.mock("nodemailer", () => ({
   default: { createTransport: vi.fn(() => ({ sendMail: vi.fn(async () => ({})) })) },
 }));
 
-import { prisma } from "@komunaid/database";
+import { prisma, db } from "../support/mock";
+import { anEvent } from "../support/builders";
 import { eventRoutes } from "../../src/routes/events";
+import { LifecycleTransitionError } from "../../src/services/lifecycle-transition";
 
 async function generateToken(payload: any): Promise<string> {
   return new SignJWT(payload).setProtectedHeader({ alg: "HS256" }).setIssuedAt().setExpirationTime("15m").sign(JWT_SECRET);
@@ -136,6 +37,7 @@ describe("Events Integration Tests", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    db.reset();
     (prisma.userRole.findMany as any).mockResolvedValue([]);
     app = new Hono();
     app.onError((err, c) => {
@@ -147,6 +49,9 @@ describe("Events Integration Tests", () => {
       }
       if (err.message === "Not Found") {
         return c.json({ success: false, error: { code: "NOT_FOUND", message: "Not Found" } }, 404);
+      }
+      if (err instanceof LifecycleTransitionError) {
+        return c.json({ success: false, error: { code: err.code, message: "Status telah berubah, silakan muat ulang" } }, 409);
       }
       return c.json({ success: false, error: { code: "INTERNAL_SERVER_ERROR", message: "Internal Server Error" } }, 500);
     });
@@ -263,8 +168,12 @@ describe("Events Integration Tests", () => {
     it("allows SUPER_ADMIN to cancel an event they do not own", async () => {
       const token = await generateToken({ sub: "user-2", email: "u2@test.com", name: "U2", username: "u2", type: "access" });
       (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
-      (prisma.event.findUnique as any).mockResolvedValue({
-        id: "event-1", status: "PUBLISHED", deletedAt: null, createdById: "user-1",
+      // Seeded (not just `mockResolvedValue`d) so the guarded `updateMany` inside
+      // transitionEvent() checks its `where.status` against the SAME row `findUnique`
+      // returns — this is what actually exercises the optimistic-concurrency guard
+      // instead of an always-succeeds stub.
+      anEvent(db, {
+        id: "event-1", status: "PUBLISHED", createdById: "user-1",
         title: "Test", slug: "test", communityId: "comm-1", organizationId: null,
       });
       (prisma.communityMember.findUnique as any).mockResolvedValue(null);
@@ -272,7 +181,6 @@ describe("Events Integration Tests", () => {
       // SUPER_ADMIN platform role → canManageEvent bypass applies.
       (prisma.userRole.findMany as any).mockResolvedValue([{ role: "SUPER_ADMIN" }]);
       (prisma.eventRegistration.findMany as any).mockResolvedValue([]);
-      (prisma.event.update as any).mockResolvedValue({ id: "event-1", status: "CANCELLED" });
       (prisma.volunteerOpportunity.findMany as any).mockResolvedValue([]);
       (prisma.volunteerApplication.findMany as any).mockResolvedValue([]);
       (prisma.volunteerOpportunity.updateMany as any).mockResolvedValue({ count: 0 });
@@ -283,6 +191,8 @@ describe("Events Integration Tests", () => {
       });
 
       expect(res.status).toBe(200);
+      const body = await res.json() as any;
+      expect(body.data.status).toBe("CANCELLED");
       // Restore default (non-superadmin) role lookup so later tests are unaffected.
       (prisma.userRole.findMany as any).mockResolvedValue([]);
     });
@@ -306,15 +216,16 @@ describe("Events Integration Tests", () => {
     it("cascades cancellation to volunteer opportunities and notifies applicants", async () => {
       const token = await generateToken({ sub: "user-1", email: "test@test.com", name: "Test", username: "test", type: "access" });
       (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
-      (prisma.event.findUnique as any).mockResolvedValue({
-        id: "event-1", status: "PUBLISHED", deletedAt: null, createdById: "user-2",
+      // Seeded (not just `mockResolvedValue`d) — see the SUPER_ADMIN cancel test above
+      // for why the guarded `updateMany` needs a real backing row.
+      anEvent(db, {
+        id: "event-1", status: "PUBLISHED", createdById: "user-2",
         title: "Test", slug: "test", communityId: "comm-1", organizationId: null,
       });
       // Creator is an OWNER of the community → can manage the event.
       (prisma.communityMember.findUnique as any).mockResolvedValue({ role: "OWNER", status: "ACTIVE", deletedAt: null });
       (prisma.organizationMember.findUnique as any).mockResolvedValue(null);
       (prisma.eventRegistration.findMany as any).mockResolvedValue([]);
-      (prisma.event.update as any).mockResolvedValue({ id: "event-1", status: "CANCELLED" });
       // There is one volunteer opportunity with one applicant.
       (prisma.volunteerOpportunity.findMany as any).mockResolvedValue([{ id: "opp-1" }]);
       (prisma.volunteerApplication.findMany as any).mockResolvedValue([{ id: "va-1", userId: "member-9" }]);
@@ -338,6 +249,52 @@ describe("Events Integration Tests", () => {
       expect(notifData).toEqual(
         expect.arrayContaining([expect.objectContaining({ userId: "member-9", title: "Event Dibatalkan" })])
       );
+    });
+
+    it("refuses a transition computed from a stale status snapshot (optimistic-concurrency guard)", async () => {
+      // Regression test for the guard in services/lifecycle-transition.ts's
+      // transitionEvent(): `tx.event.updateMany({ where: { status: expectedStatus },
+      // ... })` must find ZERO rows — and therefore throw LifecycleTransitionError
+      // ("EVENT_STATUS_CHANGED") — when the row's real status no longer matches what
+      // the handler read earlier. The previous hand-rolled fake's `updateMany` always
+      // returned `{ count: 1 }` regardless of `where.status`, so this path was never
+      // actually exercised; grep for EVENT_STATUS_CHANGED found it in zero test files.
+      const token = await generateToken({ sub: "user-1", email: "test@test.com", name: "Test", username: "test", type: "access" });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
+
+      // The row's REAL current status is already CANCELLED — as if another admin's
+      // request already won the race. Both the route handler's own `findUnique` read
+      // AND the transition module's internal pre-update `findUnique` read (inside the
+      // transaction) see a stale PUBLISHED snapshot, exactly like two concurrent reads
+      // racing a concurrent update would produce — this forces the assertion past the
+      // module's fail-fast pre-check and into the real defense: updateMany's `where`
+      // matching against the actually-stored row.
+      anEvent(db, {
+        id: "event-race", status: "CANCELLED", createdById: "user-2",
+        title: "Race", slug: "race", communityId: "comm-1", organizationId: null,
+      });
+      const staleSnapshot = {
+        id: "event-race", status: "PUBLISHED", deletedAt: null, createdById: "user-2",
+        title: "Race", slug: "race", communityId: "comm-1", organizationId: null,
+      };
+      (prisma.event.findUnique as any).mockResolvedValueOnce(staleSnapshot).mockResolvedValueOnce(staleSnapshot);
+      (prisma.communityMember.findUnique as any).mockResolvedValue({ role: "OWNER", status: "ACTIVE", deletedAt: null });
+      (prisma.organizationMember.findUnique as any).mockResolvedValue(null);
+      (prisma.eventRegistration.findMany as any).mockResolvedValue([]);
+
+      const res = await app.request("/api/v1/events/event-race/cancel", {
+        method: "POST", headers: { Authorization: `Bearer ${token}` },
+      });
+
+      // app.ts's onError (mirrored in this test's local onError above) maps
+      // LifecycleTransitionError to 409 for every caller, public or admin — fixing
+      // the previous split where the public path fell through to a bare 500.
+      expect(res.status).toBe(409);
+      expect(prisma.event.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ id: "event-race", status: "PUBLISHED" }) })
+      );
+      // The stale write must never have taken effect.
+      expect(db.tables.event.all().find((e) => e.id === "event-race")?.status).toBe("CANCELLED");
     });
   });
 

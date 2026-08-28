@@ -1,5 +1,15 @@
 import { z } from "zod";
 
+export * from "./feature-flags";
+export * from "./permissions";
+export * from "./response";
+
+import {
+  PLATFORM_ROLES,
+  COMMUNITY_ROLES_EXCLUDING_OWNER,
+  ORGANIZATION_ROLES_EXCLUDING_OWNER,
+} from "./permissions";
+
 const emptyToUndefined = (v: unknown) =>
   typeof v === "string" && v.trim() === "" ? undefined : v;
 
@@ -94,7 +104,7 @@ export const reviewReportSchema = z.object({
 });
 
 export const assignRoleSchema = z.object({
-  role: z.enum(["SUPER_ADMIN", "PLATFORM_ADMIN", "MEMBER"]),
+  role: z.enum(PLATFORM_ROLES),
 });
 
 // ==========================================
@@ -190,8 +200,11 @@ export const updateCommunitySettingsSchema = z.object({
   showEventList: z.boolean().optional(),
 });
 
+// Excludes OWNER on purpose: this route (PUT /communities/:id/members/:id/role)
+// changes another member's role and can never be used to grant or revoke
+// ownership -- see COMMUNITY_ROLES_EXCLUDING_OWNER in ./permissions.
 export const changeMemberRoleSchema = z.object({
-  role: z.enum(["ADMIN", "EVENT_MANAGER", "VOLUNTEER_COORDINATOR", "MEMBER"]),
+  role: z.enum(COMMUNITY_ROLES_EXCLUDING_OWNER),
 });
 
 export const communityQuerySchema = z.object({
@@ -328,8 +341,11 @@ export const updateOrganizationSettingsSchema = z.object({
   showEventList: z.boolean().optional(),
 });
 
+// Excludes OWNER on purpose, same reasoning as changeMemberRoleSchema above
+// but for the organization-scoped equivalent route -- see
+// ORGANIZATION_ROLES_EXCLUDING_OWNER in ./permissions.
 export const changeOrganizationMemberRoleSchema = z.object({
-  role: z.enum(["ADMIN", "MEMBER"]),
+  role: z.enum(ORGANIZATION_ROLES_EXCLUDING_OWNER),
 });
 
 // ==========================================
@@ -642,7 +658,7 @@ export const adminBroadcastNotificationSchema = z.object({
   title: z.string().min(1, "Title wajib diisi").max(200),
   message: z.string().min(1, "Message wajib diisi").max(2000),
   type: z.enum(["SYSTEM", "COMMUNITY", "ORGANIZATION", "EVENT", "REPORT", "APPROVAL"]).optional(),
-  targetRoles: z.array(z.enum(["SUPER_ADMIN", "PLATFORM_ADMIN", "MEMBER"])).optional(),
+  targetRoles: z.array(z.enum(PLATFORM_ROLES)).optional(),
 });
 
 export const adminCreateCategorySchema = z.object({

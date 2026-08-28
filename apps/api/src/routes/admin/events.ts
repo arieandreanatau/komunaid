@@ -1,9 +1,10 @@
 import { Hono } from "hono";
 import { prisma } from "@komunaid/database";
 import { requireSuperAdmin } from "../../middleware/rbac";
-import { createAuditLog, AuditActions } from "../../services/audit";
-import { transitionEvent, EventTransitionError } from "../../services/event-transition";
+import { createAuditLog, AuditActions, logAuditSnapshot, snapshotFields } from "../../services/audit";
+import { transitionEvent, LifecycleTransitionError as EventTransitionError } from "../../services/lifecycle-transition";
 import type { AuthUser } from "../../middleware/auth";
+import { activeScope } from "../../lib/visibility-scope";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
 export const eventsRoutes = new Hono<Env>();
@@ -23,7 +24,7 @@ eventsRoutes.get("/events", async (c) => {
   const url = new URL(c.req.url);
   const status = url.searchParams.get("status") || "";
 
-  const where: Record<string, any> = { deletedAt: null };
+  const where: Record<string, any> = { ...activeScope("event") };
 
   if (search) {
     where.OR = [
@@ -227,21 +228,18 @@ eventsRoutes.put("/events/:eventId/soft-delete", requireSuperAdmin(), async (c) 
     return c.json({ success: false, message: "Event sudah dihapus" }, 400);
   }
 
-  const before = { status: event.status, deletedAt: event.deletedAt };
+  const before = snapshotFields(event, ["status", "deletedAt"]);
 
+  const deletedAt = new Date();
   await prisma.event.update({
     where: { id: eventId },
-    data: { deletedAt: new Date() },
+    data: { deletedAt },
   });
 
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.EVENT_DELETE,
-    resourceName: "Event",
-    resourceId: eventId,
-    beforeData: before,
-    afterData: { deletedAt: new Date().toISOString() },
-  });
+  await logAuditSnapshot(
+    { userId: authUser.id, actionType: AuditActions.EVENT_DELETE, resourceName: "Event", resourceId: eventId },
+    { before, after: { deletedAt: deletedAt.toISOString() } }
+  );
 
   return c.json({ success: true, message: "Event berhasil dihapus" });
 });

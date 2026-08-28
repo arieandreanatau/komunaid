@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Header } from "@/components/header";
 import { useAuth } from "@/components/auth-provider";
-import api from "@/lib/api";
+import { apiPost } from "@/lib/api";
+import { useApiPaginatedQuery } from "@/hooks/useApi";
 import { FeatureDisabledBanner } from "@/components/feature-disabled-banner";
 import { featureFlags } from "@/lib/feature-flags";
 
@@ -26,17 +27,6 @@ interface Submission {
   memberCount: number;
   createdAt: string;
   updatedAt: string;
-}
-
-interface PaginatedResponse {
-  success: boolean;
-  data: Submission[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
 }
 
 type StatusFilter = "" | "DRAFT" | "PENDING" | "APPROVED" | "REJECTED" | "REVISION_REQUIRED";
@@ -62,12 +52,8 @@ export default function MyOrganizationSubmissionsPage() {
   const router = useRouter();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
 
-  const [submissions, setSubmissions] = useState<Submission[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<StatusFilter>("");
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const [submittingId, setSubmittingId] = useState<string | null>(null);
 
@@ -77,38 +63,28 @@ export default function MyOrganizationSubmissionsPage() {
     }
   }, [isAuthenticated, authLoading, router]);
 
-  const fetchSubmissions = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const { data } = await api.get("/organizations/my/submissions", {
-        params: {
-          page,
-          limit: 10,
-          status: activeTab || undefined,
-        },
-      });
-      const result: PaginatedResponse = data;
-      setSubmissions(result.data);
-      setTotalPages(result.pagination.totalPages);
-    } catch (err: any) {
-      setError(err?.response?.data?.message || "Gagal memuat data pengajuan.");
-    } finally {
-      setLoading(false);
-    }
-  }, [page, activeTab]);
+  const {
+    data: submissionsPage,
+    isLoading: loading,
+    error: queryError,
+    refetch: fetchSubmissions,
+  } = useApiPaginatedQuery<Submission>({
+    url: "/organizations/my/submissions",
+    params: { page, limit: 10, status: activeTab || undefined },
+    enabled: !authLoading && isAuthenticated,
+  });
 
-  useEffect(() => {
-    if (!authLoading && isAuthenticated) {
-      fetchSubmissions();
-    }
-  }, [authLoading, isAuthenticated, fetchSubmissions]);
+  const submissions = submissionsPage?.data ?? [];
+  const totalPages = submissionsPage?.pagination.totalPages ?? 1;
+  const error = queryError
+    ? ((queryError as any)?.response?.data?.message ?? "Gagal memuat data pengajuan.")
+    : null;
 
   const handleSubmit = async (id: string) => {
     if (!confirm("Yakin ingin mengajukan organisasi ini untuk review?")) return;
     try {
       setSubmittingId(id);
-      await api.post(`/organizations/${id}/submit`);
+      await apiPost(`/organizations/${id}/submit`);
       fetchSubmissions();
     } catch (err: any) {
       alert(err?.response?.data?.message || "Gagal mengajukan organisasi.");
@@ -204,7 +180,7 @@ export default function MyOrganizationSubmissionsPage() {
             <h2 className="text-xl font-bold text-komuna-navy mb-2">Gagal Memuat</h2>
             <p className="text-gray-500 text-sm mb-6">{error}</p>
             <button
-              onClick={fetchSubmissions}
+              onClick={() => fetchSubmissions()}
               className="px-5 py-2.5 bg-komuna-blue text-white rounded-lg font-medium hover:bg-komuna-navy transition-colors text-sm"
             >
               Coba Lagi

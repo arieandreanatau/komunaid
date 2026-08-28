@@ -15,6 +15,9 @@ import { xssSanitize, sanitizeText } from "../lib/xss";
 import { createWithUniqueSlug } from "../lib/slug";
 import { slugify } from "@komunaid/utils";
 import type { AuthUser } from "../middleware/auth";
+import { transitionVolunteerOpportunity, VOLUNTEER_OPPORTUNITY_TRANSITIONS, LifecycleTransitionError } from "../services/lifecycle-transition";
+import { activeScope, publicScope } from "../lib/visibility-scope";
+import { getEventOrganizerRole, isSuperAdmin, canManageEvent } from "../lib/organizer-authorization";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
 
@@ -31,54 +34,16 @@ volunteerRoutes.use("*", async (c, next) => {
   }, 410);
 });
 
-async function getEventOrganizerRole(userId: string, event: any): Promise<string | null> {
-  if (event.communityId) {
-    const membership = await prisma.communityMember.findUnique({
-      where: { communityId_userId: { communityId: event.communityId, userId } },
-    });
-    return membership?.status === "ACTIVE" && membership.deletedAt === null ? membership.role : null;
-  }
-  if (event.organizationId) {
-    const membership = await prisma.organizationMember.findUnique({
-      where: { organizationId_userId: { organizationId: event.organizationId, userId } },
-    });
-    return membership?.status === "ACTIVE" && membership.deletedAt === null ? membership.role : null;
-  }
-  return null;
-}
+// getEventOrganizerRole / isSuperAdmin / canManageEvent now live in
+// ../lib/organizer-authorization.ts -- this file and routes/events.ts used
+// to carry byte-identical copies.
 
-async function isSuperAdmin(userId: string): Promise<boolean> {
-  const roles = await prisma.userRole.findMany({ where: { userId }, select: { role: true } });
-  return roles.some((r) => r.role === "SUPER_ADMIN");
-}
-
-async function canManageEvent(role: string | null, userId: string, event: any): Promise<boolean> {
-  if (await isSuperAdmin(userId)) return true;
-  if (!role) return false;
-  if (["OWNER", "ADMIN", "EVENT_MANAGER"].includes(role)) return true;
-  return false;
-}
-
-const VALID_OPPORTUNITY_TRANSITIONS: Record<string, string[]> = {
-  DRAFT: ["PUBLISHED"],
-  PUBLISHED: ["OPEN"],
-  OPEN: ["CLOSED"],
-  CLOSED: ["ARCHIVED"],
-  ARCHIVED: [],
-};
-
+// Canonical transition table now lives in services/lifecycle-transition.ts
+// (VOLUNTEER_OPPORTUNITY_TRANSITIONS) — this used to be a second copy, and
+// the guarded update + VolunteerStatusHistory write below used to be two
+// different shapes (transactional+guarded for "open", plain for the rest).
 function isValidOpportunityTransition(from: string, to: string): boolean {
-  return VALID_OPPORTUNITY_TRANSITIONS[from]?.includes(to) ?? false;
-}
-
-async function recordVolunteerStatusChange(opportunityId: string, fromStatus: string, toStatus: string, actorId: string, reason?: string) {
-  try {
-    await prisma.volunteerStatusHistory.create({
-      data: { opportunityId, fromStatus: fromStatus as any, toStatus: toStatus as any, actorId, reason: reason || null },
-    });
-  } catch {
-    // status history is best-effort; never fail the transition because a history write fails
-  }
+  return VOLUNTEER_OPPORTUNITY_TRANSITIONS[from]?.includes(to) ?? false;
 }
 
 // ==========================================
@@ -91,15 +56,7 @@ volunteerRoutes.get("/", optionalAuthMiddleware, validate(volunteerOpportunityQu
   const limit = q.limit as number;
 
   // Public discovery exposes opportunities only from eligible public events.
-  const where: any = {
-    deletedAt: null,
-    status: { notIn: ["DRAFT", "ARCHIVED"] },
-    event: {
-      deletedAt: null,
-      visibility: "PUBLIC",
-      status: { in: ["PUBLISHED", "OPEN", "CLOSED"] },
-    },
-  };
+  const where: any = { ...publicScope("volunteerOpportunity") };
 
   if (q.search) {
     where.OR = [
@@ -266,33 +223,33 @@ volunteerRoutes.get("/dashboard/:eventId", authMiddleware, async (c) => {
     checkedOutCount,
     opportunities,
   ] = await Promise.all([
-    prisma.volunteerOpportunity.count({ where: { eventId, deletedAt: null } }),
+    prisma.volunteerOpportunity.count({ where: { eventId, ...activeScope("volunteerOpportunity") } }),
     prisma.volunteerApplication.count({
-      where: { opportunity: { eventId, deletedAt: null } },
+      where: { opportunity: { eventId, ...activeScope("volunteerOpportunity") } },
     }),
     prisma.volunteerApplication.count({
-      where: { opportunity: { eventId, deletedAt: null }, status: "APPLIED" },
+      where: { opportunity: { eventId, ...activeScope("volunteerOpportunity") }, status: "APPLIED" },
     }),
     prisma.volunteerApplication.count({
-      where: { opportunity: { eventId, deletedAt: null }, status: "ACCEPTED" },
+      where: { opportunity: { eventId, ...activeScope("volunteerOpportunity") }, status: "ACCEPTED" },
     }),
     prisma.volunteerApplication.count({
-      where: { opportunity: { eventId, deletedAt: null }, status: "REJECTED" },
+      where: { opportunity: { eventId, ...activeScope("volunteerOpportunity") }, status: "REJECTED" },
     }),
     prisma.volunteerAttendance.count({
       where: {
-        assignment: { application: { opportunity: { eventId, deletedAt: null } } },
+        assignment: { application: { opportunity: { eventId, ...activeScope("volunteerOpportunity") } } },
         status: "CHECKED_IN",
       },
     }),
     prisma.volunteerAttendance.count({
       where: {
-        assignment: { application: { opportunity: { eventId, deletedAt: null } } },
+        assignment: { application: { opportunity: { eventId, ...activeScope("volunteerOpportunity") } } },
         status: "CHECKED_OUT",
       },
     }),
     prisma.volunteerOpportunity.findMany({
-      where: { eventId, deletedAt: null },
+      where: { eventId, ...activeScope("volunteerOpportunity") },
       include: {
         positions: true,
         _count: { select: { applications: true } },
@@ -694,21 +651,14 @@ volunteerRoutes.post("/:opportunityId/publish", authMiddleware, async (c) => {
     return c.json({ success: false, message: `Tidak dapat publish dari status ${opportunity.status}` }, 400);
   }
 
-  const updated = await prisma.volunteerOpportunity.update({
-    where: { id: opportunityId },
-    data: { status: targetStatus },
+  const updated = await transitionVolunteerOpportunity({
+    opportunityId,
+    expectedStatus: opportunity.status,
+    targetStatus,
+    actorId: authUser.id,
+    actorRole: "EVENT_MANAGER",
+    auditAction: AuditActions.VOLUNTEER_OPPORTUNITY_PUBLISH,
   });
-
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.VOLUNTEER_OPPORTUNITY_PUBLISH,
-    resourceName: "VolunteerOpportunity",
-    resourceId: opportunityId,
-    beforeData: { status: opportunity.status },
-    afterData: { status: targetStatus },
-  });
-
-  await recordVolunteerStatusChange(opportunityId, opportunity.status, targetStatus, authUser.id);
 
   return c.json({
     success: true,
@@ -742,27 +692,16 @@ volunteerRoutes.post("/:opportunityId/open", authMiddleware, async (c) => {
     return c.json({ success: false, message: `Tidak dapat membuka dari status ${opportunity.status}` }, 400);
   }
 
-  const updated = await prisma.$transaction(async (tx) => {
-    const changed = await tx.volunteerOpportunity.updateMany({
-      where: { id: opportunityId, status: "PUBLISHED", deletedAt: null },
-      data: { status: "OPEN" },
-    });
-    if (changed.count !== 1) throw new Error("OPPORTUNITY_STATUS_CHANGED");
-    await tx.volunteerStatusHistory.create({
-      data: { opportunityId, fromStatus: "PUBLISHED", toStatus: "OPEN", actorId: authUser.id },
-    });
-    return tx.volunteerOpportunity.findUniqueOrThrow({ where: { id: opportunityId } });
-  }).catch((error) => error?.message === "OPPORTUNITY_STATUS_CHANGED" ? null : Promise.reject(error));
+  const updated = await transitionVolunteerOpportunity({
+    opportunityId,
+    expectedStatus: "PUBLISHED",
+    targetStatus: "OPEN",
+    actorId: authUser.id,
+    actorRole: "EVENT_MANAGER",
+    auditAction: AuditActions.VOLUNTEER_OPPORTUNITY_PUBLISH,
+  }).catch((error) => (error instanceof LifecycleTransitionError ? null : Promise.reject(error)));
 
   if (!updated) return c.json({ success: false, message: "Status opportunity telah berubah" }, 409);
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.VOLUNTEER_OPPORTUNITY_PUBLISH,
-    resourceName: "VolunteerOpportunity",
-    resourceId: opportunityId,
-    beforeData: { status: opportunity.status },
-    afterData: { status: "OPEN" },
-  });
   return c.json({ success: true, message: "Pendaftaran volunteer dibuka", data: { id: updated.id, status: updated.status } });
 });
 
@@ -792,49 +731,19 @@ volunteerRoutes.post("/:opportunityId/close", authMiddleware, async (c) => {
     return c.json({ success: false, message: `Tidak dapat menutup dari status ${opportunity.status}` }, 400);
   }
 
-  const updated = await prisma.volunteerOpportunity.update({
-    where: { id: opportunityId },
-    data: { status: "CLOSED" },
+  // transitionVolunteerOpportunity's CLOSED cascade (inside the same guarded
+  // transaction) already rejects outstanding APPLIED/REVIEWED applications
+  // and notifies those applicants. ACCEPTED volunteers are preserved — they
+  // already have a confirmed slot.
+  const updated = await transitionVolunteerOpportunity({
+    opportunityId,
+    expectedStatus: opportunity.status,
+    targetStatus: "CLOSED",
+    actorId: authUser.id,
+    actorRole: "EVENT_MANAGER",
+    reason: "Opportunity ditutup oleh penyelenggara",
+    auditAction: AuditActions.VOLUNTEER_OPPORTUNITY_CLOSE,
   });
-
-  // Reject outstanding pending applications (APPLIED/REVIEWED).
-  // ACCEPTED volunteers are preserved â€” they already have a confirmed slot.
-  const pendingApplications = await prisma.volunteerApplication.findMany({
-    where: { opportunityId, status: { in: ["APPLIED", "REVIEWED"] } },
-  });
-
-  if (pendingApplications.length > 0) {
-    await prisma.volunteerApplication.updateMany({
-      where: { opportunityId, status: { in: ["APPLIED", "REVIEWED"] } },
-      data: {
-        status: "REJECTED",
-        reviewNote: "Volunteer opportunity ditutup oleh penyelenggara.",
-        reviewedAt: new Date(),
-        reviewedById: authUser.id,
-      },
-    });
-
-    await prisma.notification.createMany({
-      data: pendingApplications.map((a) => ({
-        userId: a.userId,
-        title: "Kesempatan Volunteer Ditutup",
-        message: `Kesempatan volunteer "${opportunity.title}" telah ditutup. Pendaftaran Anda dibatalkan.`,
-        type: "EVENT" as const,
-        link: `/volunteer/${opportunity.slug}`,
-      })),
-    });
-  }
-
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.VOLUNTEER_OPPORTUNITY_CLOSE,
-    resourceName: "VolunteerOpportunity",
-    resourceId: opportunityId,
-    beforeData: { status: opportunity.status },
-    afterData: { status: "CLOSED" },
-  });
-
-  await recordVolunteerStatusChange(opportunityId, opportunity.status, "CLOSED", authUser.id, "Opportunity ditutup oleh penyelenggara");
 
   return c.json({
     success: true,
@@ -869,21 +778,14 @@ volunteerRoutes.post("/:opportunityId/archive", authMiddleware, async (c) => {
     return c.json({ success: false, message: `Tidak dapat mengarsipkan dari status ${opportunity.status}` }, 400);
   }
 
-  const updated = await prisma.volunteerOpportunity.update({
-    where: { id: opportunityId },
-    data: { status: "ARCHIVED" },
+  const updated = await transitionVolunteerOpportunity({
+    opportunityId,
+    expectedStatus: opportunity.status,
+    targetStatus: "ARCHIVED",
+    actorId: authUser.id,
+    actorRole: "EVENT_MANAGER",
+    auditAction: AuditActions.VOLUNTEER_OPPORTUNITY_ARCHIVE,
   });
-
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.VOLUNTEER_OPPORTUNITY_ARCHIVE,
-    resourceName: "VolunteerOpportunity",
-    resourceId: opportunityId,
-    beforeData: { status: opportunity.status },
-    afterData: { status: "ARCHIVED" },
-  });
-
-  await recordVolunteerStatusChange(opportunityId, opportunity.status, "ARCHIVED", authUser.id);
 
   return c.json({
     success: true,

@@ -30,6 +30,8 @@ import { xssSanitize, sanitizeText } from "../lib/xss";
 import { createWithUniqueSlug, isUniqueConstraintError } from "../lib/slug";
 import { slugify } from "@komunaid/utils";
 import type { AuthUser } from "../middleware/auth";
+import { transitionCommunity } from "../services/lifecycle-transition";
+import { activeScope, publicScope } from "../lib/visibility-scope";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
 
@@ -46,7 +48,7 @@ communityRoutes.get("/", optionalAuthMiddleware, validate(communityQuerySchema, 
   const page = q.page as number;
   const limit = q.limit as number;
 
-  const where: any = { deletedAt: null, status: "APPROVED", visibility: "PUBLIC" };
+  const where: any = { ...publicScope("community") };
 
   if (q.search) {
     where.OR = [
@@ -169,11 +171,7 @@ communityRoutes.get("/", optionalAuthMiddleware, validate(communityQuerySchema, 
 
 communityRoutes.get("/featured/list", async (c) => {
   const communities = await prisma.community.findMany({
-    where: {
-      deletedAt: null,
-      status: "APPROVED",
-      visibility: "PUBLIC",
-    },
+    where: publicScope("community"),
     include: {
       owner: {
         select: { id: true, name: true, avatar: true },
@@ -222,11 +220,7 @@ communityRoutes.get("/featured/list", async (c) => {
 
 communityRoutes.get("/new/list", async (c) => {
   const communities = await prisma.community.findMany({
-    where: {
-      deletedAt: null,
-      status: "APPROVED",
-      visibility: "PUBLIC",
-    },
+    where: publicScope("community"),
     include: {
       owner: {
         select: { id: true, name: true, avatar: true },
@@ -271,11 +265,7 @@ communityRoutes.get("/new/list", async (c) => {
 
 communityRoutes.get("/popular/list", async (c) => {
   const communities = await prisma.community.findMany({
-    where: {
-      deletedAt: null,
-      status: "APPROVED",
-      visibility: "PUBLIC",
-    },
+    where: publicScope("community"),
     include: {
       owner: {
         select: { id: true, name: true, avatar: true },
@@ -321,9 +311,7 @@ communityRoutes.get("/popular/list", async (c) => {
 communityRoutes.get("/meta/provinces", async (c) => {
   const provinces = await prisma.community.findMany({
     where: {
-      deletedAt: null,
-      status: "APPROVED",
-      visibility: "PUBLIC",
+      ...publicScope("community"),
       province: { not: null },
     },
     select: { province: true },
@@ -357,7 +345,7 @@ communityRoutes.get(
 
     const where: any = {
       ownerId: authUser.id,
-      deletedAt: null,
+      ...activeScope("community"),
     };
 
     if (status) {
@@ -419,7 +407,7 @@ communityRoutes.get("/my/saved", authMiddleware, async (c) => {
   const user = c.get("user");
   const page = Math.max(1, Number(new URL(c.req.url).searchParams.get("page") || 1));
   const limit = Math.min(100, Math.max(1, Number(new URL(c.req.url).searchParams.get("limit") || 20)));
-  const where = { userId: user.id, community: { deletedAt: null } };
+  const where = { userId: user.id, community: activeScope("community") };
   const [saved, total] = await Promise.all([
     prisma.communitySave.findMany({ where, include: { community: { select: { id: true, name: true, slug: true, logo: true, coverImage: true, description: true, _count: { select: { members: true } } } } }, orderBy: { createdAt: "desc" }, skip: (page - 1) * limit, take: limit }),
     prisma.communitySave.count({ where }),
@@ -447,11 +435,7 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
         take: 20,
       },
       events: {
-        where: {
-          deletedAt: null,
-          visibility: "PUBLIC",
-          status: { in: ["PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"] },
-        },
+        where: publicScope("event", { statuses: ["PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"] }),
         orderBy: { eventDate: "asc" },
         take: 20,
       },
@@ -525,7 +509,7 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
   }
 
   const officers = await prisma.communityMember.findMany({
-    where: { communityId: community.id, status: "ACTIVE", deletedAt: null, role: { not: "MEMBER" } },
+    where: { communityId: community.id, status: "ACTIVE", ...activeScope("communityMember"), role: { not: "MEMBER" } },
     include: {
       user: {
         select: { id: true, name: true, avatar: true },
@@ -613,7 +597,7 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
 communityRoutes.post("/:communityId/save", authMiddleware, async (c) => {
   const user = c.get("user");
   const communityId = c.req.param("communityId") as string;
-  const community = await prisma.community.findFirst({ where: { id: communityId, deletedAt: null }, select: { id: true } });
+  const community = await prisma.community.findFirst({ where: { id: communityId, ...activeScope("community") }, select: { id: true } });
   if (!community) return c.json({ success: false, message: "Komunitas tidak ditemukan" }, 404);
   await prisma.communitySave.upsert({ where: { communityId_userId: { communityId, userId: user.id } }, create: { communityId, userId: user.id }, update: {} });
   return c.json({ success: true, message: "Komunitas berhasil disimpan" });
@@ -882,45 +866,39 @@ communityRoutes.post(
       return c.json({ success: false, message: "Komunitas tidak dapat dikirim untuk review" }, 400);
     }
 
-    const updated = await prisma.community.update({
-      where: { id: communityId },
-      data: {
-        status: "PENDING",
-        submittedAt: new Date(),
-      },
-    });
-
-    await createAuditLog({
-      userId: authUser.id,
-      actionType: AuditActions.COMMUNITY_SUBMITTED,
-      resourceName: "Community",
-      resourceId: communityId,
-      beforeData: { status: community.status },
-      afterData: { status: "PENDING" },
-    });
-
     const platformAdmins = await prisma.userRole.findMany({
       where: { role: "PLATFORM_ADMIN" },
       select: { userId: true },
     });
 
-    if (platformAdmins.length > 0) {
-      await prisma.notification.createMany({
-        data: platformAdmins.map((admin) => ({
-          userId: admin.userId,
-          title: "Komunitas Baru Menunggu Review",
-          message: `Komunitas "${community.name}" telah dikirim untuk review.`,
-          type: "APPROVAL",
-          link: `/admin/communities`,
-        })),
-      });
-    }
+    const updated = await transitionCommunity({
+      communityId,
+      expectedStatus: community.status,
+      targetStatus: "PENDING",
+      actorId: authUser.id,
+      actorRole: "OWNER",
+      auditAction: AuditActions.COMMUNITY_SUBMITTED,
+      data: { submittedAt: new Date() },
+      cascade: async (tx) => {
+        if (platformAdmins.length > 0) {
+          await tx.notification.createMany({
+            data: platformAdmins.map((admin) => ({
+              userId: admin.userId,
+              title: "Komunitas Baru Menunggu Review",
+              message: `Komunitas "${community.name}" telah dikirim untuk review.`,
+              type: "APPROVAL",
+              link: `/admin/communities`,
+            })),
+          });
+        }
 
-    await prisma.activityHistory.create({
-      data: {
-        userId: authUser.id,
-        action: "COMMUNITY_SUBMITTED",
-        details: { communityId, communityName: community.name },
+        await tx.activityHistory.create({
+          data: {
+            userId: authUser.id,
+            action: "COMMUNITY_SUBMITTED",
+            details: { communityId, communityName: community.name },
+          },
+        });
       },
     });
 
@@ -1044,20 +1022,13 @@ communityRoutes.post(
       return c.json({ success: false, message: "Komunitas sudah diarsipkan" }, 400);
     }
 
-    const beforeStatus = community.status;
-
-    await prisma.community.update({
-      where: { id: communityId },
-      data: { status: "ARCHIVED" },
-    });
-
-    await createAuditLog({
-      userId: authUser.id,
-      actionType: AuditActions.COMMUNITY_ARCHIVE,
-      resourceName: "Community",
-      resourceId: communityId,
-      beforeData: { status: beforeStatus },
-      afterData: { status: "ARCHIVED" },
+    await transitionCommunity({
+      communityId,
+      expectedStatus: community.status,
+      targetStatus: "ARCHIVED",
+      actorId: authUser.id,
+      actorRole: "OWNER",
+      auditAction: AuditActions.COMMUNITY_ARCHIVE,
     });
 
     return c.json({
@@ -1986,7 +1957,7 @@ communityRoutes.get(
             communityId,
             userId: authUser.id,
             status: "ACTIVE",
-            deletedAt: null,
+            ...activeScope("communityMember"),
           },
           select: { id: true, role: true },
         })
@@ -2023,7 +1994,7 @@ communityRoutes.get(
       where.status = statusFilter;
     } else {
       where.status = "ACTIVE";
-      where.deletedAt = null;
+      Object.assign(where, activeScope("communityMember"));
     }
 
     if (roleFilter) {
@@ -2501,30 +2472,26 @@ communityRoutes.post(
       return c.json({ success: false, message: "Komunitas sudah diarsipkan" }, 400);
     }
 
-    const beforeStatus = community.status;
-
-    await prisma.community.update({
-      where: { id: communityId },
-      data: { status: "SUSPENDED" },
-    });
-
-    await createAuditLog({
-      userId: authUser.id,
-      actionType: AuditActions.COMMUNITY_SUSPEND,
-      resourceName: "Community",
-      resourceId: communityId,
-      beforeData: { status: beforeStatus, reason: data.reason },
-      afterData: { status: "SUSPENDED" },
-    });
-
-    await prisma.membershipHistory.create({
-      data: {
-        communityId,
-        userId: authUser.id,
-        action: "COMMUNITY_SUSPENDED",
-        details: { reason: data.reason, communityName: community.name },
-        performedBy: authUser.id,
-      },
+    await transitionCommunity({
+      communityId,
+      expectedStatus: community.status,
+      targetStatus: "SUSPENDED",
+      actorId: authUser.id,
+      actorRole: "OWNER",
+      reason: data.reason,
+      auditAction: AuditActions.COMMUNITY_SUSPEND,
+      auditBeforeData: { status: community.status, reason: data.reason },
+      auditAfterData: { status: "SUSPENDED" },
+      cascade: (tx) =>
+        tx.membershipHistory.create({
+          data: {
+            communityId,
+            userId: authUser.id,
+            action: "COMMUNITY_SUSPENDED",
+            details: { reason: data.reason, communityName: community.name },
+            performedBy: authUser.id,
+          },
+        }),
     });
 
     return c.json({
@@ -2571,16 +2538,16 @@ communityRoutes.get(
       volunteerCount,
     ] = await Promise.all([
       prisma.communityMember.count({
-        where: { communityId, deletedAt: null },
+        where: { communityId, ...activeScope("communityMember") },
       }),
       prisma.communityMember.count({
-        where: { communityId, status: "ACTIVE", deletedAt: null },
+        where: { communityId, status: "ACTIVE", ...activeScope("communityMember") },
       }),
       prisma.communityMember.count({
         where: {
           communityId,
           status: "ACTIVE",
-          deletedAt: null,
+          ...activeScope("communityMember"),
           joinedAt: { gte: sevenDaysAgo },
         },
       }),
@@ -2588,18 +2555,18 @@ communityRoutes.get(
         where: {
           communityId,
           status: "ACTIVE",
-          deletedAt: null,
+          ...activeScope("communityMember"),
           joinedAt: { gte: thirtyDaysAgo, lt: sevenDaysAgo },
         },
       }),
       prisma.event.count({
-        where: { communityId, deletedAt: null },
+        where: { communityId, ...activeScope("event") },
       }),
       prisma.event.count({
         where: {
           communityId,
           status: { in: ["PUBLISHED", "REGISTRATION_OPEN", "ONGOING"] },
-          deletedAt: null,
+          ...activeScope("event"),
         },
       }),
       prisma.joinRequest.count({
@@ -2615,13 +2582,13 @@ communityRoutes.get(
       }),
       prisma.communityMember.groupBy({
         by: ["role"],
-        where: { communityId, status: "ACTIVE", deletedAt: null },
+        where: { communityId, status: "ACTIVE", ...activeScope("communityMember") },
         _count: true,
       }),
       prisma.volunteerOpportunity.count({
         where: {
           event: { communityId },
-          deletedAt: null,
+          ...activeScope("volunteerOpportunity"),
         },
       }),
     ]);
@@ -2726,7 +2693,7 @@ communityRoutes.get(
       return c.json({ success: false, message: "Komunitas tidak ditemukan" }, 404);
     }
 
-    const where: any = { communityId, deletedAt: null };
+    const where: any = { communityId, ...activeScope("communityMedia") };
 
     // Public callers can never relax this constraint through query parameters.
     if (!canManageMedia) {
@@ -2998,7 +2965,7 @@ communityRoutes.get(
     const q = c.get("validated");
 
     const thread = await prisma.communityMedia.findFirst({
-      where: { id: threadId, communityId, type: "FORUM_POST", deletedAt: null },
+      where: { id: threadId, communityId, type: "FORUM_POST", ...activeScope("communityMedia") },
     });
 
     if (!thread) {
@@ -3010,7 +2977,7 @@ communityRoutes.get(
 
     const [replies, total] = await Promise.all([
       prisma.forumReply.findMany({
-        where: { threadId, deletedAt: null },
+        where: { threadId, ...activeScope("forumReply") },
         include: {
           createdBy: { select: { id: true, name: true, avatar: true } },
         },
@@ -3018,7 +2985,7 @@ communityRoutes.get(
         skip: (page - 1) * limit,
         take: limit,
       }),
-      prisma.forumReply.count({ where: { threadId, deletedAt: null } }),
+      prisma.forumReply.count({ where: { threadId, ...activeScope("forumReply") } }),
     ]);
 
     return c.json({
@@ -3040,7 +3007,7 @@ communityRoutes.post(
     const data = c.get("validated");
 
     const thread = await prisma.communityMedia.findFirst({
-      where: { id: threadId, communityId, type: "FORUM_POST", deletedAt: null },
+      where: { id: threadId, communityId, type: "FORUM_POST", ...activeScope("communityMedia") },
     });
 
     if (!thread) {
@@ -3048,7 +3015,7 @@ communityRoutes.post(
     }
 
     const isMember = await prisma.communityMember.findFirst({
-      where: { communityId, userId: authUser.id, status: "ACTIVE", deletedAt: null },
+      where: { communityId, userId: authUser.id, status: "ACTIVE", ...activeScope("communityMember") },
       select: { id: true },
     });
 
@@ -3079,7 +3046,7 @@ communityRoutes.delete(
     const replyId = c.req.param("replyId") as string;
 
     const reply = await prisma.forumReply.findFirst({
-      where: { id: replyId, deletedAt: null },
+      where: { id: replyId, ...activeScope("forumReply") },
     });
 
     if (!reply) {

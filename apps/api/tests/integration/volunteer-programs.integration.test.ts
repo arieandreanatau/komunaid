@@ -4,30 +4,15 @@ import { SignJWT } from "jose";
 const JWT_SECRET = new TextEncoder().encode("test-integration-secret");
 process.env.JWT_SECRET = "test-integration-secret";
 
-vi.mock("@komunaid/database", () => {
-  const prisma: any = {
-    user: { findUnique: vi.fn() },
-    userRole: { findMany: vi.fn() },
-    communityMember: { findUnique: vi.fn(), findMany: vi.fn() },
-    volunteerProgram: { findUnique: vi.fn(), findMany: vi.fn(), update: vi.fn(), updateMany: vi.fn(), findUniqueOrThrow: vi.fn(), count: vi.fn() },
-    volunteerProgramStatusHistory: { create: vi.fn() },
-    volunteerProgramOrganizerAccess: { findUnique: vi.fn(), upsert: vi.fn() },
-    volunteerProgramApplication: { count: vi.fn(), findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), updateMany: vi.fn(), findUniqueOrThrow: vi.fn() },
-    volunteerProgramApplicationHistory: { create: vi.fn() },
-    volunteerProgramParticipation: { count: vi.fn(), findMany: vi.fn(), updateMany: vi.fn() },
-    notification: { create: vi.fn(), createMany: vi.fn(), findMany: vi.fn(), count: vi.fn(), findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
-    activityHistory: { create: vi.fn() },
-    auditLog: { create: vi.fn(), createMany: vi.fn() },
-    $queryRaw: vi.fn(),
-    $transaction: vi.fn(async (fn: any) => typeof fn === "function" ? fn(prisma) : Promise.all(fn)),
-  };
+vi.mock("@komunaid/database", async () => {
+  const { prisma } = await import("../support/mock");
   return { prisma };
 });
 
 vi.mock("pino", () => ({ default: vi.fn(() => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), child: vi.fn().mockReturnThis() })) }));
 vi.mock("pino-pretty", () => ({ default: vi.fn(() => ({})) }));
 
-import { prisma } from "@komunaid/database";
+import { prisma, db } from "../support/mock";
 import { invalidateRoleCache } from "../../src/middleware/rbac";
 import { volunteerProgramRoutes } from "../../src/routes/volunteer-programs";
 import { Hono } from "hono";
@@ -60,6 +45,7 @@ function program(overrides: Record<string, unknown> = {}) {
 describe("Volunteer program route authorization", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    db.reset();
     ["coordinator-1", "owner-1", "self-admin", "admin-2"].forEach(invalidateRoleCache);
     (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
     (prisma.userRole.findMany as any).mockResolvedValue([{ role: "MEMBER" }]);
@@ -155,6 +141,7 @@ describe("Volunteer program route authorization", () => {
 describe("Volunteer program superadmin panel endpoints", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    db.reset();
     ["panel-admin", "member-1"].forEach(invalidateRoleCache);
     (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
   });

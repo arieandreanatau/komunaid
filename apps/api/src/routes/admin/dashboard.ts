@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { prisma } from "@komunaid/database";
 import { requireSuperAdmin } from "../../middleware/rbac";
 import type { AuthUser } from "../../middleware/auth";
+import { activeScope } from "../../lib/visibility-scope";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
 export const dashboardRoutes = new Hono<Env>();
@@ -31,18 +32,18 @@ dashboardRoutes.get("/dashboard", async (c) => {
     pendingOrganizationList,
     totalVolunteers,
   ] = await Promise.all([
-    prisma.user.count({ where: { deletedAt: null } }),
-    prisma.community.count({ where: { deletedAt: null } }),
-    prisma.organization.count({ where: { deletedAt: null } }),
-    prisma.event.count({ where: { deletedAt: null } }),
-    prisma.community.count({ where: { status: "PENDING", deletedAt: null } }),
-    prisma.organization.count({ where: { status: "PENDING", deletedAt: null } }),
+    prisma.user.count({ where: activeScope("user") }),
+    prisma.community.count({ where: activeScope("community") }),
+    prisma.organization.count({ where: activeScope("organization") }),
+    prisma.event.count({ where: activeScope("event") }),
+    prisma.community.count({ where: { status: "PENDING", ...activeScope("community") } }),
+    prisma.organization.count({ where: { status: "PENDING", ...activeScope("organization") } }),
     prisma.report.count({ where: { status: { in: ["OPEN", "UNDER_REVIEW"] } } }),
-    prisma.user.count({ where: { status: "ACTIVE", deletedAt: null } }),
-    prisma.user.count({ where: { status: "SUSPENDED", deletedAt: null } }),
-    prisma.user.count({ where: { createdAt: { gte: thirtyDaysAgo }, deletedAt: null } }),
-    prisma.community.count({ where: { createdAt: { gte: thirtyDaysAgo }, deletedAt: null } }),
-    prisma.event.count({ where: { createdAt: { gte: thirtyDaysAgo }, deletedAt: null } }),
+    prisma.user.count({ where: { status: "ACTIVE", ...activeScope("user") } }),
+    prisma.user.count({ where: { status: "SUSPENDED", ...activeScope("user") } }),
+    prisma.user.count({ where: { createdAt: { gte: thirtyDaysAgo }, ...activeScope("user") } }),
+    prisma.community.count({ where: { createdAt: { gte: thirtyDaysAgo }, ...activeScope("community") } }),
+    prisma.event.count({ where: { createdAt: { gte: thirtyDaysAgo }, ...activeScope("event") } }),
     prisma.activityHistory.findMany({
       orderBy: { createdAt: "desc" },
       take: 10,
@@ -60,13 +61,13 @@ dashboardRoutes.get("/dashboard", async (c) => {
       include: { reporter: { select: { id: true, name: true } } },
     }),
     prisma.community.findMany({
-      where: { status: "PENDING", deletedAt: null },
+      where: { status: "PENDING", ...activeScope("community") },
       take: 5,
       orderBy: { submittedAt: "asc" },
       include: { owner: { select: { id: true, name: true, avatar: true } } },
     }),
     prisma.organization.findMany({
-      where: { status: "PENDING", deletedAt: null },
+      where: { status: "PENDING", ...activeScope("organization") },
       take: 5,
       orderBy: { submittedAt: "asc" },
       include: { owner: { select: { id: true, name: true, avatar: true } } },
@@ -151,13 +152,13 @@ dashboardRoutes.get("/dashboard/growth", requireSuperAdmin(), async (c) => {
 
     const [members, communities, events, volunteers] = await Promise.all([
       prisma.user.count({
-        where: { createdAt: { gte: startOfMonth, lte: endOfMonth }, deletedAt: null },
+        where: { createdAt: { gte: startOfMonth, lte: endOfMonth }, ...activeScope("user") },
       }),
       prisma.community.count({
-        where: { createdAt: { gte: startOfMonth, lte: endOfMonth }, deletedAt: null },
+        where: { createdAt: { gte: startOfMonth, lte: endOfMonth }, ...activeScope("community") },
       }),
       prisma.event.count({
-        where: { createdAt: { gte: startOfMonth, lte: endOfMonth }, deletedAt: null },
+        where: { createdAt: { gte: startOfMonth, lte: endOfMonth }, ...activeScope("event") },
       }),
       prisma.volunteerApplication.count({
         where: { createdAt: { gte: startOfMonth, lte: endOfMonth } },
@@ -177,7 +178,7 @@ dashboardRoutes.get("/dashboard/growth", requireSuperAdmin(), async (c) => {
     where: { status: "ACCEPTED" },
   });
   const activeVolunteers = await prisma.volunteerOpportunity.count({
-    where: { status: { in: ["PUBLISHED", "OPEN"] }, deletedAt: null },
+    where: { status: { in: ["PUBLISHED", "OPEN"] }, ...activeScope("volunteerOpportunity") },
   });
 
   return c.json({

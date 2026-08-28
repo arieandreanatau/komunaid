@@ -33,6 +33,7 @@ import {
   getIP,
 } from "../services/rate-limiter";
 import { createChildLogger } from "../lib/logger";
+import { activeScope } from "../lib/visibility-scope";
 
 const log = createChildLogger("auth");
 
@@ -483,10 +484,10 @@ authRoutes.get("/me", authMiddleware, async (c) => {
 
   const [communitiesCount, organizationsCount] = await Promise.all([
     prisma.communityMember.count({
-      where: { userId: userData.id, deletedAt: null },
+      where: { userId: userData.id, ...activeScope("communityMember") },
     }),
     prisma.organizationMember.count({
-      where: { userId: userData.id, deletedAt: null },
+      where: { userId: userData.id, ...activeScope("organizationMember") },
     }),
   ]);
 
