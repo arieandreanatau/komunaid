@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import Link from "next/link";
-import api from "@/lib/api";
+import { useApiQuery } from "@/hooks/useApi";
 import { useAuth } from "@/components/auth-provider";
 
 interface DashboardStats {
@@ -56,13 +55,10 @@ interface GrowthData {
   volunteers: number;
 }
 
-interface GrowthResponse {
-  success: boolean;
-  data: {
-    monthlyGrowth: GrowthData[];
-    totalVolunteers: number;
-    activeVolunteers: number;
-  };
+interface GrowthPayload {
+  monthlyGrowth: GrowthData[];
+  totalVolunteers: number;
+  activeVolunteers: number;
 }
 
 interface DashboardData {
@@ -114,55 +110,33 @@ function formatTime(dateStr: string): string {
 }
 
 export default function AdminDashboardPage() {
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [growthData, setGrowthData] = useState<GrowthData[]>([]);
-  const [growthLoading, setGrowthLoading] = useState(true);
-  const [growthError, setGrowthError] = useState<string | null>(null);
   const { user, isLoading: authLoading } = useAuth();
 
   const isAdmin = user?.roles?.some((r: string) => ["SUPER_ADMIN", "PLATFORM_ADMIN"].includes(r));
+  const isSuper = user?.roles?.some((r: string) => r === "SUPER_ADMIN");
 
-  useEffect(() => {
-    if (authLoading || !isAdmin) {
-      if (!authLoading) setLoading(false);
-      return;
-    }
-    const fetchDashboard = async () => {
-      try {
-        const res = await api.get("/admin/dashboard");
-        setData(res.data.data);
-      } catch {
-        console.error("Gagal memuat dashboard");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchDashboard();
-  }, [authLoading, isAdmin]);
+  // `isPending` (not `isLoading`) so the very first render after `enabled`
+  // flips true still counts as loading -- `isLoading` in TanStack Query v5
+  // only turns true once fetching has actually started, which happens one
+  // render later, and that gap would otherwise flash the "Gagal memuat
+  // data" empty state for a frame.
+  const { data, isPending: dashboardPending } = useApiQuery<DashboardData>({
+    url: "/admin/dashboard",
+    enabled: !authLoading && !!isAdmin,
+  });
+  const loading = authLoading || (!!isAdmin && dashboardPending);
 
-  useEffect(() => {
-    if (authLoading || !isAdmin) return;
-    const isSuper = user?.roles?.some((r: string) => r === "SUPER_ADMIN");
-    if (!isSuper) {
-      setGrowthLoading(false);
-      return;
-    }
-    const fetchGrowth = async () => {
-      try {
-        const res = await api.get("/admin/dashboard/growth");
-        const payload: GrowthResponse = res.data;
-        if (payload.success && payload.data) {
-          setGrowthData(payload.data.monthlyGrowth);
-        }
-      } catch {
-        setGrowthError("Gagal memuat data pertumbuhan");
-      } finally {
-        setGrowthLoading(false);
-      }
-    };
-    fetchGrowth();
-  }, [authLoading, isAdmin]);
+  const {
+    data: growthPayload,
+    isPending: growthPending,
+    isError: growthIsError,
+  } = useApiQuery<GrowthPayload>({
+    url: "/admin/dashboard/growth",
+    enabled: !authLoading && !!isAdmin && !!isSuper,
+  });
+  const growthData = growthPayload?.monthlyGrowth ?? [];
+  const growthLoading = !!isAdmin && !!isSuper && growthPending;
+  const growthError = growthIsError ? "Gagal memuat data pertumbuhan" : null;
 
   if (loading) {
     return (

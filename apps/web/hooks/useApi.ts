@@ -8,7 +8,8 @@ import {
   type UseMutationOptions,
   type QueryKey,
 } from "@tanstack/react-query";
-import api from "@/lib/api";
+import type { PaginatedResponse } from "@komunaid/shared";
+import { apiGet, apiGetPaginated, apiPost, apiPut, apiPatch, apiDelete } from "@/lib/api";
 import type { AxiosRequestConfig } from "axios";
 
 interface UseApiQueryOptions<TData, TError = Error>
@@ -25,6 +26,13 @@ interface UseApiMutationOptions<TData, TVariables, TError = unknown>
   config?: AxiosRequestConfig;
 }
 
+/**
+ * GET a single-resource endpoint and return its already-unwrapped `data`
+ * (see `apiGet` in `@/lib/api`) as `TData`, wired into TanStack Query.
+ * Use `useApiPaginatedQuery` instead for list endpoints built with
+ * `paginatedResponse()` on the API side -- those need the `pagination`
+ * block too, which this hook discards.
+ */
 export function useApiQuery<TData>({
   url,
   params,
@@ -33,42 +41,57 @@ export function useApiQuery<TData>({
 }: UseApiQueryOptions<TData>) {
   return useQuery<TData>({
     queryKey: [url, params] as QueryKey,
-    queryFn: async () => {
-      const res = await api.get(url, { params, ...config });
-      return res.data as TData;
-    },
+    queryFn: () => apiGet<TData>(url, { params, ...config }),
     retry: 2,
     staleTime: 5 * 60 * 1000,
     ...options,
   });
 }
 
+/**
+ * GET a paginated list endpoint and return the full envelope --
+ * `{ success, data, pagination }` -- as `PaginatedResponse<TItem>`, wired
+ * into TanStack Query. `params` (page, limit, search, ...) is part of the
+ * query key so changing them refetches.
+ */
+export function useApiPaginatedQuery<TItem>({
+  url,
+  params,
+  config,
+  ...options
+}: UseApiQueryOptions<PaginatedResponse<TItem>>) {
+  return useQuery<PaginatedResponse<TItem>>({
+    queryKey: [url, params] as QueryKey,
+    queryFn: () => apiGetPaginated<TItem>(url, { params, ...config }),
+    retry: 2,
+    staleTime: 5 * 60 * 1000,
+    ...options,
+  });
+}
+
+/**
+ * Mutate via POST/PUT/PATCH/DELETE and return the unwrapped `data` as
+ * `TData`, wired into TanStack Query.
+ */
 export function useApiMutation<TData, TVariables = unknown>({
   url,
   method = "post",
   config,
   ...options
 }: UseApiMutationOptions<TData, TVariables>) {
-  const queryClient = useQueryClient();
-
   return useMutation<TData, Error, TVariables>({
     mutationFn: async (variables) => {
       const endpoint = typeof url === "function" ? url(variables) : url;
-      let res;
       switch (method) {
         case "put":
-          res = await api.put(endpoint, variables, config);
-          break;
+          return apiPut<TData>(endpoint, variables, config);
         case "patch":
-          res = await api.patch(endpoint, variables, config);
-          break;
+          return apiPatch<TData>(endpoint, variables, config);
         case "delete":
-          res = await api.delete(endpoint, config);
-          break;
+          return apiDelete<TData>(endpoint, config);
         default:
-          res = await api.post(endpoint, variables, config);
+          return apiPost<TData>(endpoint, variables, config);
       }
-      return res.data as TData;
     },
     onError: (error) => {
       console.error(`API Mutation Error [${method} ${url}]:`, error);

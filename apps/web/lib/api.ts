@@ -1,5 +1,6 @@
 import axios from "axios";
-import type { AxiosResponse } from "axios";
+import type { AxiosRequestConfig } from "axios";
+import type { ApiResponse, PaginatedResponse } from "@komunaid/shared";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -56,9 +57,80 @@ export const api = axios.create({
   },
 });
 
-/** Extract standard API payload, including legacy community response envelopes. */
-export function unwrapApiData<T>(response: AxiosResponse<{ data?: T }>): T {
-  return response.data.data as T;
+/**
+ * Unwrap the `{ success: true, data }` envelope documented in CLAUDE.md
+ * ("API conventions" -> Envelopes) and typed in
+ * `packages/shared/src/response.ts`. Axios already rejects non-2xx
+ * responses, so a well-behaved endpoint never resolves here with
+ * `success: false` -- the check exists to narrow the type, and to fail
+ * loudly instead of silently returning `undefined` if that assumption
+ * is ever wrong.
+ *
+ * This -- plus `apiGet`/`apiGetPaginated`/`apiPost`/`apiPut`/`apiPatch`/
+ * `apiDelete` below -- is the ONLY place in the web app that unwraps the
+ * envelope. Existing call sites that read `response.data.data` off the raw
+ * `api` instance are untouched by this file; only code written or migrated
+ * to use these helpers (or the `useApiQuery`/`useApiMutation` hooks in
+ * `hooks/useApi.ts`, which are built on top of them) gets automatic
+ * unwrapping. Do not make `api` itself unwrap -- that would silently break
+ * every one of those existing call sites.
+ */
+export function unwrapApiResponse<T>(payload: ApiResponse<T>): T {
+  if (!payload.success) {
+    throw new Error(payload.error?.message || "Request failed");
+  }
+  return payload.data;
+}
+
+/** GET a single-resource (non-paginated) endpoint and unwrap its envelope. */
+export async function apiGet<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  const res = await api.get<ApiResponse<T>>(url, config);
+  return unwrapApiResponse(res.data);
+}
+
+/**
+ * GET a paginated list endpoint (one built with `paginatedResponse()` on
+ * the API side). Returns the full envelope -- `data` and `pagination` --
+ * since list UIs need both, unlike `apiGet`'s single-value unwrap.
+ */
+export async function apiGetPaginated<T>(
+  url: string,
+  config?: AxiosRequestConfig,
+): Promise<PaginatedResponse<T>> {
+  const res = await api.get<PaginatedResponse<T>>(url, config);
+  return res.data;
+}
+
+export async function apiPost<T>(
+  url: string,
+  body?: unknown,
+  config?: AxiosRequestConfig,
+): Promise<T> {
+  const res = await api.post<ApiResponse<T>>(url, body, config);
+  return unwrapApiResponse(res.data);
+}
+
+export async function apiPut<T>(
+  url: string,
+  body?: unknown,
+  config?: AxiosRequestConfig,
+): Promise<T> {
+  const res = await api.put<ApiResponse<T>>(url, body, config);
+  return unwrapApiResponse(res.data);
+}
+
+export async function apiPatch<T>(
+  url: string,
+  body?: unknown,
+  config?: AxiosRequestConfig,
+): Promise<T> {
+  const res = await api.patch<ApiResponse<T>>(url, body, config);
+  return unwrapApiResponse(res.data);
+}
+
+export async function apiDelete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  const res = await api.delete<ApiResponse<T>>(url, config);
+  return unwrapApiResponse(res.data);
 }
 
 api.interceptors.request.use(async (config) => {

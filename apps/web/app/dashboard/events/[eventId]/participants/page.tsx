@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import api from "@/lib/api";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import api, { apiPost, apiPatch } from "@/lib/api";
+import { useApiPaginatedQuery } from "@/hooks/useApi";
 import { useAuth } from "@/components/auth-provider";
 
 interface Participant {
@@ -15,11 +16,6 @@ interface Participant {
   registeredAt: string;
   checkedInAt: string | null;
   checkedOutAt: string | null;
-}
-
-interface ParticipantsResponse {
-  data: Participant[];
-  pagination: { page: number; totalPages: number; total: number };
 }
 
 const REG_STATUS_MAP: Record<string, { label: string; className: string }> = {
@@ -54,61 +50,50 @@ export default function EventParticipantsPage() {
     }
   }, [isAuthenticated, authLoading, router]);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["eventParticipants", eventId, page, search, statusFilter],
+  const { data, isLoading } = useApiPaginatedQuery<Participant>({
+    url: `/events/${eventId}/participants`,
+    params: { page, limit: 20, search: search || undefined, status: statusFilter || undefined },
     enabled: !!isAuthenticated && !!eventId,
-    queryFn: async () => {
-      const params: Record<string, string | number> = { page, limit: 20 };
-      if (search) params.search = search;
-      if (statusFilter) params.status = statusFilter;
-      const res = await api.get(`/events/${eventId}/participants`, { params });
-      return res.data as ParticipantsResponse;
-    },
   });
 
   const checkInMutation = useMutation({
-    mutationFn: async (participantId: string) => {
-      return api.post(`/events/${eventId}/participants/${participantId}/check-in`);
-    },
+    mutationFn: (participantId: string) =>
+      apiPost(`/events/${eventId}/participants/${participantId}/check-in`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["eventParticipants", eventId] });
+      queryClient.invalidateQueries({ queryKey: [`/events/${eventId}/participants`] });
       setSelectedIds(new Set());
     },
   });
 
   const checkOutMutation = useMutation({
-    mutationFn: async (participantId: string) => {
-      return api.post(`/events/${eventId}/participants/${participantId}/check-out`);
-    },
+    mutationFn: (participantId: string) =>
+      apiPost(`/events/${eventId}/participants/${participantId}/check-out`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["eventParticipants", eventId] });
+      queryClient.invalidateQueries({ queryKey: [`/events/${eventId}/participants`] });
     },
   });
 
   const approveMutation = useMutation({
-    mutationFn: async (participantId: string) => {
-      return api.patch(`/events/${eventId}/participants/${participantId}/approve`);
-    },
+    mutationFn: (participantId: string) =>
+      apiPatch(`/events/${eventId}/participants/${participantId}/approve`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["eventParticipants", eventId] });
+      queryClient.invalidateQueries({ queryKey: [`/events/${eventId}/participants`] });
     },
   });
 
   const rejectMutation = useMutation({
-    mutationFn: async (participantId: string) => {
-      return api.patch(`/events/${eventId}/participants/${participantId}/reject`);
-    },
+    mutationFn: (participantId: string) =>
+      apiPatch(`/events/${eventId}/participants/${participantId}/reject`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["eventParticipants", eventId] });
+      queryClient.invalidateQueries({ queryKey: [`/events/${eventId}/participants`] });
     },
   });
 
   const bulkCheckInMutation = useMutation({
-    mutationFn: async (ids: string[]) => {
-      return api.post(`/events/${eventId}/participants/bulk-check-in`, { participantIds: ids });
-    },
+    mutationFn: (ids: string[]) =>
+      apiPost(`/events/${eventId}/participants/bulk-check-in`, { participantIds: ids }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["eventParticipants", eventId] });
+      queryClient.invalidateQueries({ queryKey: [`/events/${eventId}/participants`] });
       setSelectedIds(new Set());
     },
   });
@@ -170,7 +155,7 @@ export default function EventParticipantsPage() {
   if (!isAuthenticated) return null;
 
   const participants = data?.data || [];
-  const pagination = data?.pagination || { page: 1, totalPages: 1, total: 0 };
+  const pagination = data?.pagination || { page: 1, limit: 20, totalPages: 1, total: 0 };
 
   return (
     <div className="space-y-6">

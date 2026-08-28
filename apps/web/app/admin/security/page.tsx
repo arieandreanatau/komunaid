@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import api from "@/lib/api";
+import { useState, useEffect } from "react";
+import type { PaginationMeta } from "@komunaid/shared";
+import { apiPost, apiPut } from "@/lib/api";
+import { useApiQuery, useApiPaginatedQuery } from "@/hooks/useApi";
 
 interface UserInfo {
   id: string;
@@ -34,13 +36,6 @@ interface SuspiciousActivityEntry {
   user: UserInfo;
   ipAddress: string | null;
   failedAttempts: number;
-}
-
-interface Pagination {
-  page: number;
-  limit: number;
-  total: number;
-  totalPages: number;
 }
 
 type TabKey = "login-history" | "failed-logins" | "suspicious-activity";
@@ -116,13 +111,7 @@ function ConfirmActionModal({
 
 export default function SecurityPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("login-history");
-  const [loading, setLoading] = useState(true);
 
-  const [loginHistory, setLoginHistory] = useState<LoginHistoryEntry[]>([]);
-  const [failedLogins, setFailedLogins] = useState<FailedLoginEntry[]>([]);
-  const [suspiciousActivity, setSuspiciousActivity] = useState<SuspiciousActivityEntry[]>([]);
-
-  const [pagination, setPagination] = useState<Pagination>({ page: 1, limit: 20, total: 0, totalPages: 1 });
   const [page, setPage] = useState(1);
 
   const [userIdFilter, setUserIdFilter] = useState("");
@@ -137,51 +126,48 @@ export default function SecurityPage() {
     userName: string;
   } | null>(null);
 
-  const fetchLoginHistory = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params: Record<string, any> = { page, limit: 20 };
-      if (userIdFilter) params.userId = userIdFilter;
-      if (successFilter) params.success = successFilter;
-      if (dateFrom) params.dateFrom = dateFrom;
-      if (dateTo) params.dateTo = dateTo;
-      const { data } = await api.get("/admin/security/login-history", { params });
-      setLoginHistory(data.data || []);
-      setPagination(data.pagination || { page: 1, limit: 20, total: 0, totalPages: 1 });
-    } catch {
-      console.error("Gagal memuat riwayat login");
-    } finally {
-      setLoading(false);
-    }
-  }, [page, userIdFilter, successFilter, dateFrom, dateTo]);
+  const loginHistoryQuery = useApiPaginatedQuery<LoginHistoryEntry>({
+    url: "/admin/security/login-history",
+    params: {
+      page,
+      limit: 20,
+      userId: userIdFilter || undefined,
+      success: successFilter || undefined,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined,
+    },
+    enabled: activeTab === "login-history",
+  });
 
-  const fetchFailedLogins = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params: Record<string, any> = { page, limit: 20 };
-      if (dateFrom) params.dateFrom = dateFrom;
-      if (dateTo) params.dateTo = dateTo;
-      const { data } = await api.get("/admin/security/failed-logins", { params });
-      setFailedLogins(data.data || []);
-      setPagination(data.pagination || { page: 1, limit: 20, total: 0, totalPages: 1 });
-    } catch {
-      console.error("Gagal memuat login gagal");
-    } finally {
-      setLoading(false);
-    }
-  }, [page, dateFrom, dateTo]);
+  const failedLoginsQuery = useApiPaginatedQuery<FailedLoginEntry>({
+    url: "/admin/security/failed-logins",
+    params: { page, limit: 20, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined },
+    enabled: activeTab === "failed-logins",
+  });
 
-  const fetchSuspiciousActivity = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { data } = await api.get("/admin/security/suspicious-activity");
-      setSuspiciousActivity(data.data || []);
-    } catch {
-      console.error("Gagal memuat aktivitas mencurigakan");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const suspiciousActivityQuery = useApiQuery<SuspiciousActivityEntry[]>({
+    url: "/admin/security/suspicious-activity",
+    enabled: activeTab === "suspicious-activity",
+  });
+
+  const loginHistory = loginHistoryQuery.data?.data ?? [];
+  const failedLogins = failedLoginsQuery.data?.data ?? [];
+  const suspiciousActivity = suspiciousActivityQuery.data ?? [];
+
+  const defaultPagination: PaginationMeta = { page: 1, limit: 20, total: 0, totalPages: 1 };
+  const pagination: PaginationMeta =
+    activeTab === "login-history"
+      ? (loginHistoryQuery.data?.pagination ?? defaultPagination)
+      : activeTab === "failed-logins"
+      ? (failedLoginsQuery.data?.pagination ?? defaultPagination)
+      : defaultPagination;
+
+  const loading =
+    activeTab === "login-history"
+      ? loginHistoryQuery.isPending
+      : activeTab === "failed-logins"
+      ? failedLoginsQuery.isPending
+      : suspiciousActivityQuery.isPending;
 
   useEffect(() => {
     setPage(1);
@@ -191,20 +177,18 @@ export default function SecurityPage() {
     setDateTo("");
   }, [activeTab]);
 
-  useEffect(() => {
-    if (activeTab === "login-history") fetchLoginHistory();
-    else if (activeTab === "failed-logins") fetchFailedLogins();
-    else if (activeTab === "suspicious-activity") fetchSuspiciousActivity();
-  }, [activeTab, fetchLoginHistory, fetchFailedLogins, fetchSuspiciousActivity]);
+  const refetchActiveTab = () => {
+    if (activeTab === "login-history") loginHistoryQuery.refetch();
+    else if (activeTab === "failed-logins") failedLoginsQuery.refetch();
+    else suspiciousActivityQuery.refetch();
+  };
 
   const handleForceLogout = async (userId: string) => {
     setActionLoading(userId);
     try {
-      await api.post("/admin/security/force-logout", { userId });
+      await apiPost("/admin/security/force-logout", { userId });
       setConfirmModal(null);
-      if (activeTab === "login-history") fetchLoginHistory();
-      else if (activeTab === "failed-logins") fetchFailedLogins();
-      else fetchSuspiciousActivity();
+      refetchActiveTab();
     } catch {
       console.error("Gagal force logout");
     } finally {
@@ -215,11 +199,9 @@ export default function SecurityPage() {
   const handleLockUser = async (userId: string) => {
     setActionLoading(userId);
     try {
-      await api.put("/admin/security/lock-user", { userId });
+      await apiPut("/admin/security/lock-user", { userId });
       setConfirmModal(null);
-      if (activeTab === "login-history") fetchLoginHistory();
-      else if (activeTab === "failed-logins") fetchFailedLogins();
-      else fetchSuspiciousActivity();
+      refetchActiveTab();
     } catch {
       console.error("Gagal mengunci user");
     } finally {
@@ -230,11 +212,9 @@ export default function SecurityPage() {
   const handleUnlockUser = async (userId: string) => {
     setActionLoading(userId);
     try {
-      await api.put("/admin/security/unlock-user", { userId });
+      await apiPut("/admin/security/unlock-user", { userId });
       setConfirmModal(null);
-      if (activeTab === "login-history") fetchLoginHistory();
-      else if (activeTab === "failed-logins") fetchFailedLogins();
-      else fetchSuspiciousActivity();
+      refetchActiveTab();
     } catch {
       console.error("Gagal membuka kunci user");
     } finally {
