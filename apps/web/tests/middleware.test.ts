@@ -159,22 +159,29 @@ describe("middleware - protected routes", () => {
 });
 
 describe("middleware - community management routes", () => {
-  it("redirects to /login when no token on /communities/my-org/edit", async () => {
-    const req = createMockRequest("/communities/my-org/edit");
+  // The legacy /communities/:slug/{edit,settings,join-requests} tree is retired;
+  // those paths are now redirected to their canonical
+  // /dashboard/communities/:slug/* equivalents via next.config.js `redirects()`
+  // (checked before middleware ever runs), not via this middleware. Community
+  // owner/admin management now lives exclusively under
+  // /dashboard/communities/:slug/*, so the gating below targets that tree.
+  it("redirects to /login when no token on /dashboard/communities/my-org/settings", async () => {
+    const req = createMockRequest("/dashboard/communities/my-org/settings");
     const res = await middleware(req);
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toContain("/login");
   });
 
-  it("redirects to /login when no token on /communities/my-org/settings", async () => {
-    const req = createMockRequest("/communities/my-org/settings");
+  it("redirects to /login when no token on /dashboard/communities/my-org/requests", async () => {
+    const req = createMockRequest("/dashboard/communities/my-org/requests");
     const res = await middleware(req);
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toContain("/login");
   });
 
-  it("redirects to /login when no token on /communities/my-org/join-requests", async () => {
-    const req = createMockRequest("/communities/my-org/join-requests");
+  it("redirects to /login with invalid token on /dashboard/communities/my-org/settings", async () => {
+    mockedJwtVerify.mockRejectedValueOnce(new Error("invalid"));
+    const req = createMockRequest("/dashboard/communities/my-org/settings", "bad-token");
     const res = await middleware(req);
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toContain("/login");
@@ -182,7 +189,14 @@ describe("middleware - community management routes", () => {
 
   it("allows community management route with valid token", async () => {
     mockedJwtVerify.mockResolvedValueOnce(memberPayload);
-    const req = createMockRequest("/communities/my-org/edit", "valid-token");
+    const req = createMockRequest("/dashboard/communities/my-org/settings", "valid-token");
+    const res = await middleware(req);
+    expectNoRedirect(res);
+  });
+
+  it("allows a community's other dashboard tabs with valid token (covered by the broader /dashboard/:path* gate)", async () => {
+    mockedJwtVerify.mockResolvedValueOnce(memberPayload);
+    const req = createMockRequest("/dashboard/communities/my-org/overview", "valid-token");
     const res = await middleware(req);
     expectNoRedirect(res);
   });

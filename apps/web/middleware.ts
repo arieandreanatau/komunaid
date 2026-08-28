@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
+import { featureFlags } from "./lib/feature-flags";
 
-const ORG_ENABLED = process.env.NEXT_PUBLIC_ORGANIZATION_ENABLED === "true";
 const JWT_SECRET_RAW = process.env.JWT_SECRET;
 if (!JWT_SECRET_RAW) {
   throw new Error(
@@ -52,7 +52,7 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get("token")?.value;
 
-  if (!ORG_ENABLED && orgRoutes.some((route) => pathname === route || pathname.startsWith(route))) {
+  if (!featureFlags.organization && orgRoutes.some((route) => pathname === route || pathname.startsWith(route))) {
     return NextResponse.redirect(new URL("/not-found", request.url));
   }
 
@@ -78,22 +78,38 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (protectedRoutes.some((route) => pathname.startsWith(route))) {
-    const result = await verifyTokenLocally(token);
-    if (!result.valid) {
-      const loginUrl = new URL("/login", request.url);
-      loginUrl.searchParams.set("redirect", pathname);
-      return NextResponse.redirect(loginUrl);
-    }
-  }
-
+  // The legacy /communities/:slug/{edit,settings,join-requests} tree has been
+  // retired (see next.config.js `redirects()`, which now sends those paths to
+  // their canonical /dashboard/communities/:slug/* equivalents before requests
+  // ever reach this middleware). Community owner/admin management now lives
+  // exclusively under /dashboard/communities/:slug/*. That whole tree is
+  // already covered by the generic "/dashboard" entry in `protectedRoutes`
+  // below, but we spell out the settings/join-requests-equivalent paths
+  // explicitly (`isCommunityManagementRoute`) so this gate stays intact and
+  // documented even if `protectedRoutes` is ever narrowed.
+  //
+  // Limitation: the access token's `roles` claim is a PLATFORM-level claim
+  // (SUPER_ADMIN / PLATFORM_ADMIN) — it carries no per-community role, so this
+  // middleware cannot determine here whether the caller is a given
+  // community's OWNER/ADMIN without an API round-trip (explicitly out of
+  // scope for middleware per project conventions). The strongest correct
+  // check available at this layer is "is this a valid, authenticated
+  // session" — enforced below. Per-community authorization is enforced
+  // server-side by `requireCommunityAdmin` on every
+  // /communities/:id/dashboard, /communities/:id/settings,
+  // /communities/:id/join-requests, etc. API call (see
+  // apps/api/src/routes/communities.ts), and mirrored client-side by the
+  // `isOwner` gate in apps/web/components/community-dashboard-route.tsx. Do
+  // not treat this middleware check as a substitute for those checks.
   const segments = pathname.split("/").filter(Boolean);
-  if (
-    segments.length >= 3 &&
-    segments[0] === "communities" &&
-    segments[1] &&
-    (segments[2] === "edit" || segments[2] === "settings" || segments[2] === "join-requests")
-  ) {
+  const isCommunityManagementRoute =
+    segments.length >= 4 &&
+    segments[0] === "dashboard" &&
+    segments[1] === "communities" &&
+    Boolean(segments[2]) &&
+    (segments[3] === "settings" || segments[3] === "requests");
+
+  if (isCommunityManagementRoute || protectedRoutes.some((route) => pathname.startsWith(route))) {
     const result = await verifyTokenLocally(token);
     if (!result.valid) {
       const loginUrl = new URL("/login", request.url);
@@ -114,9 +130,6 @@ export const config = {
     "/dashboard/:path*",
     "/admin/:path*",
     "/communities/create",
-    "/communities/:slug/edit",
-    "/communities/:slug/settings",
-    "/communities/:slug/join-requests",
     "/organizations",
     "/organizations/:path*",
     "/login",

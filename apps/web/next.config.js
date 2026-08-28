@@ -66,6 +66,19 @@ const nextConfig = {
       { source: "/live", destination: "/api/live" },
     ];
   },
+  async redirects() {
+    // The legacy community-management tree under /communities/[slug]/* has been
+    // retired in favor of the canonical /dashboard/communities/[slug]/* workspace
+    // (see apps/web/components/community-dashboard-route.tsx). These entries keep
+    // existing links/bookmarks working. Kept in next.config.js (rather than
+    // middleware or per-page redirect() calls) because the mapping is a static,
+    // slug-preserving path rewrite with no auth/role logic involved.
+    return [
+      { source: "/communities/:slug/edit", destination: "/dashboard/communities/:slug/settings", permanent: false },
+      { source: "/communities/:slug/settings", destination: "/dashboard/communities/:slug/settings", permanent: false },
+      { source: "/communities/:slug/join-requests", destination: "/dashboard/communities/:slug/requests", permanent: false },
+    ];
+  },
 };
 
 module.exports = nextConfig;
