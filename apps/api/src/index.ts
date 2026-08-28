@@ -2,9 +2,8 @@ import "dotenv/config";
 import { serve } from "@hono/node-server";
 import app from "./app";
 import { createChildLogger } from "./lib/logger";
-import { cleanupExpiredKeys, closeRedisConnection } from "./services/rate-limiter";
-import { cleanupExpiredTokens } from "./services/refresh-token";
-import { rolloverStaleEvents } from "./services/event-rollover";
+import { closeRedisConnection } from "./services/rate-limiter";
+import { runAllJobs, JOB_CADENCE_MS } from "./services/scheduled-work";
 
 const log = createChildLogger("server");
 
@@ -17,23 +16,12 @@ const server = serve({
 
 log.info(`KomunaID API running on port ${port}`);
 
-const CLEANUP_INTERVAL = 60 * 60 * 1000;
-const cleanupId = setInterval(async () => {
-  try {
-    await cleanupExpiredKeys();
-    await cleanupExpiredTokens();
-  } catch (err) {
-    log.error({ err }, "cleanup job failed");
-  }
-  try {
-    const result = await rolloverStaleEvents();
-    if (result.ongoing > 0 || result.completed > 0) {
-      log.info(result, "event rollover applied");
-    }
-  } catch (err) {
-    log.error({ err }, "event rollover job failed");
-  }
-}, CLEANUP_INTERVAL);
+// Node standalone adapter for the scheduled-work module (see services/scheduled-work.ts):
+// this process is long-lived, so it can just keep an interval timer. The Vercel
+// topology has no equivalent process — see routes/cron.ts for that adapter.
+const cleanupId = setInterval(() => {
+  void runAllJobs();
+}, JOB_CADENCE_MS);
 
 function gracefulShutdown() {
   log.info("Shutting down gracefully...");

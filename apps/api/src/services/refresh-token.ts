@@ -239,6 +239,10 @@ export async function validateRefreshToken(
   };
 }
 
+// Under the serverless (Vercel) topology nothing calls this on its own — there is
+// no long-lived process to hold a setInterval. It requires an external scheduler;
+// see apps/api/src/services/scheduled-work.ts, apps/api/src/routes/cron.ts and
+// the "crons" entry in vercel.json.
 export async function cleanupExpiredTokens(): Promise<number> {
   const result = await prisma.refreshToken.deleteMany({
     where: {
