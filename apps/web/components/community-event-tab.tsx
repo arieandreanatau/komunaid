@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
+import { can, type CommunityRole } from "@komunaid/shared";
 import api from "@/lib/api";
 
 interface CommunityEvent {
@@ -65,11 +66,11 @@ function formatDate(value: string): string {
   });
 }
 
-export function CommunityEventTab({ communityId, communitySlug, communityName }: { communityId: string; communitySlug: string; communityName: string }) {
+export function CommunityEventTab({ communityId, communitySlug, communityName, role }: { communityId: string; communitySlug: string; communityName: string; role: CommunityRole | null }) {
   const [events, setEvents] = useState<CommunityEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [canManage, setCanManage] = useState(false);
+  const canManage = can(role, "manageEvents");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [filter, setFilter] = useState<EventFilter>("all");
@@ -88,21 +89,6 @@ export function CommunityEventTab({ communityId, communitySlug, communityName }:
       return true;
     });
   }, [events, filter]);
-
-  useEffect(() => {
-    api
-      .get("/users/profile")
-      .then(({ data }) => {
-        const profile = data.data?.user || data.user;
-        const membership = (profile?.communities || []).find((c: { id: string }) => c.id === communityId);
-        setCanManage(
-          !!membership &&
-            membership.status === "ACTIVE" &&
-            ["OWNER", "ADMIN", "EVENT_MANAGER"].includes(membership.role)
-        );
-      })
-      .catch(() => setCanManage(false));
-  }, [communityId]);
 
   const fetchEvents = useCallback(async () => {
     try {

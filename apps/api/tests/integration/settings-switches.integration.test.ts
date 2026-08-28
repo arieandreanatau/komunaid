@@ -198,6 +198,82 @@ describe("settings-policy enforcement: public community/organization detail", ()
     });
   });
 
+  describe("Community — showMemberList on GET /:communityId/members", () => {
+    it("returns 403 for an anonymous caller when showMemberList is off", async () => {
+      const communityId = "ml-comm-1";
+      const owner = aUser(db, { id: "owner-1" });
+      aCommunity(db, { id: communityId, slug: communityId, ownerId: owner.id }).withMember({ id: owner.id as string }, { role: "OWNER" });
+      db.tables.communitySettings.seed({ id: "settings-ml-1", communityId, allowMemberPost: true, requireApproval: false, showMemberList: false, showEventList: true });
+
+      const res = await app.request(`/api/v1/communities/${communityId}/members`);
+      expect(res.status).toBe(403);
+      const body = (await res.json()) as any;
+      expect(body.message).toBe("Daftar anggota tidak tersedia");
+    });
+
+    it("returns 200 with member data to an active MEMBER when showMemberList is off (hiding is outward)", async () => {
+      const communityId = "ml-comm-2";
+      const owner = aUser(db, { id: "owner-1" });
+      const member = aUser(db, { id: "member-1" });
+      const community = aCommunity(db, { id: communityId, slug: communityId, ownerId: owner.id });
+      community.withMember({ id: owner.id as string }, { role: "OWNER" });
+      community.withMember({ id: member.id as string }, { role: "MEMBER" });
+      db.tables.communitySettings.seed({ id: "settings-ml-2", communityId, allowMemberPost: true, requireApproval: false, showMemberList: false, showEventList: true });
+
+      const tok = await token(member.id);
+      const res = await app.request(`/api/v1/communities/${communityId}/members`, { headers: { Authorization: `Bearer ${tok}` } });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as any;
+      expect(body.success).toBe(true);
+      expect(body.data.length).toBeGreaterThan(0);
+    });
+
+    it("returns 200 for an anonymous caller when showMemberList is true", async () => {
+      const communityId = "ml-comm-3";
+      const owner = aUser(db, { id: "owner-1" });
+      aCommunity(db, { id: communityId, slug: communityId, ownerId: owner.id }).withMember({ id: owner.id as string }, { role: "OWNER" });
+      db.tables.communitySettings.seed({ id: "settings-ml-3", communityId, allowMemberPost: true, requireApproval: false, showMemberList: true, showEventList: true });
+
+      const res = await app.request(`/api/v1/communities/${communityId}/members`);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as any;
+      expect(body.success).toBe(true);
+    });
+  });
+
+  describe("Organization — showMemberList on GET /:organizationId/members", () => {
+    it("returns 403 for an authenticated non-member when showMemberList is off", async () => {
+      const orgId = "ml-org-1";
+      const owner = aUser(db, { id: "owner-1" });
+      anOrganization(db, { id: orgId, slug: orgId, ownerId: owner.id }).withMember({ id: owner.id as string }, { role: "OWNER" });
+      seedOrganizationSettings(orgId, { showMemberList: false });
+
+      const outsider = aUser(db, { id: "outsider-1" });
+      const tok = await token(outsider.id);
+      const res = await app.request(`/api/v1/organizations/${orgId}/members`, { headers: { Authorization: `Bearer ${tok}` } });
+      expect(res.status).toBe(403);
+      const body = (await res.json()) as any;
+      expect(body.message).toBe("Daftar anggota tidak tersedia");
+    });
+
+    it("returns 200 with member data to an active member when showMemberList is off", async () => {
+      const orgId = "ml-org-2";
+      const owner = aUser(db, { id: "owner-1" });
+      const member = aUser(db, { id: "member-1" });
+      const org = anOrganization(db, { id: orgId, slug: orgId, ownerId: owner.id });
+      org.withMember({ id: owner.id as string }, { role: "OWNER" });
+      org.withMember({ id: member.id as string }, { role: "MEMBER" });
+      seedOrganizationSettings(orgId, { showMemberList: false });
+
+      const tok = await token(member.id);
+      const res = await app.request(`/api/v1/organizations/${orgId}/members`, { headers: { Authorization: `Bearer ${tok}` } });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as any;
+      expect(body.success).toBe(true);
+      expect(body.data.length).toBeGreaterThan(0);
+    });
+  });
+
   describe("Ticket #16 gap — standalone public event-listing routes (GET /events, /events/popular/upcoming, /events/featured)", () => {
     it("GET /events omits an event whose community has showEventList off, for an anonymous caller", async () => {
       const communityId = "list-comm-1";
@@ -346,6 +422,36 @@ describe("settings-policy enforcement: public community/organization detail", ()
       const body = (await res.json()) as any;
       expect(body.data.map((e: any) => e.id)).toContain("d9-org-ev-1");
       expect(body.pagination.total).toBe(body.data.length);
+    });
+
+    it("GET /events?communityId=X omits the community's event for an anonymous caller when showEventList is off", async () => {
+      const communityId = "ev-filter-comm-1";
+      const owner = aUser(db, { id: "owner-1" });
+      aCommunity(db, { id: communityId, slug: communityId, ownerId: owner.id }).withMember({ id: owner.id as string }, { role: "OWNER" });
+      db.tables.communitySettings.seed({ id: "settings-ev-filter-1", communityId, allowMemberPost: true, requireApproval: false, showMemberList: true, showEventList: false });
+      anEvent(db, { id: "ev-filter-ev-1", communityId, status: "PUBLISHED", visibility: "PUBLIC", eventDate: new Date("2026-12-01T10:00:00Z") });
+
+      const res = await app.request(`/api/v1/events?communityId=${communityId}`);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as any;
+      expect(body.data.find((e: any) => e.id === "ev-filter-ev-1")).toBeUndefined();
+    });
+
+    it("GET /events?communityId=X includes the community's event for an active member when showEventList is off", async () => {
+      const communityId = "ev-filter-comm-2";
+      const owner = aUser(db, { id: "owner-1" });
+      const member = aUser(db, { id: "member-1" });
+      const community = aCommunity(db, { id: communityId, slug: communityId, ownerId: owner.id });
+      community.withMember({ id: owner.id as string }, { role: "OWNER" });
+      community.withMember({ id: member.id as string }, { role: "MEMBER" });
+      db.tables.communitySettings.seed({ id: "settings-ev-filter-2", communityId, allowMemberPost: true, requireApproval: false, showMemberList: true, showEventList: false });
+      anEvent(db, { id: "ev-filter-ev-2", communityId, status: "PUBLISHED", visibility: "PUBLIC", eventDate: new Date("2026-12-01T10:00:00Z") });
+
+      const tok = await token(member.id);
+      const res = await app.request(`/api/v1/events?communityId=${communityId}`, { headers: { Authorization: `Bearer ${tok}` } });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as any;
+      expect(body.data.map((e: any) => e.id)).toContain("ev-filter-ev-2");
     });
 
     it("GET /events/featured still shows the event to the owner of the hidden community (hiding is outward, not inward)", async () => {

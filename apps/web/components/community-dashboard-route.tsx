@@ -662,7 +662,7 @@ export function CommunityDashboardRoute({
             )}
 
             {tab === "event" && (
-              <CommunityEventTab communityId={communityId} communitySlug={community.slug} communityName={community.name} />
+              <CommunityEventTab communityId={communityId} communitySlug={community.slug} communityName={community.name} role={role} />
             )}
 
             {tab === "anggota" && (

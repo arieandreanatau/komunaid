@@ -554,20 +554,19 @@ export default function CommunityDetailPage() {
               {/* ===== SIDEBAR ===== */}
               <div className="space-y-6">
                 <CommunityInfoCard community={community} />
-                {community.settings?.showMemberList && officers.length > 0 && (
+                {officers.length > 0 && (
                   <OfficersCard
                     officers={officers}
                     communitySlug={community.slug}
                   />
                 )}
-                {community.settings?.showMemberList &&
-                  community.membersPreview.length > 0 && (
-                    <ActiveMembersCard
-                      members={community.membersPreview}
-                      totalCount={community.memberCount}
-                      communitySlug={community.slug}
-                    />
-                  )}
+                {community.membersPreview.length > 0 && (
+                  <ActiveMembersCard
+                    members={community.membersPreview}
+                    totalCount={community.memberCount}
+                    communitySlug={community.slug}
+                  />
+                )}
                 {(community.website || community.instagram || community.contactEmail) && (
                   <ContactCard community={community} />
                 )}
@@ -1108,7 +1107,7 @@ function MembersSection({
 }) {
   return (
     <div className="space-y-6">
-      {community.settings?.showMemberList && officers.length > 0 && (
+      {officers.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-komuna-navy">
@@ -1149,8 +1148,7 @@ function MembersSection({
         </div>
       )}
 
-      {community.settings?.showMemberList &&
-        community.membersPreview.length > 0 && (
+      {community.membersPreview.length > 0 && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-komuna-navy">

@@ -127,8 +127,8 @@ export function getCommunityNavigation(communityId: string, role: string): NavSe
       id: "activity-engine",
       label: "Activity Engine",
       items: [
-        { href: `${base}/events`, label: "Event", icon: ICONS.event },
-        { href: `${base}/volunteer`, label: "Volunteer", icon: ICONS.volunteer },
+        { href: `${base}/events`, label: "Event", icon: ICONS.event, action: "manageEvents" },
+        { href: `${base}/volunteer`, label: "Volunteer", icon: ICONS.volunteer, action: "manageVolunteerPrograms" },
       ],
     },
     {

@@ -294,7 +294,7 @@ export function PengaturanTab({
             <div className="space-y-4">
               {([
                 { key: "allowMemberPost" as const, label: "Izinkan Anggota Posting", desc: "Anggota dapat membuat postingan di komunitas." },
-                { key: "requireApproval" as const, label: "Persetujuan Wajib", desc: "Postingan anggota harus disetujui admin sebelum tampil." },
+                { key: "requireApproval" as const, label: "Persetujuan Wajib", desc: "Permintaan bergabung menunggu ditinjau, bukan langsung menjadi anggota." },
                 { key: "showMemberList" as const, label: "Tampilkan Daftar Anggota", desc: "Daftar anggota terlihat di halaman publik komunitas." },
                 { key: "showEventList" as const, label: "Tampilkan Daftar Event", desc: "Event terlihat di halaman publik komunitas." },
               ]).map((item, i) => (
