@@ -5,8 +5,9 @@ import { validate } from "../../middleware/validate";
 import { adminResolveReportSchema, adminModerationWarningSchema } from "@komunaid/shared";
 import { createAuditLog, AuditActions } from "../../services/audit";
 import { invalidateRoleCache } from "../../middleware/rbac";
-import { transitionEvent, EventTransitionError } from "../../services/event-transition";
+import { transitionEvent, LifecycleTransitionError as EventTransitionError } from "../../services/lifecycle-transition";
 import type { AuthUser } from "../../middleware/auth";
+import { activeScope } from "../../lib/visibility-scope";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
 export const reportsRoutes = new Hono<Env>();
@@ -23,10 +24,10 @@ function pagination(url: string) {
 
 reportsRoutes.get("/moderation/stats", requirePlatformAdmin(), async (c) => {
   const [open, underReview, suspended, dismissed] = await Promise.all([
-    prisma.report.count({ where: { status: "OPEN" } }),
-    prisma.report.count({ where: { status: "UNDER_REVIEW" } }),
-    prisma.report.count({ where: { status: "SUSPENDED" } }),
-    prisma.report.count({ where: { status: "DISMISSED" } }),
+    prisma.report.count({ where: { status: "OPEN", ...activeScope("report") } }),
+    prisma.report.count({ where: { status: "UNDER_REVIEW", ...activeScope("report") } }),
+    prisma.report.count({ where: { status: "SUSPENDED", ...activeScope("report") } }),
+    prisma.report.count({ where: { status: "DISMISSED", ...activeScope("report") } }),
   ]);
   return c.json({ success: true, data: { openReports: open, underReview, resolved: suspended, dismissed } });
 });
@@ -37,7 +38,7 @@ reportsRoutes.get("/reports", async (c) => {
   const status = url.searchParams.get("status") || "";
   const targetType = url.searchParams.get("targetType") || "";
 
-  const where: Record<string, any> = {};
+  const where: Record<string, any> = { ...activeScope("report") };
 
   if (status && status !== "ALL") {
     where.status = status;
@@ -151,7 +152,7 @@ reportsRoutes.put("/reports/:reportId/resolve", validate(adminResolveReportSchem
   const data = c.get("validated");
   const { action, note } = data as { action: "DISMISSED" | "SUSPENDED"; note?: string };
 
-  const report = await prisma.report.findUnique({ where: { id: reportId } });
+  const report = await prisma.report.findUnique({ where: { id: reportId, deletedAt: activeScope("report").deletedAt } });
   if (!report) {
     return c.json({ success: false, message: "Laporan tidak ditemukan" }, 404);
   }
@@ -218,7 +219,7 @@ reportsRoutes.put("/reports/:reportId/under-review", async (c) => {
   const authUser = c.get("user");
   const reportId = c.req.param("reportId") as string;
 
-  const report = await prisma.report.findUnique({ where: { id: reportId } });
+  const report = await prisma.report.findUnique({ where: { id: reportId, deletedAt: activeScope("report").deletedAt } });
   if (!report) {
     return c.json({ success: false, message: "Laporan tidak ditemukan" }, 404);
   }
@@ -261,7 +262,7 @@ reportsRoutes.post("/reports/:reportId/warn", requireSuperAdmin(), validate(admi
   const data = c.get("validated");
   const { reason } = data as { reason: string };
 
-  const report = await prisma.report.findUnique({ where: { id: reportId } });
+  const report = await prisma.report.findUnique({ where: { id: reportId, deletedAt: activeScope("report").deletedAt } });
   if (!report) {
     return c.json({ success: false, message: "Laporan tidak ditemukan" }, 404);
   }
