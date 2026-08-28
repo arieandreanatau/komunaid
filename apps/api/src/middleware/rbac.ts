@@ -1,6 +1,6 @@
 import { Context, Next } from "hono";
 import { prisma } from "@komunaid/database";
-import { isAtLeastCommunityRole, type PlatformRole } from "@komunaid/shared";
+import { isAtLeastCommunityRole, isCommunityOfficer, type PlatformRole } from "@komunaid/shared";
 
 const roleCache = new Map<string, { roles: string[]; expiresAt: number }>();
 const ROLE_CACHE_TTL = 10 * 1000; // 10 seconds
@@ -123,6 +123,44 @@ export async function requireCommunityAdmin(c: Context, next: Next) {
   if (!membership || !isAtLeastCommunityRole(membership.role, "ADMIN") || membership.status !== "ACTIVE" || membership.deletedAt != null) {
     throw new Error("Forbidden");
   }
+
+  await next();
+}
+
+/**
+ * "Any community officer" -- OWNER, ADMIN, EVENT_MANAGER or
+ * VOLUNTEER_COORDINATOR, i.e. anyone above plain MEMBER. Built on
+ * isCommunityOfficer (packages/shared/src/permissions.ts) rather than a
+ * locally re-typed role list, so it stays in sync with the single
+ * "any officer" predicate the rest of the codebase already uses.
+ *
+ * Unlike requireCommunityOwner/requireCommunityAdmin, this guard also
+ * stashes the resolved membership role on the context as `communityRole`
+ * (typed in apps/api/src/types/hono-env.ts) so a route guarded by it can
+ * read the viewer's real role without a second membership query.
+ */
+export async function requireCommunityOfficer(c: Context, next: Next) {
+  const user = c.get("user");
+  const communityId = c.req.param("communityId") || c.req.query("communityId");
+
+  if (!user || !communityId) {
+    throw new Error("Forbidden");
+  }
+
+  const membership = await prisma.communityMember.findUnique({
+    where: {
+      communityId_userId: {
+        communityId,
+        userId: user.id,
+      },
+    },
+  });
+
+  if (!membership || !isCommunityOfficer(membership.role) || membership.status !== "ACTIVE" || membership.deletedAt != null) {
+    throw new Error("Forbidden");
+  }
+
+  c.set("communityRole", membership.role);
 
   await next();
 }

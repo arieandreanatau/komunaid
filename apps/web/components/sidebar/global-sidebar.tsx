@@ -13,7 +13,6 @@ import {
 } from "./navigation";
 import { ContextSwitcher } from "./context-switcher";
 import { api } from "@/lib/api";
-import { isCommunityOfficer } from "@komunaid/shared";
 
 const SIDEBAR_COLLAPSE_KEY = "komuna-sidebar-collapsed";
 
@@ -22,6 +21,11 @@ interface UserProfile {
   avatar?: string | null;
   roles: string[];
   communities?: (CommunityContext & { role: string })[];
+  // Server-derived with the same isCommunityOfficer predicate that gates
+  // workspace entry (requireCommunityOfficer, apps/api/src/middleware/rbac.ts)
+  // -- see apps/api/src/routes/users.ts. The switcher must not re-derive this
+  // client-side; it just consumes what the server already decided.
+  managedCommunities?: (CommunityContext & { role: string })[];
 }
 
 function SidebarIcon({ path, className = "h-5 w-5" }: { path: string; className?: string }) {
@@ -86,14 +90,12 @@ export function GlobalSidebar({
   }, [pathname, profile, activeContextType, activeCommunity?.id, setActiveContext]);
 
   useEffect(() => {
-    if (profile?.communities) {
-      // "OFFICER" was never a real role the server issues (see
-      // @komunaid/shared's permissions module) -- isCommunityOfficer
-      // expresses the same "any role above plain MEMBER" intent using only
-      // real CommunityRole values.
-      const managed = profile.communities.filter((c) =>
-        isCommunityOfficer(c.role)
-      ).map((c) => ({
+    if (profile?.managedCommunities) {
+      // The server already filtered this with isCommunityOfficer (the same
+      // predicate requireCommunityOfficer uses to gate workspace entry) --
+      // see apps/api/src/routes/users.ts. Re-filtering here would let the
+      // client's copy of the rule drift from the server's.
+      const managed = profile.managedCommunities.map((c) => ({
         id: c.id,
         name: c.name,
         slug: c.slug,

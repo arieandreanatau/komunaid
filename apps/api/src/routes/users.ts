@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { prisma } from "@komunaid/database";
-import { updateProfileSchema, updateInterestsSchema } from "@komunaid/shared";
+import { updateProfileSchema, updateInterestsSchema, isCommunityOfficer } from "@komunaid/shared";
 import { ALLOWED_IMAGE_TYPES } from "@komunaid/constants";
 import { authMiddleware } from "../middleware/auth";
 import { validate } from "../middleware/validate";
@@ -132,6 +132,14 @@ userRoutes.get("/profile", authMiddleware, async (c) => {
   const followedCommunities = activeMemberships
     .filter((membership) => membership.role !== "OWNER")
     .map(mapCommunity);
+  // The set of communities the caller can actually open as a workspace.
+  // Deliberately built with the exact same isCommunityOfficer predicate
+  // that requireCommunityOfficer (apps/api/src/middleware/rbac.ts) uses to
+  // gate entry, so this list can never promise a door that turns out to be
+  // locked -- see packages/shared/src/permissions.ts.
+  const managedCommunities = activeMemberships
+    .filter((membership) => isCommunityOfficer(membership.role))
+    .map(mapCommunity);
   const pastCommunities = user.joinedCommunities
     .filter(
       (membership) =>
@@ -163,6 +171,7 @@ userRoutes.get("/profile", authMiddleware, async (c) => {
         communities: activeMemberships.map(mapCommunity),
         createdCommunities,
         followedCommunities,
+        managedCommunities,
         pastCommunities,
         organizations: user.organizationMembers.map((m) => ({
           id: m.organization.id,

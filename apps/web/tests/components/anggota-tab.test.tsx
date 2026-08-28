@@ -53,6 +53,10 @@ describe("AnggotaTab", () => {
     return container;
   }
 
+  // Default role is ADMIN (not OWNER), matching the old `isOwner: false`
+  // default -- this component was previously only ever reachable by
+  // OWNER/ADMIN (requireCommunityAdmin on the dashboard route), so ADMIN is
+  // the realistic "non-owner" baseline for most of these tests.
   function baseProps(overrides: Partial<React.ComponentProps<typeof AnggotaTab>> = {}) {
     return {
       members: [] as Member[],
@@ -65,7 +69,7 @@ describe("AnggotaTab", () => {
       memberPage: 1,
       setMemberPage: vi.fn(),
       memberTotalPages: 1,
-      isOwner: false,
+      role: "ADMIN" as const,
       currentUserId: "current-user",
       onChangeRole: vi.fn(),
       onRemoveMember: vi.fn(),
@@ -92,19 +96,19 @@ describe("AnggotaTab", () => {
     expect(el.textContent).toContain("ADMIN");
   });
 
-  it("hides role-management affordances for non-owners", () => {
+  it("ADMIN can remove a member but cannot change their role (changeMemberRole is OWNER-only)", () => {
     const members = [makeMember()];
-    const el = render(<AnggotaTab {...baseProps({ members, isOwner: false })} />);
+    const el = render(<AnggotaTab {...baseProps({ members, role: "ADMIN" })} />);
     // Only one <select> should exist (the top filter) since the per-row role select is owner-only.
     expect(el.querySelectorAll("select").length).toBe(1);
-    // The remove button is still shown to non-owners per existing behaviour.
+    // manageMembers (remove) is OWNER+ADMIN, so an ADMIN still sees it.
     expect(el.querySelector("button[title='Keluarkan anggota']")).toBeTruthy();
   });
 
-  it("shows the per-row role select for owners and wires onChangeRole", () => {
+  it("shows the per-row role select for OWNER and wires onChangeRole", () => {
     const onChangeRole = vi.fn();
     const members = [makeMember({ id: "mem-2", role: "MEMBER" })];
-    const el = render(<AnggotaTab {...baseProps({ members, isOwner: true, onChangeRole })} />);
+    const el = render(<AnggotaTab {...baseProps({ members, role: "OWNER", onChangeRole })} />);
 
     const selects = el.querySelectorAll("select");
     expect(selects.length).toBe(2); // filter select + per-row role select
@@ -114,9 +118,24 @@ describe("AnggotaTab", () => {
     expect(onChangeRole).toHaveBeenCalledWith("mem-2", "ADMIN");
   });
 
+  it("EVENT_MANAGER and plain MEMBER get no member-management affordances at all", () => {
+    const members = [makeMember()];
+
+    const eventManager = render(<AnggotaTab {...baseProps({ members, role: "EVENT_MANAGER" })} />);
+    expect(eventManager.querySelectorAll("select").length).toBe(1);
+    expect(eventManager.querySelector("button[title='Keluarkan anggota']")).toBeNull();
+
+    act(() => root?.unmount());
+    container?.remove();
+
+    const plainMember = render(<AnggotaTab {...baseProps({ members, role: "MEMBER" })} />);
+    expect(plainMember.querySelectorAll("select").length).toBe(1);
+    expect(plainMember.querySelector("button[title='Keluarkan anggota']")).toBeNull();
+  });
+
   it("never shows role-management affordances for the current user's own row", () => {
     const members = [makeMember({ userId: "current-user" })];
-    const el = render(<AnggotaTab {...baseProps({ members, isOwner: true, currentUserId: "current-user" })} />);
+    const el = render(<AnggotaTab {...baseProps({ members, role: "OWNER", currentUserId: "current-user" })} />);
     // Only the top filter select remains; no per-row controls for your own membership.
     expect(el.querySelectorAll("select").length).toBe(1);
     expect(el.querySelector("button[title='Keluarkan anggota']")).toBeNull();
@@ -125,7 +144,7 @@ describe("AnggotaTab", () => {
   it("calls onRemoveMember with the member id and name", () => {
     const onRemoveMember = vi.fn();
     const members = [makeMember({ id: "mem-3", name: "Dewi Lestari" })];
-    const el = render(<AnggotaTab {...baseProps({ members, isOwner: true, onRemoveMember })} />);
+    const el = render(<AnggotaTab {...baseProps({ members, role: "OWNER", onRemoveMember })} />);
 
     const removeButton = el.querySelector<HTMLButtonElement>("button[title='Keluarkan anggota']")!;
     act(() => removeButton.click());

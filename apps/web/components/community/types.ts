@@ -2,6 +2,8 @@
 // Kept together here because the shell (community-dashboard-route.tsx) owns all
 // fetching/state and passes these shapes down as props to every tab component.
 
+import { can, type CommunityAction, type CommunityRole } from "@komunaid/shared";
+
 export interface DashboardData {
   community: {
     id: string;
@@ -86,6 +88,35 @@ export const tabs: { key: Tab; label: string }[] = [
   { key: "pengaturan", label: "Pengaturan" },
   { key: "insight", label: "Insight" },
 ];
+
+/**
+ * The CommunityAction each tab requires -- mirrors the API guard the tab's
+ * own data ultimately depends on (e.g. "pengaturan" needs editSettings
+ * because GET/PUT .../settings is requireCommunityAdmin). Tabs absent from
+ * this map ("ringkasan", "profil") have no action of their own: they're the
+ * workspace's general landing/overview views, open to any role that
+ * already cleared the entry guard (requireCommunityOfficer in
+ * apps/api/src/middleware/rbac.ts) -- ticket #14, spec #12.
+ */
+export const TAB_ACTION: Partial<Record<Tab, CommunityAction>> = {
+  event: "manageEvents",
+  pengurus: "managePengurus",
+  anggota: "viewMembers",
+  permintaan: "handleJoinRequests",
+  media: "manageMedia",
+  pengaturan: "editSettings",
+  insight: "viewInsights",
+};
+
+/**
+ * "Can this role open this tab?" -- the single predicate the workspace
+ * shell uses both to filter which tabs are shown and to guard each tab's
+ * route, so the visible surface can never drift from the accessible one.
+ */
+export function canOpenTab(role: CommunityRole | null, tab: Tab): boolean {
+  const action = TAB_ACTION[tab];
+  return action === undefined || can(role, action);
+}
 
 // Shared across AnggotaTab, PengurusTab and InsightTab.
 export const roleBadge: Record<string, string> = {
