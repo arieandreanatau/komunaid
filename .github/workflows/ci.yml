@@ -20,11 +20,17 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm test:web
       - run: pnpm build
+    env:
+      # Placeholder only — nothing in the test job ever connects to this database.
+      # The Prisma client requires DATABASE_URL to construct, even for tests that
+      # never open a connection (e.g. health.integration.test.ts).
+      DATABASE_URL: "mysql://user:pass@localhost:3306/db"
 
   security-audit:
     runs-on: ubuntu-latest
