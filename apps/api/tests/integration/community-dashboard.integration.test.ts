@@ -280,5 +280,23 @@ describe("GET /communities/:communityId/dashboard — viewer role & workspace ac
       expect(typeof body.data.memberCount).toBe("number");
       expect(typeof body.data.activeEventCount).toBe("number");
     });
+
+    it("zeroes pendingJoinRequestCount, empties recentActivity and nulls settings for VOLUNTEER_COORDINATOR (same trim as EVENT_MANAGER)", async () => {
+      await seedWorkspace("comm-10");
+      await seedUser("volunteer-coordinator-1");
+      aCommunity(db, { id: "comm-10", ownerId: "owner-1" })
+        .withMember({ id: "volunteer-coordinator-1" }, { role: "VOLUNTEER_COORDINATOR" });
+
+      const tok = await token("volunteer-coordinator-1");
+      const res = await app.request("/api/v1/communities/comm-10/dashboard", { headers: headers(tok) });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.data.userRole).toBe("VOLUNTEER_COORDINATOR");
+      expect(body.data.pendingJoinRequestCount).toBe(0);
+      expect(body.data.recentActivity).toEqual([]);
+      expect(body.data.communityInfo.settings).toBeNull();
+      expect(typeof body.data.memberCount).toBe("number");
+      expect(typeof body.data.activeEventCount).toBe("number");
+    });
   });
 });

@@ -54,6 +54,19 @@ describe("canOpenTab", () => {
     expect(openTabs(null)).toEqual(["ringkasan", "profil"]);
   });
 
+  it("MEMBER can open ringkasan, profil, and anggota (viewMembers is open to MEMBER), but not event/pengurus/permintaan/media/pengaturan/insight", () => {
+    const open = openTabs("MEMBER");
+    expect(open).toContain("ringkasan");
+    expect(open).toContain("profil");
+    expect(open).toContain("anggota");
+    expect(open).not.toContain("event");
+    expect(open).not.toContain("pengurus");
+    expect(open).not.toContain("permintaan");
+    expect(open).not.toContain("media");
+    expect(open).not.toContain("pengaturan");
+    expect(open).not.toContain("insight");
+  });
+
   it("ringkasan and profil have no gate -- open to any role that reached the workspace at all", () => {
     for (const role of ["OWNER", "ADMIN", "EVENT_MANAGER", "VOLUNTEER_COORDINATOR"] as const) {
       expect(canOpenTab(role, "ringkasan")).toBe(true);

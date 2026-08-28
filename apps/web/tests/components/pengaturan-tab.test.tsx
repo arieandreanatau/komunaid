@@ -221,6 +221,12 @@ describe("PengaturanTab", () => {
     expect(onSaveCommunitySettings).toHaveBeenCalledOnce();
   });
 
+  it("shows correct requireApproval copy about join approval, not posting approval", () => {
+    const el = render(<PengaturanTab {...baseProps({ role: "OWNER" })} />);
+    expect(el.textContent).toContain("Permintaan bergabung menunggu ditinjau, bukan langsung menjadi anggota.");
+    expect(el.textContent).not.toContain("Postingan anggota harus disetujui admin");
+  });
+
   // Gated on can(role, "editSettings") (see the field-gating tests above) --
   // a role below ADMIN sees the control disabled.
   it("does not flip a toggle when the viewer cannot manage the community since the control is disabled", () => {

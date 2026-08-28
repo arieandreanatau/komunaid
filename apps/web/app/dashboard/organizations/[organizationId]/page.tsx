@@ -8,6 +8,7 @@ import { Header } from "@/components/header";
 import { useAuth } from "@/components/auth-provider";
 import { FeatureDisabledBanner } from "@/components/feature-disabled-banner";
 import { featureFlags } from "@/lib/feature-flags";
+import { SETTINGS_DEFAULTS } from "@komunaid/shared";
 
 interface DashboardData {
   organization: {
@@ -87,6 +88,12 @@ export default function OrganizationDashboardPage() {
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsSuccess, setSettingsSuccess] = useState("");
   const [settingsError, setSettingsError] = useState("");
+
+  const [interactionSettings, setInteractionSettings] = useState(SETTINGS_DEFAULTS);
+  const [interactionLoading, setInteractionLoading] = useState(false);
+  const [interactionSaving, setInteractionSaving] = useState(false);
+  const [interactionSuccess, setInteractionSuccess] = useState("");
+  const [interactionError, setInteractionError] = useState("");
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -177,6 +184,46 @@ export default function OrganizationDashboardPage() {
       setSettingsSaving(false);
     }
   };
+
+  const fetchInteractionSettings = useCallback(async () => {
+    setInteractionLoading(true);
+    setInteractionError("");
+    try {
+      const { data } = await api.get(`/organizations/${organizationId}/settings`);
+      const s = data.data || data;
+      setInteractionSettings({
+        allowMemberPost: s.allowMemberPost ?? SETTINGS_DEFAULTS.allowMemberPost,
+        requireApproval: s.requireApproval ?? SETTINGS_DEFAULTS.requireApproval,
+        showMemberList: s.showMemberList ?? SETTINGS_DEFAULTS.showMemberList,
+        showEventList: s.showEventList ?? SETTINGS_DEFAULTS.showEventList,
+      });
+    } catch (err: any) {
+      if (err?.response?.status !== 404) {
+        setInteractionError(err?.response?.data?.message || "Gagal memuat pengaturan interaksi.");
+      }
+    } finally {
+      setInteractionLoading(false);
+    }
+  }, [organizationId]);
+
+  const handleSaveInteractionSettings = async () => {
+    setInteractionSaving(true);
+    setInteractionError("");
+    setInteractionSuccess("");
+    try {
+      await api.put(`/organizations/${organizationId}/settings`, interactionSettings);
+      setInteractionSuccess("Pengaturan interaksi berhasil disimpan!");
+      setTimeout(() => setInteractionSuccess(""), 3000);
+    } catch (err: any) {
+      setInteractionError(err?.response?.data?.message || "Gagal menyimpan pengaturan interaksi.");
+    } finally {
+      setInteractionSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "pengaturan") fetchInteractionSettings();
+  }, [activeTab, fetchInteractionSettings]);
 
   if (!featureFlags.organization) {
     return (
@@ -357,6 +404,13 @@ export default function OrganizationDashboardPage() {
                 success={settingsSuccess}
                 error={settingsError}
                 isOwner={isOwner}
+                interactionSettings={interactionSettings}
+                setInteractionSettings={setInteractionSettings}
+                onSaveInteraction={handleSaveInteractionSettings}
+                interactionLoading={interactionLoading}
+                interactionSaving={interactionSaving}
+                interactionSuccess={interactionSuccess}
+                interactionError={interactionError}
               />
             )}
           </div>
@@ -672,6 +726,13 @@ function PengaturanTab({
   success,
   error,
   isOwner,
+  interactionSettings,
+  setInteractionSettings,
+  onSaveInteraction,
+  interactionLoading,
+  interactionSaving,
+  interactionSuccess,
+  interactionError,
 }: {
   form: { name: string; description: string; visibility: string; status: string };
   setForm: (v: typeof form) => void;
@@ -680,10 +741,18 @@ function PengaturanTab({
   success: string;
   error: string;
   isOwner: boolean;
+  interactionSettings: { allowMemberPost: boolean; requireApproval: boolean; showMemberList: boolean; showEventList: boolean };
+  setInteractionSettings: (v: typeof interactionSettings) => void;
+  onSaveInteraction: () => void;
+  interactionLoading: boolean;
+  interactionSaving: boolean;
+  interactionSuccess: string;
+  interactionError: string;
 }) {
   return (
-    <div className="bg-white rounded-xl shadow-sm p-6">
-      <h3 className="text-lg font-semibold text-komuna-navy mb-6">Pengaturan Organisasi</h3>
+    <div className="space-y-5">
+      <div className="bg-white rounded-xl shadow-sm p-6">
+        <h3 className="text-lg font-semibold text-komuna-navy mb-6">Pengaturan Organisasi</h3>
 
       {success && (
         <div className="mb-4 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm p-3 rounded-lg flex items-center gap-2">
@@ -768,6 +837,77 @@ function PengaturanTab({
 
         {!isOwner && (
           <p className="text-xs text-gray-400 text-right pt-2">Hanya pemilik yang dapat mengubah pengaturan ini.</p>
+        )}
+      </div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm p-6">
+        <h3 className="text-lg font-semibold text-komuna-navy mb-2">Pengaturan Interaksi</h3>
+        <p className="mb-6 text-sm text-slate-500">Kontrol visibilitas anggota, event, dan postingan organisasi.</p>
+
+        {interactionSuccess && (
+          <div className="mb-4 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm p-3 rounded-lg flex items-center gap-2">
+            <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            {interactionSuccess}
+          </div>
+        )}
+
+        {interactionError && (
+          <div className="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm p-3 rounded-lg flex items-center gap-2">
+            <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+            {interactionError}
+          </div>
+        )}
+
+        {interactionLoading ? (
+          <div className="py-6 text-center text-sm text-gray-400">Memuat pengaturan interaksi...</div>
+        ) : (
+          <div className="space-y-4">
+            {([
+              { key: "allowMemberPost" as const, label: "Izinkan Anggota Posting", desc: "Anggota dapat membuat postingan di organisasi." },
+              { key: "requireApproval" as const, label: "Persetujuan Wajib", desc: "Permintaan bergabung menunggu ditinjau, bukan langsung menjadi anggota." },
+              { key: "showMemberList" as const, label: "Tampilkan Daftar Anggota", desc: "Daftar anggota terlihat di halaman publik organisasi." },
+              { key: "showEventList" as const, label: "Tampilkan Daftar Event", desc: "Event terlihat di halaman publik organisasi." },
+            ]).map((item, i) => (
+              <div key={item.key}>
+                {i > 0 && <div className="border-t border-gray-100 mb-4" />}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">{item.label}</p>
+                    <p className="text-xs text-gray-500">{item.desc}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setInteractionSettings({ ...interactionSettings, [item.key]: !interactionSettings[item.key] })}
+                      aria-pressed={interactionSettings[item.key]}
+                    className={`relative inline-flex h-6 w-12 items-center rounded-full transition-colors disabled:opacity-50 ${
+                      interactionSettings[item.key] ? "bg-komuna-blue" : "bg-gray-300"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        interactionSettings[item.key] ? "translate-x-7" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+            ))}
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={onSaveInteraction}
+                disabled={interactionSaving}
+                className="px-5 py-2 bg-komuna-blue text-white text-sm font-medium rounded-lg hover:bg-komuna-navy disabled:opacity-50 transition-colors inline-flex items-center gap-2"
+              >
+                {interactionSaving && <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                {interactionSaving ? "Menyimpan..." : "Simpan Pengaturan Interaksi"}
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>
