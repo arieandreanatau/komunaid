@@ -5,89 +5,8 @@ import { SignJWT } from "jose";
 const JWT_SECRET = new TextEncoder().encode("test-integration-secret");
 process.env.JWT_SECRET = "test-integration-secret";
 
-vi.mock("@komunaid/database", () => {
-  const communities = new Map<string, any>();
-  const members = new Map<string, any[]>();
-  let idCounter = 1;
-  const createId = () => `comm-${idCounter++}`;
-
-  const prisma = {
-    community: {
-      findUnique: vi.fn(async ({ where }: any) => {
-        if (where.id) return communities.get(where.id) || null;
-        if (where.slug) return Array.from(communities.values()).find((c) => c.slug === where.slug) || null;
-        return null;
-      }),
-      findMany: vi.fn(async () => Array.from(communities.values())),
-      create: vi.fn(async ({ data }: any) => {
-        const id = createId();
-        const slug = data.slug || data.name.toLowerCase().replace(/\s+/g, "-");
-        const community = {
-          id, name: data.name, slug, description: data.description || null,
-          location: data.location || null, website: data.website || null,
-          ownerId: data.ownerId, status: data.status || "DRAFT",
-          visibility: data.visibility || "PUBLIC", membershipType: data.membershipType || "OPEN",
-          deletedAt: null, coverImage: null, logo: null, banner: null,
-          address: null, address1: null, address2: null, postalCode: null,
-          district: null, village: null, country: null, province: null, city: null,
-          contactEmail: null, contactPhone: null, submittedAt: null, reviewedAt: null,
-          adminNote: null, createdAt: new Date(), updatedAt: new Date(),
-          _count: { members: 0, events: 0 }, categories: [], tags: [],
-          owner: { id: data.ownerId, name: "Owner", avatar: null },
-          members: [], events: [], settings: null,
-        };
-        communities.set(id, community);
-        members.set(id, [{ userId: data.ownerId, role: "OWNER", status: "ACTIVE", communityId: id }]);
-        return community;
-      }),
-      update: vi.fn(async ({ where, data }: any) => {
-        const c = communities.get(where.id);
-        if (!c) throw new Error("Not found");
-        Object.assign(c, data);
-        return c;
-      }),
-      count: vi.fn(async () => communities.size),
-    },
-    communityMember: {
-      findUnique: vi.fn(async ({ where }: any) => {
-        const cid = where?.communityId_userId?.communityId || "";
-        const uid = where?.communityId_userId?.userId || "";
-        const commMembers = members.get(cid) || [];
-        return commMembers.find((m) => m.userId === uid) || null;
-      }),
-      create: vi.fn(async ({ data }: any) => {
-        const commMembers = members.get(data.communityId) || [];
-        commMembers.push({ ...data, id: `member-${Date.now()}` });
-        return { id: `member-${Date.now()}`, ...data };
-      }),
-      findMany: vi.fn(async () => []),
-      findFirst: vi.fn(async () => null),
-      count: vi.fn(async () => 0),
-      update: vi.fn(),
-    },
-    communitySettings: { findUnique: vi.fn(async () => null), upsert: vi.fn(async ({ create }: any) => create) },
-    communityMedia: { findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
-    communityCategory: { deleteMany: vi.fn(async () => ({ count: 0 })), createMany: vi.fn(async () => ({ count: 0 })), create: vi.fn(async () => ({})) },
-    communityTag: { deleteMany: vi.fn(async () => ({ count: 0 })), createMany: vi.fn(async () => ({ count: 0 })) },
-    joinRequest: {
-      findFirst: vi.fn(async () => null), findUnique: vi.fn(async () => null),
-      findMany: vi.fn(async () => []),
-      create: vi.fn(async ({ data }: any) => ({ id: `jr-${Date.now()}`, ...data, status: "PENDING", createdAt: new Date() })),
-      update: vi.fn(), count: vi.fn(async () => 0),
-    },
-    category: { findUnique: vi.fn(async () => null), findFirst: vi.fn(async () => null), create: vi.fn(async ({ data }: any) => ({ id: `cat-${Date.now()}`, ...data })) },
-    auditLog: { create: vi.fn(async () => ({})) },
-    activityHistory: { create: vi.fn(async () => ({})) },
-    membershipHistory: { create: vi.fn(async () => ({})), findMany: vi.fn(async () => []) },
-    notification: { create: vi.fn(async () => ({})), createMany: vi.fn(async () => ({ count: 0 })) },
-    event: { count: vi.fn(async () => 0) },
-    organization: { count: vi.fn(async () => 0) },
-    organizationMember: { findUnique: vi.fn(async () => null), count: vi.fn(async () => 0) },
-    userRole: { findMany: vi.fn(async () => []) },
-    user: { findUnique: vi.fn(async () => null) },
-    $transaction: vi.fn(async (fn: any) => { if (typeof fn === "function") return fn(prisma); return Promise.all(fn); }),
-    $queryRaw: vi.fn(async () => []),
-  };
+vi.mock("@komunaid/database", async () => {
+  const { prisma } = await import("../support/mock");
   return { prisma };
 });
 
@@ -104,7 +23,7 @@ vi.mock("nodemailer", () => ({
   default: { createTransport: vi.fn(() => ({ sendMail: vi.fn(async () => ({})) })) },
 }));
 
-import { prisma } from "@komunaid/database";
+import { prisma, db } from "../support/mock";
 import { communityRoutes } from "../../src/routes/communities";
 
 async function generateToken(payload: any): Promise<string> {
@@ -116,6 +35,7 @@ describe("Communities Integration Tests", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    db.reset();
     app = new Hono();
     app.onError((err, c) => {
       if (err.message === "Unauthorized") {

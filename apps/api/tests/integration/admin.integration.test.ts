@@ -5,25 +5,8 @@ import { SignJWT } from "jose";
 const JWT_SECRET = new TextEncoder().encode("test-integration-secret");
 process.env.JWT_SECRET = "test-integration-secret";
 
-vi.mock("@komunaid/database", () => {
-  const prisma = {
-    user: { findUnique: vi.fn(), findMany: vi.fn(async () => []), count: vi.fn(async () => 0), update: vi.fn() },
-    userRole: { findMany: vi.fn(async () => []), findUnique: vi.fn(async () => null), create: vi.fn(), delete: vi.fn(), count: vi.fn(async () => 0) },
-    community: { findMany: vi.fn(async () => []), count: vi.fn(async () => 0), findUnique: vi.fn(async () => null), update: vi.fn(async ({ data }: any) => ({ id: data.id || "comm-1", ...data })) },
-    communityMember: { findFirst: vi.fn(async () => null), update: vi.fn(async () => ({})) },
-    membershipHistory: { create: vi.fn(async () => ({})) },
-    organization: { findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
-    event: { findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
-    auditLog: { findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
-    report: { findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
-    activityHistory: { findMany: vi.fn(async () => []) },
-    volunteerProgramParticipation: { count: vi.fn(async () => 0), findMany: vi.fn(async () => []) },
-    notification: { create: vi.fn(async () => ({})), findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
-    notificationTemplate: { findMany: vi.fn(async () => []) },
-    category: { findUnique: vi.fn(async () => null), findMany: vi.fn(async () => []), create: vi.fn(async ({ data }: any) => ({ id: "cat-1", ...data })), update: vi.fn(), delete: vi.fn() },
-    $queryRaw: vi.fn(async () => [{ count: 0 }]),
-    $transaction: vi.fn(async (fn: any) => { if (typeof fn === "function") return fn(prisma); return Promise.all(fn); }),
-  };
+vi.mock("@komunaid/database", async () => {
+  const { prisma } = await import("../support/mock");
   return { prisma };
 });
 
@@ -40,8 +23,10 @@ vi.mock("nodemailer", () => ({
   default: { createTransport: vi.fn(() => ({ sendMail: vi.fn(async () => ({})) })) },
 }));
 
-import { prisma } from "@komunaid/database";
+import { prisma, db } from "../support/mock";
+import { aCommunity, aUser } from "../support/builders";
 import { adminRoutes } from "../../src/routes/admin/index";
+import { LifecycleTransitionError } from "../../src/services/lifecycle-transition";
 
 async function generateToken(payload: any): Promise<string> {
   return new SignJWT(payload).setProtectedHeader({ alg: "HS256" }).setIssuedAt().setExpirationTime("15m").sign(JWT_SECRET);
@@ -52,6 +37,7 @@ describe("Admin Integration Tests", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    db.reset();
     app = new Hono();
     app.onError((err, c) => {
       if (err.message === "Unauthorized") {
@@ -59,6 +45,9 @@ describe("Admin Integration Tests", () => {
       }
       if (err.message === "Forbidden") {
         return c.json({ success: false, error: { code: "FORBIDDEN", message: "Forbidden" } }, 403);
+      }
+      if (err instanceof LifecycleTransitionError) {
+        return c.json({ success: false, error: { code: err.code, message: "Status telah berubah, silakan muat ulang" } }, 409);
       }
       return c.json({ success: false, error: { code: "INTERNAL_SERVER_ERROR", message: "Internal Server Error" } }, 500);
     });
@@ -204,24 +193,39 @@ describe("Admin Integration Tests", () => {
       const token = await generateToken({ sub: "admin-1", email: "admin@test.com", name: "Admin", username: "admin", type: "access" });
       (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
       (prisma.userRole.findMany as any).mockResolvedValue([{ role: "PLATFORM_ADMIN" }]);
-      (prisma.community.findUnique as any).mockResolvedValue({
-        id: "comm-1", name: "Komunitas Buku", slug: "komunitas-buku", ownerId: "u1", status: "PENDING",
-      });
-      (prisma.community.update as any).mockResolvedValue({ id: "comm-1", status: "APPROVED" });
-      (prisma.communityMember.findFirst as any).mockResolvedValue({ id: "m-1", status: "ACTIVE" });
-      (prisma.notification.create as any).mockResolvedValue({});
-      (prisma.membershipHistory.create as any).mockResolvedValue({});
+      const owner = aUser(db, { id: "u1" });
+      aCommunity(db, { id: "comm-1", name: "Komunitas Buku", slug: "komunitas-buku", ownerId: owner.id, status: "PENDING" })
+        .withMember({ id: owner.id as string }, { id: "m-1", role: "OWNER", status: "PENDING" });
 
       const res = await app.request("/api/v1/admin/communities/comm-1/approve", {
         method: "PUT",
         headers: { Authorization: `Bearer ${token}` },
       });
-      expect(res.status).toBe(200);
       const body = await res.json() as any;
+      expect(res.status).toBe(200);
       expect(body.success).toBe(true);
-      expect(prisma.community.update).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ status: "APPROVED" }) })
-      );
+      expect(db.tables.community.all().find((r: any) => r.id === "comm-1")?.status).toBe("APPROVED");
+      expect(db.tables.communityMember.all().find((r: any) => r.id === "m-1")?.status).toBe("ACTIVE");
+    });
+
+    // COMMUNITY_TRANSITIONS (services/lifecycle-transition.ts) only allows
+    // PENDING -> APPROVED; a community sent back for revision must go through
+    // PENDING again (owner resubmission) before it can be approved. Consuming
+    // the shared transition table narrows the old bespoke handler, which also
+    // accepted REVISION_REQUIRED directly — see the task report.
+    it("should reject approving a REVISION_REQUIRED community with 400 instead of skipping resubmission", async () => {
+      const token = await generateToken({ sub: "admin-1", email: "admin@test.com", name: "Admin", username: "admin", type: "access" });
+      (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
+      (prisma.userRole.findMany as any).mockResolvedValue([{ role: "PLATFORM_ADMIN" }]);
+      const owner = aUser(db, { id: "u2" });
+      aCommunity(db, { id: "comm-2", ownerId: owner.id, status: "REVISION_REQUIRED" });
+
+      const res = await app.request("/api/v1/admin/communities/comm-2/approve", {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(res.status).toBe(400);
+      expect(db.tables.community.all().find((r: any) => r.id === "comm-2")?.status).toBe("REVISION_REQUIRED");
     });
   });
 

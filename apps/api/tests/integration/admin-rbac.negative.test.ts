@@ -6,21 +6,15 @@ const JWT_SECRET = new TextEncoder().encode("test-integration-secret");
 process.env.JWT_SECRET = "test-integration-secret";
 process.env.CSRF_SECRET = "test-csrf-secret";
 
-vi.mock("@komunaid/database", () => {
-  const prisma: any = {
-    user: { findUnique: vi.fn() },
-    userRole: { findMany: vi.fn() },
-    auditLog: { findMany: vi.fn(), count: vi.fn() },
-    setting: { findMany: vi.fn() },
-    report: { count: vi.fn() },
-  };
+vi.mock("@komunaid/database", async () => {
+  const { prisma } = await import("../support/mock");
   return { prisma };
 });
 
 vi.mock("pino", () => ({ default: vi.fn(() => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), child: vi.fn().mockReturnThis() })) }));
 vi.mock("pino-pretty", () => ({ default: vi.fn(() => ({})) }));
 
-import { prisma } from "@komunaid/database";
+import { prisma, db } from "../support/mock";
 import { invalidateRoleCache } from "../../src/middleware/rbac";
 import app from "../../src/app";
 
@@ -41,6 +35,7 @@ function headers(accessToken: string, mutation = false): Record<string, string> 
 describe("Slice 4: admin RBAC negative cases", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    db.reset();
     ["member-1", "admin-1", "super-1"].forEach(invalidateRoleCache);
     (prisma.user.findUnique as any).mockResolvedValue({ tokenVersion: 0, status: "ACTIVE" });
     (prisma.userRole.findMany as any).mockResolvedValue([{ role: "MEMBER" }]);

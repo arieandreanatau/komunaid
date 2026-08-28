@@ -5,23 +5,8 @@ import { SignJWT } from "jose";
 const JWT_SECRET = new TextEncoder().encode("test-integration-secret");
 process.env.JWT_SECRET = "test-integration-secret";
 
-vi.mock("@komunaid/database", () => {
-  const prisma = {
-    userRole: { findMany: vi.fn(async () => []), findUnique: vi.fn(async () => null), create: vi.fn() },
-    communityMember: { findUnique: vi.fn(async () => null) },
-    organizationMember: { findUnique: vi.fn(async () => null) },
-    user: { findUnique: vi.fn(async () => null) },
-    community: { findUnique: vi.fn(async () => null), findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
-    organization: { findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
-    event: { findMany: vi.fn(async () => []), count: vi.fn(async () => 0) },
-    joinRequest: { count: vi.fn(async () => 0) },
-    membershipHistory: { findMany: vi.fn(async () => []), create: vi.fn(async () => ({})) },
-    auditLog: { create: vi.fn(async () => ({})) },
-    activityHistory: { create: vi.fn(async () => ({})) },
-    notification: { create: vi.fn(async () => ({})), createMany: vi.fn(async () => ({ count: 0 })) },
-    $queryRaw: vi.fn(async () => []),
-    $transaction: vi.fn(async (fn: any) => { if (typeof fn === "function") return fn(prisma); return Promise.all(fn); }),
-  };
+vi.mock("@komunaid/database", async () => {
+  const { prisma } = await import("../support/mock");
   return { prisma };
 });
 
@@ -38,7 +23,7 @@ vi.mock("nodemailer", () => ({
   default: { createTransport: vi.fn(() => ({ sendMail: vi.fn(async () => ({})) })) },
 }));
 
-import { prisma } from "@komunaid/database";
+import { prisma, db } from "../support/mock";
 import { communityRoutes } from "../../src/routes/communities";
 
 async function generateToken(payload: any): Promise<string> {
@@ -50,6 +35,7 @@ describe("RBAC Integration Tests", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    db.reset();
     app = new Hono();
     app.onError((err, c) => {
       if (err.message === "Unauthorized") {
