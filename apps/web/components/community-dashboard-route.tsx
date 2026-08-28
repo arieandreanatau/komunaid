@@ -15,7 +15,7 @@ import { PengaturanTab } from "@/components/community/pengaturan-tab";
 import { InsightTab } from "@/components/community/insight-tab";
 import { MediaTab } from "@/components/community/media-tab";
 import { runMutation } from "@/components/community/mutation-helper";
-import { can, type CommunityRole } from "@komunaid/shared";
+import { isCommunityRole, type CommunityRole } from "@komunaid/shared";
 import type {
   DashboardData,
   Member,
@@ -51,7 +51,12 @@ export function CommunityDashboardRoute({
   const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isOwner, setIsOwner] = useState(false);
+  // The viewer's real community role, straight from GET .../dashboard's
+  // `userRole` field (apps/api/src/routes/communities.ts). Every tab-level
+  // gate below is derived from this through can() in
+  // packages/shared/src/permissions.ts -- never from an ownership boolean
+  // and never from a local role comparison.
+  const [role, setRole] = useState<CommunityRole | null>(null);
 
   useEffect(() => {
     if (!routeSlug || communityIdOverride || routeSlug.startsWith("cmt")) return;
@@ -145,10 +150,16 @@ export function CommunityDashboardRoute({
          pendingRequests: payload.pendingRequests ?? payload.pendingJoinRequestCount ?? 0,
          activeEvents: payload.activeEvents ?? payload.activeEventCount ?? 0,
        });
-       setIsOwner(
-         comm.status !== undefined &&
-           (payload.userRole === "OWNER" || payload.isOwner === true || comm.owner?.id === user?.id)
-       );
+       // Prefer the server-issued role. Fall back to the legacy
+       // ownership-boolean/owner-id inference only for a payload that
+       // predates the `userRole` field, so an old cached response never
+       // hard-fails the dashboard.
+       const resolvedRole: CommunityRole | null = isCommunityRole(payload.userRole)
+         ? payload.userRole
+         : payload.isOwner === true || comm.owner?.id === user?.id
+           ? "OWNER"
+           : null;
+       setRole(comm.status !== undefined ? resolvedRole : null);
       setSettingsForm((prev) => ({
         ...prev,
         name: comm.name,
@@ -476,13 +487,12 @@ export function CommunityDashboardRoute({
   // Every tab below only renders once fetchDashboard() above has already
   // succeeded, and GET /communities/:id/dashboard requires
   // requireCommunityAdmin (apps/api/src/routes/communities.ts) -- so anyone
-  // who reaches this point already holds OWNER or ADMIN in this community.
-  // `isOwner` (computed from `comm.owner?.id === user?.id`, above) resolves
-  // which of those two it is; `canManage` covers everything the API accepts
-  // from either of them (settings, media) while `isOwner` stays reserved for
-  // the strictly-OWNER actions (changing a member's role, the danger zone).
-  const role: CommunityRole = isOwner ? "OWNER" : "ADMIN";
-  const canManage = can(role, "editSettings");
+  // who reaches this point today holds OWNER or ADMIN in this community.
+  // `role` is the viewer's real membership role from the dashboard payload
+  // (state above); each tab derives its own affordances from it via can(),
+  // rather than the shell precomputing a single "canManage" flag that
+  // conflates distinct actions (editSettings vs. manageMedia vs.
+  // changeMemberRole vs. manageDangerZone).
   const canonicalTabPath: Record<Tab, string> = {
     ringkasan: "overview",
     profil: "profile",
@@ -645,7 +655,7 @@ export function CommunityDashboardRoute({
                 memberPage={memberPage}
                 setMemberPage={setMemberPage}
                 memberTotalPages={memberTotalPages}
-                isOwner={isOwner}
+                role={role}
                 currentUserId={user?.id}
                 onChangeRole={handleChangeRole}
                 onRemoveMember={handleRemoveMember}
@@ -657,7 +667,7 @@ export function CommunityDashboardRoute({
               <PengurusTab
                 officers={officers}
                 loading={officersLoading}
-                isOwner={isOwner}
+                role={role}
                 currentUserId={user?.id}
                 onChangeRole={handleChangeRole}
                 onRemoveMember={handleRemoveMember}
@@ -678,7 +688,7 @@ export function CommunityDashboardRoute({
             )}
 
             {tab === "media" && (
-              <MediaTab communityId={communityId} canManage={canManage} />
+              <MediaTab communityId={communityId} role={role} />
             )}
 
             {tab === "pengaturan" && (
@@ -689,8 +699,7 @@ export function CommunityDashboardRoute({
                 saving={settingsSaving}
                 success={settingsSuccess}
                 error={settingsError}
-                isOwner={isOwner}
-                canManage={canManage}
+                role={role}
                 categories={categories}
                 communitySettingsForm={communitySettingsForm}
                 setCommunitySettingsForm={setCommunitySettingsForm}

@@ -84,8 +84,7 @@ describe("PengaturanTab", () => {
       saving: false,
       success: "",
       error: "",
-      isOwner: true,
-      canManage: true,
+      role: "OWNER" as const,
       categories: [] as { id: string; name: string; icon: string }[],
       communitySettingsForm: baseToggles(),
       setCommunitySettingsForm: vi.fn(),
@@ -135,16 +134,15 @@ describe("PengaturanTab", () => {
     expect(unselectedButton.className).not.toContain("bg-komuna-blue text-white");
   });
 
-  // Behaviour change (architecture candidate 2, permission module): the API
-  // accepts community settings edits from OWNER *or* ADMIN alike
-  // (requireCommunityAdmin on the community/settings PUT routes), so field
-  // editing and the save actions are now gated on `canManage` (ADMIN+)
-  // instead of `isOwner`. Only the Danger Zone -- a strictly-OWNER action
-  // (archive/suspend) -- stays gated on `isOwner`. Previously this component
-  // gated everything on `isOwner`, which under-permitted ADMIN-level
-  // community managers relative to what the server already allowed them.
-  it("disables all fields, hides the save action, and hides the danger zone when the viewer cannot manage the community", () => {
-    const el = render(<PengaturanTab {...baseProps({ isOwner: false, canManage: false })} />);
+  // Behaviour change (architecture candidate 2, permission module): field
+  // editing and the save action are gated on can(role, "editSettings")
+  // (OWNER or ADMIN, matching requireCommunityAdmin on the community
+  // settings PUT routes). The Danger Zone is gated on the separate
+  // can(role, "manageDangerZone") action, which is OWNER-only -- an ADMIN
+  // can manage settings but never reaches the danger zone, and an
+  // EVENT_MANAGER (a real officer role, but below ADMIN) gets neither.
+  it("disables all fields, hides the save action, and hides the danger zone for a role below ADMIN", () => {
+    const el = render(<PengaturanTab {...baseProps({ role: "EVENT_MANAGER" })} />);
 
     const nameInput = el.querySelector<HTMLInputElement>("input[type='text']")!;
     expect(nameInput.disabled).toBe(true);
@@ -153,8 +151,8 @@ describe("PengaturanTab", () => {
     expect(el.textContent).not.toContain("Danger Zone");
   });
 
-  it("enables fields and shows the save action for admins, but still hides the danger zone (owner-only)", () => {
-    const el = render(<PengaturanTab {...baseProps({ isOwner: false, canManage: true })} />);
+  it("enables fields and shows the save action for ADMIN, but still hides the danger zone (owner-only)", () => {
+    const el = render(<PengaturanTab {...baseProps({ role: "ADMIN" })} />);
 
     const nameInput = el.querySelector<HTMLInputElement>("input[type='text']")!;
     expect(nameInput.disabled).toBe(false);
@@ -162,8 +160,8 @@ describe("PengaturanTab", () => {
     expect(el.textContent).not.toContain("Danger Zone");
   });
 
-  it("enables fields and shows the save action and danger zone for owners", () => {
-    const el = render(<PengaturanTab {...baseProps({ isOwner: true, canManage: true })} />);
+  it("enables fields and shows the save action and danger zone for OWNER", () => {
+    const el = render(<PengaturanTab {...baseProps({ role: "OWNER" })} />);
 
     const nameInput = el.querySelector<HTMLInputElement>("input[type='text']")!;
     expect(nameInput.disabled).toBe(false);
@@ -223,12 +221,11 @@ describe("PengaturanTab", () => {
     expect(onSaveCommunitySettings).toHaveBeenCalledOnce();
   });
 
-  // Behaviour change: gated on `canManage` now, not `isOwner` (see the
-  // field-gating tests above) -- an ADMIN who cannot manage the community
-  // (canManage: false) sees the control disabled, same as before.
+  // Gated on can(role, "editSettings") (see the field-gating tests above) --
+  // a role below ADMIN sees the control disabled.
   it("does not flip a toggle when the viewer cannot manage the community since the control is disabled", () => {
     const setCommunitySettingsForm = vi.fn();
-    const el = render(<PengaturanTab {...baseProps({ isOwner: false, canManage: false, setCommunitySettingsForm })} />);
+    const el = render(<PengaturanTab {...baseProps({ role: "EVENT_MANAGER", setCommunitySettingsForm })} />);
 
     const toggle = el.querySelector<HTMLButtonElement>("button[aria-pressed]")!;
     expect(toggle.disabled).toBe(true);

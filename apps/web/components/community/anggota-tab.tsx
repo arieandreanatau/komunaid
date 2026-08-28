@@ -1,5 +1,6 @@
 "use client";
 
+import { can, type CommunityRole } from "@komunaid/shared";
 import type { Member } from "./types";
 import { roleBadge } from "./types";
 
@@ -14,7 +15,7 @@ export function AnggotaTab({
   memberPage,
   setMemberPage,
   memberTotalPages,
-  isOwner,
+  role,
   currentUserId,
   onChangeRole,
   onRemoveMember,
@@ -30,12 +31,16 @@ export function AnggotaTab({
   memberPage: number;
   setMemberPage: (v: number) => void;
   memberTotalPages: number;
-  isOwner: boolean;
+  /** The viewer's own community role. Every affordance below is derived
+   * from this through can() -- never from an ownership boolean. */
+  role: CommunityRole | null;
   currentUserId?: string;
   onChangeRole: (memberId: string, role: string) => void;
   onRemoveMember: (memberId: string, name: string) => void;
   onRestoreMember: (memberId: string, name: string) => void;
 }) {
+  const canChangeRole = can(role, "changeMemberRole");
+  const canManageMembers = can(role, "manageMembers");
   return (
     <div className="space-y-4">
       <div className="flex gap-1 border-b border-gray-200 pb-px">
@@ -100,7 +105,7 @@ export function AnggotaTab({
               </span>
               {member.userId !== currentUserId && member.status !== "BANNED" && (
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  {isOwner && (
+                  {canChangeRole && (
                     <select
                       value={member.role}
                       onChange={(e) => onChangeRole(member.id, e.target.value)}
@@ -112,7 +117,7 @@ export function AnggotaTab({
                       <option value="VOLUNTEER_COORDINATOR">Koordinator Volunteer</option>
                     </select>
                   )}
-                  {member.role !== "OWNER" && (
+                  {canManageMembers && member.role !== "OWNER" && (
                     <button
                       onClick={() => onRemoveMember(member.id, member.name)}
                       className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"

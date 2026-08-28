@@ -18,6 +18,8 @@ import {
   communityMediaQuerySchema,
   createForumReplySchema,
   forumReplyQuerySchema,
+  isMemberListPublic,
+  isEventListPublic,
 } from "@komunaid/shared";
 import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth";
 import {
@@ -481,6 +483,11 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
   let userMembership: { role: string; status: string } | null = null;
   let pendingJoinRequests = 0;
   let isSaved = false;
+  // Same "hides from outside, not from members" exception used at
+  // GET /:communityId/members: an active member or the owner always sees
+  // the member/event payload below regardless of the showMemberList/
+  // showEventList switches.
+  let canViewPrivateMembers = false;
   if (user) {
     const membership = await prisma.communityMember.findUnique({
       where: {
@@ -500,6 +507,7 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
       // Keep community detail compatible until bookmark tables are migrated.
       isSaved = false;
     }
+    canViewPrivateMembers = user.id === community.ownerId || Boolean(membership && membership.status === "ACTIVE" && membership.deletedAt === null);
     const canManage = user.id === community.ownerId || Boolean(membership && membership.status === "ACTIVE" && membership.deletedAt === null && ["OWNER", "ADMIN"].includes(membership.role));
     if (canManage) {
       pendingJoinRequests = await prisma.joinRequest.count({
@@ -507,6 +515,9 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
       });
     }
   }
+
+  const membersVisible = isMemberListPublic(community.settings) || canViewPrivateMembers;
+  const eventsVisible = isEventListPublic(community.settings) || canViewPrivateMembers;
 
   const officers = await prisma.communityMember.findMany({
     where: { communityId: community.id, status: "ACTIVE", ...activeScope("communityMember"), role: { not: "MEMBER" } },
@@ -551,34 +562,44 @@ communityRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
       owner: community.owner,
       memberCount: community._count.members,
       eventCount: community._count.events,
-      membersPreview: community.members.map((m) => ({
-        id: m.user.id,
-        name: m.user.name,
-        avatar: m.user.avatar,
-        role: m.role,
-      })),
-      officers: officers.map((m) => ({
-        id: m.user.id,
-        name: m.user.name,
-        avatar: m.user.avatar,
-        role: m.role,
-      })),
-      upcomingEvents: community.events,
-      currentEvents: community.events.filter((e: any) => {
-        const now = new Date();
-        const start = new Date(e.eventDate);
-        const end = e.endDate ? new Date(e.endDate) : start;
-        return start <= now && end >= now;
-      }),
-      pastEvents: community.events.filter((e: any) => {
-        const now = new Date();
-        const end = e.endDate ? new Date(e.endDate) : new Date(e.eventDate);
-        return end < now;
-      }),
-      futureEvents: community.events.filter((e: any) => {
-        const now = new Date();
-        return new Date(e.eventDate) > now;
-      }),
+      membersPreview: membersVisible
+        ? community.members.map((m) => ({
+            id: m.user.id,
+            name: m.user.name,
+            avatar: m.user.avatar,
+            role: m.role,
+          }))
+        : [],
+      officers: membersVisible
+        ? officers.map((m) => ({
+            id: m.user.id,
+            name: m.user.name,
+            avatar: m.user.avatar,
+            role: m.role,
+          }))
+        : [],
+      upcomingEvents: eventsVisible ? community.events : [],
+      currentEvents: eventsVisible
+        ? community.events.filter((e: any) => {
+            const now = new Date();
+            const start = new Date(e.eventDate);
+            const end = e.endDate ? new Date(e.endDate) : start;
+            return start <= now && end >= now;
+          })
+        : [],
+      pastEvents: eventsVisible
+        ? community.events.filter((e: any) => {
+            const now = new Date();
+            const end = e.endDate ? new Date(e.endDate) : new Date(e.eventDate);
+            return end < now;
+          })
+        : [],
+      futureEvents: eventsVisible
+        ? community.events.filter((e: any) => {
+            const now = new Date();
+            return new Date(e.eventDate) > now;
+          })
+        : [],
       categories: community.categories.map((cc) => cc.category),
       tags: community.tags.map((t) => t.tag),
       settings: community.settings
@@ -1049,6 +1070,7 @@ communityRoutes.get(
   requireCommunityAdmin,
   async (c) => {
     const communityId = c.req.param("communityId") as string;
+    const authUser = c.get("user");
 
     const community = await prisma.community.findUnique({
       where: { id: communityId },
@@ -1068,7 +1090,7 @@ communityRoutes.get(
       return c.json({ success: false, message: "Komunitas tidak ditemukan" }, 404);
     }
 
-    const [pendingJoinRequestCount, activeEventCount, recentActivity] =
+    const [pendingJoinRequestCount, activeEventCount, recentActivity, viewerMembership] =
       await Promise.all([
         prisma.joinRequest.count({
           where: { communityId, status: "PENDING" },
@@ -1084,11 +1106,24 @@ communityRoutes.get(
           orderBy: { createdAt: "desc" },
           take: 10,
         }),
+        // requireCommunityAdmin already verified this membership exists and is
+        // ACTIVE/non-deleted -- re-queried here (rather than threaded through
+        // context) to surface the viewer's actual role to the response
+        // without touching the shared guard middleware.
+        prisma.communityMember.findUnique({
+          where: { communityId_userId: { communityId, userId: authUser.id } },
+          select: { role: true },
+        }),
       ]);
 
     return c.json({
       success: true,
       data: {
+        // The viewer's own membership role in this community -- the web
+        // client derives every tab/action gate from this via can() in
+        // packages/shared/src/permissions.ts, never from an ownership
+        // boolean or a local role comparison.
+        userRole: viewerMembership?.role ?? null,
         communityInfo: {
           id: community.id,
           name: community.name,

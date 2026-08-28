@@ -119,6 +119,7 @@ describe("permissions: can()", () => {
     "viewInsights",
     "manageEvents",
     "manageVolunteerPrograms",
+    "manageDangerZone",
   ];
 
   it("rejects a null/unknown/phantom role for every action", () => {
@@ -135,9 +136,10 @@ describe("permissions: can()", () => {
     }
   });
 
-  it("ADMIN can do everything except change a member's role", () => {
+  it("ADMIN can do everything except change a member's role or touch the danger zone", () => {
+    const ownerOnlyActions: CommunityAction[] = ["changeMemberRole", "manageDangerZone"];
     for (const action of ALL_ACTIONS) {
-      if (action === "changeMemberRole") {
+      if (ownerOnlyActions.includes(action)) {
         expect(can("ADMIN", action)).toBe(false);
       } else {
         expect(can("ADMIN", action)).toBe(true);
@@ -150,6 +152,14 @@ describe("permissions: can()", () => {
     expect(can("ADMIN", "changeMemberRole")).toBe(false);
     expect(can("EVENT_MANAGER", "changeMemberRole")).toBe(false);
     expect(can("MEMBER", "changeMemberRole")).toBe(false);
+  });
+
+  it("only OWNER can reach the danger zone (archive/deactivate/delete)", () => {
+    expect(can("OWNER", "manageDangerZone")).toBe(true);
+    expect(can("ADMIN", "manageDangerZone")).toBe(false);
+    expect(can("EVENT_MANAGER", "manageDangerZone")).toBe(false);
+    expect(can("VOLUNTEER_COORDINATOR", "manageDangerZone")).toBe(false);
+    expect(can("MEMBER", "manageDangerZone")).toBe(false);
   });
 
   it("EVENT_MANAGER can manage events but not volunteer programs, members, media, or settings", () => {
@@ -178,5 +188,6 @@ describe("permissions: can()", () => {
     expect(can("MEMBER", "editSettings")).toBe(false);
     expect(can("MEMBER", "manageEvents")).toBe(false);
     expect(can("MEMBER", "manageVolunteerPrograms")).toBe(false);
+    expect(can("MEMBER", "manageDangerZone")).toBe(false);
   });
 });
