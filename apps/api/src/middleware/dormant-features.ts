@@ -1,40 +1,28 @@
 import { Context, Next } from "hono";
-
-const DORMANT_FLAGS: Record<string, string> = {
-  organization: process.env.ORGANIZATION_ENABLED || "true",
-  brand: process.env.BRAND_ENABLED || "false",
-  campaign: process.env.CAMPAIGN_ENABLED || "false",
-  collaboration: process.env.COLLABORATION_ENABLED || "false",
-  partnership: process.env.PARTNERSHIP_ENABLED || "false",
-  csr: process.env.CSR_ENABLED || "false",
-  marketplace: process.env.MARKETPLACE_ENABLED || "false",
-  finance: process.env.FINANCE_ENABLED || "false",
-  wallet: process.env.WALLET_ENABLED || "false",
-  donation: process.env.DONATION_ENABLED || "false",
-  chat: process.env.CHAT_ENABLED || "false",
-  social_feed: process.env.SOCIAL_FEED_ENABLED || "false",
-  gamification: process.env.GAMIFICATION_ENABLED || "false",
-};
-
-const MODULE_PATHS: Record<string, string[]> = {
-  brand: ["/brands"],
-  campaign: ["/campaigns"],
-  collaboration: ["/collaborations"],
-  partnership: ["/partnerships"],
-  csr: ["/csr"],
-  marketplace: ["/marketplace"],
-  finance: ["/finance"],
-  wallet: ["/wallet"],
-  donation: ["/donations"],
-  chat: ["/chat"],
-  social_feed: ["/feed", "/posts"],
-};
+import { FEATURE_FLAG_REGISTRY, evaluateFlag, type FeatureFlagModule } from "@komunaid/shared";
 
 const DISABLED_RESPONSE = {
   success: false,
   code: "FEATURE_DISABLED",
   message: "This feature is not available in the current MVP.",
 };
+
+function envKeyFor(module: FeatureFlagModule): string {
+  return `${module.toUpperCase()}_ENABLED`;
+}
+
+/**
+ * Re-read process.env on every call (cheap: 13 entries) rather than
+ * caching at module load, so a test (or a future runtime env change)
+ * doesn't require re-importing this module to take effect.
+ */
+function resolveFlagState(): Record<FeatureFlagModule, boolean> {
+  const state = {} as Record<FeatureFlagModule, boolean>;
+  for (const module of Object.keys(FEATURE_FLAG_REGISTRY) as FeatureFlagModule[]) {
+    state[module] = evaluateFlag(module, process.env[envKeyFor(module)]);
+  }
+  return state;
+}
 
 function normalizeApiPath(path: string): string {
   return path.startsWith("/api/v1") ? path.slice("/api/v1".length) : path;
@@ -51,10 +39,13 @@ function modulePathMatches(pathSegments: string[], modulePattern: string): boole
 export function dormantFeatureGuard() {
   return async (c: Context, next: Next) => {
     const pathSegments = normalizeApiPath(c.req.path).split("/").filter(Boolean);
+    const flagState = resolveFlagState();
 
-    for (const [module, patterns] of Object.entries(MODULE_PATHS)) {
-      if (DORMANT_FLAGS[module] !== "true") {
-        const matches = patterns.some((p) => modulePathMatches(pathSegments, p));
+    for (const [module, definition] of Object.entries(FEATURE_FLAG_REGISTRY) as Array<
+      [FeatureFlagModule, (typeof FEATURE_FLAG_REGISTRY)[FeatureFlagModule]]
+    >) {
+      if (!flagState[module]) {
+        const matches = definition.paths.some((p) => modulePathMatches(pathSegments, p));
         if (matches) {
           return c.json(DISABLED_RESPONSE, 403);
         }
@@ -66,5 +57,6 @@ export function dormantFeatureGuard() {
 }
 
 export function isFeatureEnabled(feature: string): boolean {
-  return DORMANT_FLAGS[feature] === "true";
+  const flagState = resolveFlagState();
+  return flagState[feature as FeatureFlagModule] === true;
 }

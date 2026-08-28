@@ -369,6 +369,54 @@ describe("Dormant Features Middleware", () => {
       });
     });
 
+    it("should block /organizations when ORGANIZATION_ENABLED=false (structural regression guard)", async () => {
+      // Regression guard: `organization` used to have no path pattern at
+      // all in MODULE_PATHS, so the guard could never block it regardless
+      // of flag state. Verify the flag is now actually wired up.
+      process.env.ORGANIZATION_ENABLED = "false";
+      const { dormantFeatureGuard } = await import("../../../src/middleware/dormant-features");
+      const app = new Hono();
+      app.use("*", dormantFeatureGuard());
+      app.get("/organizations", (c) => c.json({ ok: true }));
+
+      const res = await app.request("/organizations");
+      expect(res.status).toBe(403);
+    });
+
+    it("should block /gamification when GAMIFICATION_ENABLED not set", async () => {
+      const { dormantFeatureGuard } = await import("../../../src/middleware/dormant-features");
+      const app = new Hono();
+      app.use("*", dormantFeatureGuard());
+      app.get("/gamification", (c) => c.json({ ok: true }));
+
+      const res = await app.request("/gamification");
+      expect(res.status).toBe(403);
+    });
+
+    it("should allow /gamification when GAMIFICATION_ENABLED=true", async () => {
+      process.env.GAMIFICATION_ENABLED = "true";
+      const { dormantFeatureGuard } = await import("../../../src/middleware/dormant-features");
+      const app = new Hono();
+      app.use("*", dormantFeatureGuard());
+      app.get("/gamification", (c) => c.json({ ok: true }));
+
+      const res = await app.request("/gamification");
+      expect(res.status).toBe(200);
+    });
+
+    it("should not false-match a path that merely shares a prefix segment (/organization-structure)", async () => {
+      // /organization-structure is a real, always-on route in apps/api/src/app.ts
+      // (api.route("/organization-structure", orgStructureRoutes)). It must
+      // never be caught by the "organization" module's "/organizations" pattern.
+      const { dormantFeatureGuard } = await import("../../../src/middleware/dormant-features");
+      const app = new Hono();
+      app.use("*", dormantFeatureGuard());
+      app.get("/organization-structure", (c) => c.json({ ok: true }));
+
+      const res = await app.request("/organization-structure");
+      expect(res.status).toBe(200);
+    });
+
     it("should block when only some features are enabled", async () => {
       process.env.ORGANIZATION_ENABLED = "true";
       process.env.BRAND_ENABLED = "true";

@@ -31,14 +31,19 @@ describe("feature-flags", () => {
     vi.resetModules();
   });
 
-  it("all flags default to false when env vars not set", async () => {
+  // `organization` is in-scope for V1 (CLAUDE.md: modules "all default to
+  // false except organization (true)") and defaults to enabled, matching
+  // the server-side registry in packages/shared/src/feature-flags.ts.
+  // Every other flag still defaults to disabled.
+  it("all flags default to false when env vars not set, except organization which defaults to true", async () => {
     const { featureFlags } = await import("../../lib/feature-flags");
     for (const key of Object.keys(featureFlags)) {
-      expect(featureFlags[key as FeatureFlag]).toBe(false);
+      const expected = key === "organization";
+      expect(featureFlags[key as FeatureFlag]).toBe(expected);
     }
   });
 
-  it("isFeatureEnabled returns false for unset flags", async () => {
+  it("isFeatureEnabled returns false for unset flags, except organization which defaults to true", async () => {
     const { isFeatureEnabled } = await import("../../lib/feature-flags");
     const flags: FeatureFlag[] = [
       "organization", "brand", "campaign", "collaboration",
@@ -46,7 +51,7 @@ describe("feature-flags", () => {
       "wallet", "donation", "chat", "socialFeed", "gamification",
     ];
     for (const flag of flags) {
-      expect(isFeatureEnabled(flag)).toBe(false);
+      expect(isFeatureEnabled(flag)).toBe(flag === "organization");
     }
   });
 
