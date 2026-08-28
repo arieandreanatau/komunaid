@@ -22,6 +22,7 @@ import { xssSanitize, sanitizeText } from "../lib/xss";
 import { createWithUniqueSlug } from "../lib/slug";
 import { slugify } from "@komunaid/utils";
 import type { AuthUser } from "../middleware/auth";
+import { activeScope, publicScope } from "../lib/visibility-scope";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
 
@@ -38,7 +39,7 @@ organizationRoutes.get("/", optionalAuthMiddleware, validate(organizationQuerySc
   const page = q.page as number;
   const limit = q.limit as number;
 
-  const where: any = { deletedAt: null, status: "APPROVED", visibility: "PUBLIC" };
+  const where: any = { ...publicScope("organization") };
 
   if (q.search) {
     where.OR = [
@@ -122,7 +123,7 @@ organizationRoutes.get("/my/submissions", authMiddleware, async (c) => {
 
   const where: any = {
     ownerId: authUser.id,
-    deletedAt: null,
+    ...activeScope("organization"),
   };
 
   if (status) {
@@ -199,9 +200,7 @@ organizationRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
       },
       events: {
         where: {
-          status: { in: ["PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"] },
-          visibility: "PUBLIC",
-          deletedAt: null,
+          ...publicScope("event", { statuses: ["PUBLISHED", "REGISTRATION_OPEN", "REGISTRATION_CLOSED", "ONGOING", "COMPLETED"] }),
           eventDate: { gte: new Date() },
         },
         orderBy: { eventDate: "asc" },
@@ -1580,7 +1579,7 @@ organizationRoutes.get(
         organizationId,
         userId: authUser.id,
         status: "ACTIVE",
-        deletedAt: null,
+        ...activeScope("organizationMember"),
       },
       select: { id: true },
     });

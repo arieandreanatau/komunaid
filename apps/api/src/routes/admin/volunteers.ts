@@ -3,6 +3,7 @@ import { prisma } from "@komunaid/database";
 import { requireSuperAdmin } from "../../middleware/rbac";
 import { createAuditLog, AuditActions } from "../../services/audit";
 import type { AuthUser } from "../../middleware/auth";
+import { activeScope } from "../../lib/visibility-scope";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
 export const volunteersRoutes = new Hono<Env>();
@@ -34,7 +35,7 @@ volunteersRoutes.get("/volunteers", async (c) => {
   const url = new URL(c.req.url);
   const status = url.searchParams.get("status") || "";
 
-  const where: Record<string, any> = { deletedAt: null };
+  const where: Record<string, any> = { ...activeScope("volunteerOpportunity") };
 
   if (search) {
     where.OR = [

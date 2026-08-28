@@ -3,8 +3,10 @@ import { prisma } from "@komunaid/database";
 import { validate } from "../../middleware/validate";
 import { requireSuperAdmin } from "../../middleware/rbac";
 import { adminActionNoteSchema } from "@komunaid/shared";
-import { createAuditLog, AuditActions } from "../../services/audit";
+import { createAuditLog, AuditActions, logAuditSnapshot, snapshotFields } from "../../services/audit";
 import type { AuthUser } from "../../middleware/auth";
+import { activeScope } from "../../lib/visibility-scope";
+import { transitionCommunity } from "../../services/lifecycle-transition";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
 export const communitiesRoutes = new Hono<Env>();
@@ -24,7 +26,7 @@ communitiesRoutes.get("/communities", async (c) => {
   const url = new URL(c.req.url);
   const status = url.searchParams.get("status") || "";
 
-  const where: Record<string, any> = { deletedAt: null };
+  const where: Record<string, any> = { ...activeScope("community") };
 
   if (search) {
     where.OR = [
@@ -83,7 +85,7 @@ communitiesRoutes.get("/communities/review-queue", async (c) => {
   const url = new URL(c.req.url);
   const status = url.searchParams.get("status") || "PENDING";
 
-  const where: Record<string, any> = { deletedAt: null };
+  const where: Record<string, any> = { ...activeScope("community") };
 
   if (search) {
     where.OR = [
@@ -187,59 +189,66 @@ communitiesRoutes.get("/communities/:communityId", async (c) => {
 communitiesRoutes.put("/communities/:communityId/approve", async (c) => {
   const authUser = c.get("user");
   const communityId = c.req.param("communityId") as string;
+  const actorRole = (c.get("userRoles") ?? []).includes("SUPER_ADMIN") ? "SUPER_ADMIN" : "PLATFORM_ADMIN";
 
   const community = await prisma.community.findUnique({ where: { id: communityId } });
   if (!community) {
     return c.json({ success: false, message: "Komunitas tidak ditemukan" }, 404);
   }
 
-  if (!["PENDING", "REVISION_REQUIRED"].includes(community.status)) {
-    return c.json({ success: false, message: "Hanya komunitas pending/revisi yang dapat disetujui" }, 400);
+  // COMMUNITY_TRANSITIONS (services/lifecycle-transition.ts) only allows
+  // PENDING -> APPROVED; REVISION_REQUIRED must first go back through PENDING
+  // (owner resubmission) before it can be approved. This narrows the old
+  // bespoke check, which also accepted REVISION_REQUIRED directly — see the
+  // task report's "admin/communities migration" section for why.
+  if (community.status !== "PENDING") {
+    return c.json({ success: false, message: "Hanya komunitas pending yang dapat disetujui" }, 400);
   }
 
-  const before = { status: community.status };
+  // transitionCommunity's guarded update + AuditLog row run inside one
+  // transaction; the cascade below (owner membership activation,
+  // notification, MembershipHistory) now runs in that same transaction
+  // instead of as separate best-effort calls afterward.
+  await transitionCommunity({
+    communityId,
+    expectedStatus: "PENDING",
+    targetStatus: "APPROVED",
+    actorId: authUser.id,
+    actorRole,
+    data: { reviewedAt: new Date(), adminNote: null },
+    auditAction: AuditActions.COMMUNITY_APPROVE,
+    auditBeforeData: { status: "PENDING" },
+    auditAfterData: { status: "APPROVED" },
+    cascade: async (tx, before) => {
+      const ownerMember = await tx.communityMember.findFirst({
+        where: { communityId, role: "OWNER" },
+      });
+      if (ownerMember) {
+        await tx.communityMember.update({
+          where: { id: ownerMember.id },
+          data: { status: "ACTIVE" },
+        });
+      }
 
-  await prisma.community.update({
-    where: { id: communityId },
-    data: { status: "APPROVED", reviewedAt: new Date(), adminNote: null },
-  });
+      await tx.notification.create({
+        data: {
+          userId: before.ownerId,
+          title: "Komunitas Disetujui",
+          message: `Komunitas "${before.name}" telah disetujui oleh admin.`,
+          type: "APPROVAL",
+          link: `/communities/${before.slug}`,
+        },
+      });
 
-  const ownerMember = await prisma.communityMember.findFirst({
-    where: { communityId, role: "OWNER" },
-  });
-  if (ownerMember) {
-    await prisma.communityMember.update({
-      where: { id: ownerMember.id },
-      data: { status: "ACTIVE" },
-    });
-  }
-
-  await prisma.notification.create({
-    data: {
-      userId: community.ownerId,
-      title: "Komunitas Disetujui",
-      message: `Komunitas "${community.name}" telah disetujui oleh admin.`,
-      type: "APPROVAL",
-      link: `/communities/${community.slug}`,
-    },
-  });
-
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.COMMUNITY_APPROVE,
-    resourceName: "Community",
-    resourceId: communityId,
-    beforeData: before,
-    afterData: { status: "APPROVED" },
-  });
-
-  await prisma.membershipHistory.create({
-    data: {
-      communityId,
-      userId: community.ownerId,
-      action: "COMMUNITY_APPROVED",
-      details: { approvedBy: authUser.id },
-      performedBy: authUser.id,
+      await tx.membershipHistory.create({
+        data: {
+          communityId,
+          userId: before.ownerId,
+          action: "COMMUNITY_APPROVED",
+          details: { approvedBy: authUser.id },
+          performedBy: authUser.id,
+        },
+      });
     },
   });
 
@@ -337,47 +346,50 @@ communitiesRoutes.patch("/communities/:communityId/reject", validate(adminAction
   const communityId = c.req.param("communityId") as string;
   const data = c.get("validated");
   const { note } = data as { note?: string };
+  const actorRole = (c.get("userRoles") ?? []).includes("SUPER_ADMIN") ? "SUPER_ADMIN" : "PLATFORM_ADMIN";
 
   const community = await prisma.community.findUnique({ where: { id: communityId } });
   if (!community) {
     return c.json({ success: false, message: "Komunitas tidak ditemukan" }, 404);
   }
 
-  if (!["PENDING", "REVISION_REQUIRED"].includes(community.status)) {
-    return c.json({ success: false, message: "Hanya komunitas pending/revisi yang dapat ditolak" }, 400);
+  // See the /approve handler above: COMMUNITY_TRANSITIONS only allows
+  // PENDING -> REJECTED, not REVISION_REQUIRED -> REJECTED.
+  if (community.status !== "PENDING") {
+    return c.json({ success: false, message: "Hanya komunitas pending yang dapat ditolak" }, 400);
   }
 
-  await prisma.community.update({
-    where: { id: communityId },
-    data: { status: "REJECTED", adminNote: note || null, reviewedAt: new Date() },
-  });
+  await transitionCommunity({
+    communityId,
+    expectedStatus: "PENDING",
+    targetStatus: "REJECTED",
+    actorId: authUser.id,
+    actorRole,
+    reason: note,
+    data: { adminNote: note || null, reviewedAt: new Date() },
+    auditAction: AuditActions.COMMUNITY_REJECTED,
+    auditBeforeData: { status: "PENDING" },
+    auditAfterData: { status: "REJECTED", note },
+    cascade: async (tx, before) => {
+      await tx.notification.create({
+        data: {
+          userId: before.ownerId,
+          title: "Komunitas Ditolak",
+          message: `Komunitas "${before.name}" ditolak. ${note ? `Alasan: ${note}` : ""}`,
+          type: "APPROVAL",
+          link: `/communities/${before.slug}`,
+        },
+      });
 
-  await prisma.notification.create({
-    data: {
-      userId: community.ownerId,
-      title: "Komunitas Ditolak",
-      message: `Komunitas "${community.name}" ditolak. ${note ? `Alasan: ${note}` : ""}`,
-      type: "APPROVAL",
-      link: `/communities/${community.slug}`,
-    },
-  });
-
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.COMMUNITY_REJECTED,
-    resourceName: "Community",
-    resourceId: communityId,
-    beforeData: { status: community.status },
-    afterData: { status: "REJECTED", note },
-  });
-
-  await prisma.membershipHistory.create({
-    data: {
-      communityId,
-      userId: community.ownerId,
-      action: "COMMUNITY_REJECTED",
-      details: { rejectedBy: authUser.id, note: note || null },
-      performedBy: authUser.id,
+      await tx.membershipHistory.create({
+        data: {
+          communityId,
+          userId: before.ownerId,
+          action: "COMMUNITY_REJECTED",
+          details: { rejectedBy: authUser.id, note: note || null },
+          performedBy: authUser.id,
+        },
+      });
     },
   });
 
@@ -389,47 +401,48 @@ communitiesRoutes.patch("/communities/:communityId/request-revision", validate(a
   const communityId = c.req.param("communityId") as string;
   const data = c.get("validated");
   const { note } = data as { note?: string };
+  const actorRole = (c.get("userRoles") ?? []).includes("SUPER_ADMIN") ? "SUPER_ADMIN" : "PLATFORM_ADMIN";
 
   const community = await prisma.community.findUnique({ where: { id: communityId } });
   if (!community) {
     return c.json({ success: false, message: "Komunitas tidak ditemukan" }, 404);
   }
 
-  if (!["PENDING"].includes(community.status)) {
+  if (community.status !== "PENDING") {
     return c.json({ success: false, message: "Hanya komunitas pending yang dapat diminta revisi" }, 400);
   }
 
-  await prisma.community.update({
-    where: { id: communityId },
-    data: { status: "REVISION_REQUIRED", adminNote: note || null, reviewedAt: new Date() },
-  });
+  await transitionCommunity({
+    communityId,
+    expectedStatus: "PENDING",
+    targetStatus: "REVISION_REQUIRED",
+    actorId: authUser.id,
+    actorRole,
+    reason: note,
+    data: { adminNote: note || null, reviewedAt: new Date() },
+    auditAction: AuditActions.COMMUNITY_REVISION_REQUESTED,
+    auditBeforeData: { status: "PENDING" },
+    auditAfterData: { status: "REVISION_REQUIRED", note },
+    cascade: async (tx, before) => {
+      await tx.notification.create({
+        data: {
+          userId: before.ownerId,
+          title: "Revisi Diperlukan",
+          message: `Komunitas "${before.name}" perlu direvisi. ${note ? `Catatan: ${note}` : ""}`,
+          type: "APPROVAL",
+          link: `/communities/${before.slug}`,
+        },
+      });
 
-  await prisma.notification.create({
-    data: {
-      userId: community.ownerId,
-      title: "Revisi Diperlukan",
-      message: `Komunitas "${community.name}" perlu direvisi. ${note ? `Catatan: ${note}` : ""}`,
-      type: "APPROVAL",
-      link: `/communities/${community.slug}`,
-    },
-  });
-
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.COMMUNITY_REVISION_REQUESTED,
-    resourceName: "Community",
-    resourceId: communityId,
-    beforeData: { status: community.status },
-    afterData: { status: "REVISION_REQUIRED", note },
-  });
-
-  await prisma.membershipHistory.create({
-    data: {
-      communityId,
-      userId: community.ownerId,
-      action: "COMMUNITY_REVISION_REQUESTED",
-      details: { requestedBy: authUser.id, note: note || null },
-      performedBy: authUser.id,
+      await tx.membershipHistory.create({
+        data: {
+          communityId,
+          userId: before.ownerId,
+          action: "COMMUNITY_REVISION_REQUESTED",
+          details: { requestedBy: authUser.id, note: note || null },
+          performedBy: authUser.id,
+        },
+      });
     },
   });
 
@@ -453,21 +466,18 @@ communitiesRoutes.put("/communities/:communityId/soft-delete", requireSuperAdmin
     return c.json({ success: false, message: "Komunitas sudah dihapus" }, 400);
   }
 
-  const before = { status: community.status, deletedAt: community.deletedAt };
+  const before = snapshotFields(community, ["status", "deletedAt"]);
 
+  const deletedAt = new Date();
   await prisma.community.update({
     where: { id: communityId },
-    data: { deletedAt: new Date() },
+    data: { deletedAt },
   });
 
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.COMMUNITY_DELETE,
-    resourceName: "Community",
-    resourceId: communityId,
-    beforeData: before,
-    afterData: { deletedAt: new Date().toISOString() },
-  });
+  await logAuditSnapshot(
+    { userId: authUser.id, actionType: AuditActions.COMMUNITY_DELETE, resourceName: "Community", resourceId: communityId },
+    { before, after: { deletedAt: deletedAt.toISOString() } }
+  );
 
   return c.json({ success: true, message: "Komunitas berhasil dihapus" });
 });
@@ -490,7 +500,7 @@ communitiesRoutes.post("/communities/bulk-delete", requireSuperAdmin(), async (c
   }
 
   const communities = await prisma.community.findMany({
-    where: { id: { in: ids }, deletedAt: null },
+    where: { id: { in: ids }, ...activeScope("community") },
     select: { id: true, name: true, status: true, deletedAt: true },
   });
 
@@ -505,14 +515,10 @@ communitiesRoutes.post("/communities/bulk-delete", requireSuperAdmin(), async (c
   });
 
   for (const comm of communities) {
-    await createAuditLog({
-      userId: authUser.id,
-      actionType: AuditActions.COMMUNITY_DELETE,
-      resourceName: "Community",
-      resourceId: comm.id,
-      beforeData: { status: comm.status, deletedAt: comm.deletedAt },
-      afterData: { deletedAt: now.toISOString() },
-    });
+    await logAuditSnapshot(
+      { userId: authUser.id, actionType: AuditActions.COMMUNITY_DELETE, resourceName: "Community", resourceId: comm.id },
+      { before: snapshotFields(comm, ["status", "deletedAt"]), after: { deletedAt: now.toISOString() } }
+    );
   }
 
   return c.json({

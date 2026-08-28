@@ -4,8 +4,9 @@ import { prisma } from "@komunaid/database";
 import { requireSuperAdmin, invalidateRoleCache } from "../../middleware/rbac";
 import { validate } from "../../middleware/validate";
 import { assignRoleSchema, adminResetPasswordSchema } from "@komunaid/shared";
-import { createAuditLog, AuditActions, invalidateActorRoleCache } from "../../services/audit";
+import { createAuditLog, AuditActions, invalidateActorRoleCache, logAuditSnapshot, snapshotFields } from "../../services/audit";
 import type { AuthUser } from "../../middleware/auth";
+import { activeScope } from "../../lib/visibility-scope";
 
 type Env = { Variables: { user: AuthUser; validated: any; userRoles: string[] } };
 export const usersRoutes = new Hono<Env>();
@@ -34,7 +35,7 @@ usersRoutes.get("/users", async (c) => {
   const status = url.searchParams.get("status") || "";
   const role = url.searchParams.get("role") || "";
 
-  const where: Record<string, any> = { deletedAt: null };
+  const where: Record<string, any> = { ...activeScope("user") };
 
   if (search) {
     where.OR = [
@@ -282,21 +283,18 @@ usersRoutes.put("/users/:userId/archive", async (c) => {
     return c.json({ success: false, message: "Tidak dapat mengubah user dengan hak akses lebih tinggi" }, 403);
   }
 
-  const before = { status: user.status, deletedAt: user.deletedAt };
+  const before = snapshotFields(user, ["status", "deletedAt"]);
 
+  const archivedAt = new Date();
   await prisma.user.update({
     where: { id: userId },
-    data: { status: "DEACTIVATED", deletedAt: new Date() },
+    data: { status: "DEACTIVATED", deletedAt: archivedAt },
   });
 
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.USER_ARCHIVE,
-    resourceName: "User",
-    resourceId: userId,
-    beforeData: before,
-    afterData: { status: "DEACTIVATED", deletedAt: new Date().toISOString() },
-  });
+  await logAuditSnapshot(
+    { userId: authUser.id, actionType: AuditActions.USER_ARCHIVE, resourceName: "User", resourceId: userId },
+    { before, after: { status: "DEACTIVATED", deletedAt: archivedAt.toISOString() } }
+  );
 
   return c.json({ success: true, message: "User berhasil diarsipkan" });
 });
@@ -314,21 +312,17 @@ usersRoutes.put("/users/:userId/restore", async (c) => {
     return c.json({ success: false, message: "Tidak dapat mengubah user dengan hak akses lebih tinggi" }, 403);
   }
 
-  const before = { status: user.status, deletedAt: user.deletedAt };
+  const before = snapshotFields(user, ["status", "deletedAt"]);
 
   await prisma.user.update({
     where: { id: userId },
     data: { status: "ACTIVE", deletedAt: null },
   });
 
-  await createAuditLog({
-    userId: authUser.id,
-    actionType: AuditActions.USER_RESTORE,
-    resourceName: "User",
-    resourceId: userId,
-    beforeData: before,
-    afterData: { status: "ACTIVE", deletedAt: null },
-  });
+  await logAuditSnapshot(
+    { userId: authUser.id, actionType: AuditActions.USER_RESTORE, resourceName: "User", resourceId: userId },
+    { before, after: { status: "ACTIVE", deletedAt: null } }
+  );
 
   return c.json({ success: true, message: "User berhasil dipulihkan" });
 });
