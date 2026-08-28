@@ -2,11 +2,5 @@
   "installCommand": "npm install -g pnpm@10.33.4 && pnpm install --frozen-lockfile",
   "buildCommand": "pnpm --filter @komunaid/database generate && pnpm --filter @komunaid/web build",
   "framework": "nextjs",
-  "outputDirectory": "apps/web/.next",
-  "crons": [
-    {
-      "path": "/api/v1/cron/scheduled-jobs",
-      "schedule": "0 * * * *"
-    }
-  ]
+  "outputDirectory": "apps/web/.next"
 }
