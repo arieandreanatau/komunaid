@@ -1,0 +1,52 @@
+name: Scheduled jobs (cron trigger)
+
+# Vercel's Hobby plan only allows cron jobs that run once per day, so the
+# hourly schedule this endpoint needs cannot live in the root vercel.json
+# "crons" block (that config was removed because Vercel rejects "0 * * * *"
+# at deploy time on Hobby). This workflow is the external trigger that keeps
+# hourly execution without upgrading to Pro — see
+# apps/api/src/routes/cron.ts and apps/api/src/services/scheduled-work.ts.
+#
+# Required repository configuration:
+#   - Repository variable PRODUCTION_URL: the deployment base URL
+#     (e.g. https://komunaid.vercel.app), no trailing slash.
+#   - Repository secret CRON_SECRET: same value as the CRON_SECRET
+#     environment variable configured on the Vercel deployment.
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call scheduled-jobs endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
+        run: |
+          if [ -z "$PRODUCTION_URL" ]; then
+            echo "PRODUCTION_URL repository variable is not set." >&2
+            exit 1
+          fi
+          if [ -z "$CRON_SECRET" ]; then
+            echo "CRON_SECRET repository secret is not set." >&2
+            exit 1
+          fi
+
+          response_file=$(mktemp)
+          status=$(curl -sS -o "$response_file" -w "%{http_code}" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${PRODUCTION_URL}/api/v1/cron/scheduled-jobs")
+
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "scheduled-jobs endpoint returned HTTP $status" >&2
+            echo "--- response body ---" >&2
+            cat "$response_file" >&2
+            exit 1
+          fi
+
+          echo "scheduled-jobs endpoint returned HTTP $status"
+          cat "$response_file"
