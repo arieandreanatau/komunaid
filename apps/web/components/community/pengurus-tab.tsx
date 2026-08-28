@@ -1,30 +1,35 @@
 "use client";
 
+import { can, type CommunityRole } from "@komunaid/shared";
 import type { Member } from "./types";
 import { roleBadge } from "./types";
 
 export function PengurusTab({
   officers,
   loading,
-  isOwner,
+  role,
   currentUserId,
   onChangeRole,
   onRemoveMember,
 }: {
   officers: Member[];
   loading: boolean;
-  isOwner: boolean;
+  /** The viewer's own community role. Every affordance below is derived
+   * from this through can() -- never from an ownership boolean. */
+  role: CommunityRole | null;
   currentUserId?: string;
   onChangeRole: (memberId: string, role: string) => void;
   onRemoveMember: (memberId: string, name: string) => void;
 }) {
+  const canChangeRole = can(role, "changeMemberRole");
+  const canManagePengurus = can(role, "managePengurus");
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4">
         <p className="text-sm text-gray-500">
           Pengurus komunitas adalah anggota dengan peran governance dan operasional. Owner memiliki kewenangan tertinggi.
         </p>
-        {isOwner && <span className="whitespace-nowrap rounded-full bg-purple-100 px-2.5 py-1 text-xs font-bold text-purple-700">Owner access</span>}
+        {role === "OWNER" && <span className="whitespace-nowrap rounded-full bg-purple-100 px-2.5 py-1 text-xs font-bold text-purple-700">Owner access</span>}
       </div>
 
       {loading ? (
@@ -55,7 +60,7 @@ export function PengurusTab({
               </span>
               {member.userId !== currentUserId && (
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  {isOwner && member.role !== "OWNER" && (
+                  {canChangeRole && member.role !== "OWNER" && (
                     <select
                       value={member.role}
                       onChange={(e) => onChangeRole(member.id, e.target.value)}
@@ -67,7 +72,7 @@ export function PengurusTab({
                       <option value="VOLUNTEER_COORDINATOR">Koordinator Volunteer</option>
                     </select>
                   )}
-                  {member.role !== "OWNER" && (
+                  {canManagePengurus && member.role !== "OWNER" && (
                     <button
                       onClick={() => onRemoveMember(member.id, member.name)}
                       className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"

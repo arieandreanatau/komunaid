@@ -146,7 +146,15 @@ export type CommunityAction =
   /** Create/update/publish community events -- OWNER, ADMIN, or EVENT_MANAGER. */
   | "manageEvents"
   /** Create/update volunteer programs -- OWNER, ADMIN, or VOLUNTEER_COORDINATOR. */
-  | "manageVolunteerPrograms";
+  | "manageVolunteerPrograms"
+  /**
+   * Irreversible community lifecycle actions (the dashboard's "Danger
+   * Zone" panel: archive/deactivate/delete) -- requireCommunityOwner on
+   * POST /communities/:id/archive. Deliberately its own action rather than
+   * folded into editSettings: editSettings is OWNER+ADMIN, but nothing
+   * destructive/unrecoverable may be reachable by ADMIN.
+   */
+  | "manageDangerZone";
 
 const COMMUNITY_ACTION_ROLES: Record<CommunityAction, readonly CommunityRole[]> = {
   viewMembers: ["OWNER", "ADMIN", "EVENT_MANAGER", "VOLUNTEER_COORDINATOR", "MEMBER"],
@@ -159,6 +167,7 @@ const COMMUNITY_ACTION_ROLES: Record<CommunityAction, readonly CommunityRole[]> 
   viewInsights: ["OWNER", "ADMIN"],
   manageEvents: ["OWNER", "ADMIN", "EVENT_MANAGER"],
   manageVolunteerPrograms: ["OWNER", "ADMIN", "VOLUNTEER_COORDINATOR"],
+  manageDangerZone: ["OWNER"],
 };
 
 /**

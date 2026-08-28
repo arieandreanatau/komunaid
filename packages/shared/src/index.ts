@@ -3,6 +3,7 @@ import { z } from "zod";
 export * from "./feature-flags";
 export * from "./permissions";
 export * from "./response";
+export * from "./settings-policy";
 
 import {
   PLATFORM_ROLES,

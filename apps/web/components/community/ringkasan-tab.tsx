@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { can, type CommunityRole } from "@komunaid/shared";
 import type { ActivityItem, DashboardData } from "./types";
 
 function formatActivityDetails(details: unknown): string | null {
@@ -19,6 +20,7 @@ export function RingkasanTab({
   pendingRequests,
   activeEvents,
   recentActivity,
+  role,
 }: {
   communityId: string;
   communityPath: string;
@@ -26,7 +28,13 @@ export function RingkasanTab({
   pendingRequests: number;
   activeEvents: number;
   recentActivity: ActivityItem[];
+  /** The viewer's own community role. Gates the volunteer-workspace
+   * shortcut below via can() -- see D7 in spec #12's product decisions:
+   * the standalone volunteer route isn't rebuilt into the tab shell, it's
+   * just made discoverable to whoever can actually manage it. */
+  role: CommunityRole | null;
 }) {
+  const canManageVolunteer = can(role, "manageVolunteerPrograms");
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
@@ -55,9 +63,11 @@ export function RingkasanTab({
             <Link href="#" className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-slate-700 hover:text-komuna-blue">
               Event menunggu review <span className="font-bold text-slate-500">0</span>
             </Link>
-            <Link href="#" className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-slate-700 hover:text-komuna-blue">
-              Volunteer menunggu review <span className="font-bold text-slate-500">0</span>
-            </Link>
+            {canManageVolunteer && (
+              <Link href={`/dashboard/communities/${communityPath}/volunteer`} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-slate-700 hover:text-komuna-blue">
+                Program volunteer <span className="font-bold text-komuna-blue">Kelola</span>
+              </Link>
+            )}
           </div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-5">

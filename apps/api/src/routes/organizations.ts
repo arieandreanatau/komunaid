@@ -10,6 +10,10 @@ import {
   updateOrganizationBannerSchema,
   updateOrganizationLogoSchema,
   handleJoinRequestSchema,
+  isMemberListPublic,
+  isEventListPublic,
+  isVisibleToPublic,
+  requiresJoinApproval,
 } from "@komunaid/shared";
 import { authMiddleware, optionalAuthMiddleware } from "../middleware/auth";
 import {
@@ -246,6 +250,11 @@ organizationRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
   }
 
   let userMembership: { role: string; status: string } | null = null;
+  // Same "hides from outside, not from members" exception used at
+  // GET /:organizationId/members: an active member or the owner always
+  // sees the member/event payload below regardless of the
+  // showMemberList/showEventList switches.
+  let canViewPrivateMembers = false;
   if (user) {
     const membership = await prisma.organizationMember.findUnique({
       where: {
@@ -254,12 +263,16 @@ organizationRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
           userId: user.id,
         },
       },
-      select: { role: true, status: true },
+      select: { role: true, status: true, deletedAt: true },
     });
     userMembership = membership
       ? { role: membership.role, status: membership.status }
       : null;
+    canViewPrivateMembers = user.id === organization.ownerId || Boolean(membership && membership.status === "ACTIVE" && membership.deletedAt === null);
   }
+
+  const membersVisible = isVisibleToPublic(isMemberListPublic(organization.settings), canViewPrivateMembers);
+  const eventsVisible = isVisibleToPublic(isEventListPublic(organization.settings), canViewPrivateMembers);
 
   return c.json({
     success: true,
@@ -284,13 +297,15 @@ organizationRoutes.get("/:slug", optionalAuthMiddleware, async (c) => {
       owner: organization.owner,
       memberCount: organization._count.members,
       eventCount: organization._count.events,
-      membersPreview: organization.members.map((m) => ({
-        id: m.user.id,
-        name: m.user.name,
-        avatar: m.user.avatar,
-        role: m.role,
-      })),
-      upcomingEvents: organization.events,
+      membersPreview: membersVisible
+        ? organization.members.map((m) => ({
+            id: m.user.id,
+            name: m.user.name,
+            avatar: m.user.avatar,
+            role: m.role,
+          }))
+        : [],
+      upcomingEvents: eventsVisible ? organization.events : [],
       categories: organization.categories.map((oc) => oc.category),
       tags: organization.tags.map((t) => t.tag),
       settings: organization.settings
@@ -1236,7 +1251,7 @@ organizationRoutes.post(
       where: { organizationId },
     });
 
-    if (settings?.requireApproval) {
+    if (requiresJoinApproval(settings)) {
       const existingRequest = await prisma.joinRequest.findFirst({
         where: {
           organizationId,

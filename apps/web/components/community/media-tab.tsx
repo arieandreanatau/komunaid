@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import api from "@/lib/api";
+import { can, type CommunityRole } from "@komunaid/shared";
 import { runMutation } from "./mutation-helper";
 
 interface MediaItem {
@@ -24,7 +25,17 @@ const MEDIA_TYPE_META: Record<string, { label: string; badge: string }> = {
   FORUM_POST: { label: "Diskusi", badge: "bg-amber-100 text-amber-700" },
 };
 
-export function MediaTab({ communityId, canManage }: { communityId: string; canManage: boolean }) {
+export function MediaTab({
+  communityId,
+  role,
+}: {
+  communityId: string;
+  /** The viewer's own community role. Create/edit/delete/publish
+   * affordances are derived from this through can(), matching the API's
+   * requireCommunityAdmin guard on the mutation media routes. */
+  role: CommunityRole | null;
+}) {
+  const canManage = can(role, "manageMedia");
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState<string>("");

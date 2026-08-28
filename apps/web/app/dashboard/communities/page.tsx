@@ -10,8 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Pagination } from "@/components/pagination";
 import { useToast } from "@/components/ui/toast";
+import { isCommunityOfficer } from "@komunaid/shared";
 
-interface UserCommunity {
+export interface UserCommunity {
   id: string;
   name: string;
   slug: string;
@@ -32,10 +33,16 @@ interface UserProfile {
   communities?: UserCommunity[];
   createdCommunities?: UserCommunity[];
   followedCommunities?: UserCommunity[];
+  // Server-derived with isCommunityOfficer -- the same predicate
+  // requireCommunityOfficer uses to gate workspace entry (see
+  // apps/api/src/routes/users.ts). "Kelola" keys off membership in this set,
+  // not off which tab a community happens to be grouped into, so the
+  // affordance can never promise a workspace door that is actually locked.
+  managedCommunities?: UserCommunity[];
   pastCommunities?: UserCommunity[];
 }
 
-type CommunityTab = "created" | "followed" | "past" | "left";
+export type CommunityTab = "created" | "followed" | "past" | "left";
 
 const TABS: { id: CommunityTab; label: string }[] = [
   { id: "created", label: "Dibuat oleh Saya" },
@@ -206,6 +213,18 @@ export default function MyCommunitiesPage() {
   });
 
   const communities: UserCommunity[] = profile?.communities || [];
+
+  // "Dibuat" stays OWNER-only (see communityGroups.created below); this is
+  // the separate, structural "can this door actually be opened" set --
+  // built from the server's isCommunityOfficer-derived managedCommunities,
+  // the same predicate requireCommunityOfficer uses to gate workspace entry
+  // (apps/api/src/middleware/rbac.ts). The fallback mirrors that predicate
+  // exactly rather than re-inventing a local role check, so a manage entry
+  // point can never be shown for a community the workspace guard would reject.
+  const managedIds = useMemo(() => {
+    const managed = profile?.managedCommunities || communities.filter((c) => isCommunityOfficer(c.role));
+    return new Set(managed.map((c) => c.id));
+  }, [profile, communities]);
 
   const communityGroups = useMemo(() => {
     const created = profile?.createdCommunities || communities.filter((c) => c.role === "OWNER");
@@ -481,6 +500,7 @@ export default function MyCommunitiesPage() {
                   key={c.id}
                   community={c}
                   tab={tab}
+                  canManage={managedIds.has(c.id)}
                   onLeave={() => setLeaveTarget(c)}
                 />
               ))}
@@ -509,13 +529,20 @@ export default function MyCommunitiesPage() {
   );
 }
 
-function CommunityCard({
+// Exported (only) so it can be exercised directly by
+// apps/web/tests/components/my-communities-card.test.tsx without pulling in
+// MyCommunitiesPage's own useQuery/useAuth/useToast data-fetching -- ticket
+// #15 (spec #12)'s "Kelola" affordance lives entirely in this presentational
+// component's `canManage` prop.
+export function CommunityCard({
   community,
   tab,
+  canManage,
   onLeave,
 }: {
   community: UserCommunity;
   tab: CommunityTab;
+  canManage: boolean;
   onLeave: () => void;
 }) {
   const location = formatLocation(community.province, community.city);
@@ -537,7 +564,7 @@ function CommunityCard({
         )}
         <div className="min-w-0 flex-1">
           <Link
-              href={tab === "created" ? `/dashboard/communities/${community.slug}/overview` : `/communities/${community.slug}`}
+              href={canManage ? `/dashboard/communities/${community.slug}/overview` : `/communities/${community.slug}`}
             className="font-semibold text-komuna-navy truncate hover:text-komuna-blue transition-colors block"
           >
             {community.name}
@@ -579,7 +606,7 @@ function CommunityCard({
         <Badge variant={STATUS_VARIANT[community.status] || "default"}>
           {STATUS_LABELS[community.status] || community.status}
         </Badge>
-        {tab === "created" && community.role && (
+        {(tab === "created" || canManage) && community.role && (
           <Badge variant="default">{ROLE_LABELS[community.role] || community.role}</Badge>
         )}
         {tab === "left" && community.leftAt && (
@@ -594,7 +621,7 @@ function CommunityCard({
         )}
       </div>
 
-      <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2">
+      <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2 flex-wrap">
         {tab === "created" ? (
           <>
                <Link
@@ -612,9 +639,21 @@ function CommunityCard({
           </>
         ) : tab === "followed" ? (
           <>
+            {canManage && (
+              <Link
+                href={`/dashboard/communities/${community.slug}/overview`}
+                className="px-3 py-1.5 text-xs font-medium text-komuna-blue bg-komuna-blue/10 rounded-lg hover:bg-komuna-blue/20 transition-colors"
+              >
+                Kelola
+              </Link>
+            )}
             <Link
               href={`/communities/${community.slug}`}
-              className="px-3 py-1.5 text-xs font-medium text-komuna-blue bg-komuna-blue/10 rounded-lg hover:bg-komuna-blue/20 transition-colors"
+              className={
+                canManage
+                  ? "px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+                  : "px-3 py-1.5 text-xs font-medium text-komuna-blue bg-komuna-blue/10 rounded-lg hover:bg-komuna-blue/20 transition-colors"
+              }
             >
               Lihat Komunitas
             </Link>

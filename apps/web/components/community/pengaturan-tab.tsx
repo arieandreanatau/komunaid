@@ -1,5 +1,6 @@
 "use client";
 
+import { can, type CommunityRole } from "@komunaid/shared";
 import { AddressSelector, type AddressValue } from "@/components/address-selector";
 import type { CommunitySettingsToggles, PengaturanForm } from "./types";
 
@@ -10,8 +11,7 @@ export function PengaturanTab({
   saving,
   success,
   error,
-  isOwner,
-  canManage,
+  role,
   categories,
   communitySettingsForm,
   setCommunitySettingsForm,
@@ -27,8 +27,10 @@ export function PengaturanTab({
   saving: boolean;
   success: string;
   error: string;
-  isOwner: boolean;
-  canManage: boolean;
+  /** The viewer's own community role. `canManage` (editSettings) and the
+   * Danger Zone's visibility (manageDangerZone) are both derived from this
+   * through can() -- never from an ownership boolean. */
+  role: CommunityRole | null;
   categories: { id: string; name: string; icon: string }[];
   communitySettingsForm: CommunitySettingsToggles;
   setCommunitySettingsForm: (v: CommunitySettingsToggles) => void;
@@ -38,6 +40,8 @@ export function PengaturanTab({
   communitySettingsSuccess: string;
   communitySettingsError: string;
 }) {
+  const canManage = can(role, "editSettings");
+  const canManageDangerZone = can(role, "manageDangerZone");
   const address: AddressValue = {
     address: form.address,
     province: form.province,
@@ -335,7 +339,7 @@ export function PengaturanTab({
           )}
         </div>
 
-        {isOwner && (
+        {canManageDangerZone && (
           <div className="rounded-xl border border-red-200 bg-red-50/40 p-5">
             <p className="text-sm font-bold text-red-700">Danger Zone</p>
             <p className="mt-1 text-sm text-red-600">Deactivate dan delete memerlukan governance API dengan audit trail. Action belum diekspos sampai endpoint terverifikasi.</p>

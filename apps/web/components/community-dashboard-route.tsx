@@ -15,7 +15,7 @@ import { PengaturanTab } from "@/components/community/pengaturan-tab";
 import { InsightTab } from "@/components/community/insight-tab";
 import { MediaTab } from "@/components/community/media-tab";
 import { runMutation } from "@/components/community/mutation-helper";
-import { can, type CommunityRole } from "@komunaid/shared";
+import { isCommunityRole, type CommunityRole } from "@komunaid/shared";
 import type {
   DashboardData,
   Member,
@@ -25,7 +25,22 @@ import type {
   CommunitySettingsToggles,
   Tab,
 } from "@/components/community/types";
-import { tabs } from "@/components/community/types";
+import { tabs, canOpenTab } from "@/components/community/types";
+
+// Route path segment per tab -- a plain constant, not derived from props/state,
+// so it can be shared between the (currently dead, see D8/community-dashboard-route
+// history) nav render and the tab-access redirect below.
+const canonicalTabPath: Record<Tab, string> = {
+  ringkasan: "overview",
+  profil: "profile",
+  event: "events",
+  pengurus: "pengurus",
+  anggota: "members",
+  permintaan: "requests",
+  pengaturan: "settings",
+  media: "media",
+  insight: "insights",
+};
 
 export function CommunityDashboardRoute({
   tab,
@@ -51,7 +66,12 @@ export function CommunityDashboardRoute({
   const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isOwner, setIsOwner] = useState(false);
+  // The viewer's real community role, straight from GET .../dashboard's
+  // `userRole` field (apps/api/src/routes/communities.ts). Every tab-level
+  // gate below is derived from this through can() in
+  // packages/shared/src/permissions.ts -- never from an ownership boolean
+  // and never from a local role comparison.
+  const [role, setRole] = useState<CommunityRole | null>(null);
 
   useEffect(() => {
     if (!routeSlug || communityIdOverride || routeSlug.startsWith("cmt")) return;
@@ -145,10 +165,16 @@ export function CommunityDashboardRoute({
          pendingRequests: payload.pendingRequests ?? payload.pendingJoinRequestCount ?? 0,
          activeEvents: payload.activeEvents ?? payload.activeEventCount ?? 0,
        });
-       setIsOwner(
-         comm.status !== undefined &&
-           (payload.userRole === "OWNER" || payload.isOwner === true || comm.owner?.id === user?.id)
-       );
+       // Prefer the server-issued role. Fall back to the legacy
+       // ownership-boolean/owner-id inference only for a payload that
+       // predates the `userRole` field, so an old cached response never
+       // hard-fails the dashboard.
+       const resolvedRole: CommunityRole | null = isCommunityRole(payload.userRole)
+         ? payload.userRole
+         : payload.isOwner === true || comm.owner?.id === user?.id
+           ? "OWNER"
+           : null;
+       setRole(comm.status !== undefined ? resolvedRole : null);
       setSettingsForm((prev) => ({
         ...prev,
         name: comm.name,
@@ -274,6 +300,19 @@ export function CommunityDashboardRoute({
       fetchDashboard();
     }
   }, [authLoading, isAuthenticated, communityId, fetchDashboard]);
+
+  // The visible tabs must equal the openable tabs (ticket #14, spec #12):
+  // once the viewer's real role is known, send anyone sitting on a tab
+  // route their role can't open to a tab it can -- "anggota" is a safe
+  // landing spot because viewMembers is open to every community role that
+  // can reach the workspace at all (requireCommunityOfficer already
+  // excludes plain MEMBER and non-members).
+  useEffect(() => {
+    if (!dashboard) return;
+    if (!canOpenTab(role, tab)) {
+      router.replace(`/dashboard/communities/${communityPath}/${canonicalTabPath.anggota}`);
+    }
+  }, [dashboard, role, tab, communityPath, router]);
 
   useEffect(() => {
     if (tab === "anggota") fetchMembers();
@@ -471,29 +510,21 @@ export function CommunityDashboardRoute({
 
   if (!dashboard) return null;
 
+  // The redirect effect above sends a role sitting on a tab it can't open
+  // to one it can -- render nothing for the one frame that takes, rather
+  // than flashing a tab whose data the viewer has no authority over.
+  if (!canOpenTab(role, tab)) return null;
+
   const { community, pendingRequests, activeEvents, recentActivity } = dashboard;
 
   // Every tab below only renders once fetchDashboard() above has already
-  // succeeded, and GET /communities/:id/dashboard requires
-  // requireCommunityAdmin (apps/api/src/routes/communities.ts) -- so anyone
-  // who reaches this point already holds OWNER or ADMIN in this community.
-  // `isOwner` (computed from `comm.owner?.id === user?.id`, above) resolves
-  // which of those two it is; `canManage` covers everything the API accepts
-  // from either of them (settings, media) while `isOwner` stays reserved for
-  // the strictly-OWNER actions (changing a member's role, the danger zone).
-  const role: CommunityRole = isOwner ? "OWNER" : "ADMIN";
-  const canManage = can(role, "editSettings");
-  const canonicalTabPath: Record<Tab, string> = {
-    ringkasan: "overview",
-    profil: "profile",
-    event: "events",
-    pengurus: "pengurus",
-    anggota: "members",
-    permintaan: "requests",
-    pengaturan: "settings",
-    media: "media",
-    insight: "insights",
-  };
+  // succeeded and canOpenTab(role, tab) has passed -- `role` is the
+  // viewer's real membership role from the dashboard payload (state
+  // above); each tab derives its own affordances from it via can(), rather
+  // than the shell precomputing a single "canManage" flag that conflates
+  // distinct actions (editSettings vs. manageMedia vs. changeMemberRole vs.
+  // manageDangerZone).
+  const visibleTabs = tabs.filter((navTab) => canOpenTab(role, navTab.key));
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -514,7 +545,7 @@ export function CommunityDashboardRoute({
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Komunitas</p>
             </div>
 
-            {tabs.map((navTab) => (
+            {visibleTabs.map((navTab) => (
               <Link
                 key={navTab.key}
                 href={`/dashboard/communities/${communityPath}/${canonicalTabPath[navTab.key]}`}
@@ -599,7 +630,7 @@ export function CommunityDashboardRoute({
             </div>
 
             <div className="hidden">
-              {tabs.map((navTab) => (
+              {visibleTabs.map((navTab) => (
                 <Link
                   key={navTab.key}
                   href={`/dashboard/communities/${communityPath}/${canonicalTabPath[navTab.key]}`}
@@ -622,6 +653,7 @@ export function CommunityDashboardRoute({
                 pendingRequests={pendingRequests}
                 activeEvents={activeEvents}
                 recentActivity={recentActivity}
+                role={role}
               />
             )}
 
@@ -645,7 +677,7 @@ export function CommunityDashboardRoute({
                 memberPage={memberPage}
                 setMemberPage={setMemberPage}
                 memberTotalPages={memberTotalPages}
-                isOwner={isOwner}
+                role={role}
                 currentUserId={user?.id}
                 onChangeRole={handleChangeRole}
                 onRemoveMember={handleRemoveMember}
@@ -657,7 +689,7 @@ export function CommunityDashboardRoute({
               <PengurusTab
                 officers={officers}
                 loading={officersLoading}
-                isOwner={isOwner}
+                role={role}
                 currentUserId={user?.id}
                 onChangeRole={handleChangeRole}
                 onRemoveMember={handleRemoveMember}
@@ -678,7 +710,7 @@ export function CommunityDashboardRoute({
             )}
 
             {tab === "media" && (
-              <MediaTab communityId={communityId} canManage={canManage} />
+              <MediaTab communityId={communityId} role={role} />
             )}
 
             {tab === "pengaturan" && (
@@ -689,8 +721,7 @@ export function CommunityDashboardRoute({
                 saving={settingsSaving}
                 success={settingsSuccess}
                 error={settingsError}
-                isOwner={isOwner}
-                canManage={canManage}
+                role={role}
                 categories={categories}
                 communitySettingsForm={communitySettingsForm}
                 setCommunitySettingsForm={setCommunitySettingsForm}
