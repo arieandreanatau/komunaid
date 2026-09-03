@@ -159,6 +159,32 @@ export const createCommunitySchema = z.object({
 
 export const updateCommunitySchema = createCommunitySchema.partial();
 
+// ==========================================
+// COMMUNITY NETWORK & COLLABORATION
+// ==========================================
+
+export const createNetworkRequestSchema = z.object({
+  targetCommunityId: z.string().min(1),
+});
+
+export const networkActionSchema = z.object({
+  action: z.enum(["accept", "decline", "remove"]),
+});
+
+export const createCollaborationSchema = z.object({
+  communityAId: z.string().min(1),
+  communityBId: z.string().min(1),
+  title: z.string().min(3).max(200),
+  description: z.string().max(2000).optional(),
+  targetType: z.enum(["EVENT", "VOLUNTEER"]),
+  targetEventId: z.string().optional(),
+  targetProgramId: z.string().optional(),
+});
+
+export const collaborationActionSchema = z.object({
+  action: z.enum(["accept", "reject", "complete", "cancel"]),
+});
+
 export const updateCommunityProfileSchema = z.object({
   name: z.string().min(3).max(100).optional(),
   description: z.string().max(2000).optional(),
@@ -206,6 +232,7 @@ export const communityQuerySchema = z.object({
         "PENDING",
         "UNDER_REVIEW",
         "APPROVED",
+        "REVISION_REQUIRED",
         "REJECTED",
         "SUSPENDED",
         "ARCHIVED",

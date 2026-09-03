@@ -13,7 +13,18 @@ export const metadata: Metadata = {
   },
 };
 
-export default function KolaborasiPage() {
+async function fetchCollaborations() {
+  try {
+    const response = await fetch(`${process.env.API_URL || "http://localhost:3001"}/api/v1/collaborations/public`, { next: { revalidate: 60 } });
+    if (!response.ok) return [];
+    return (await response.json()).data ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export default async function KolaborasiPage() {
+  const collaborations = await fetchCollaborations();
   return (
     <div className="min-h-screen flex flex-col bg-komuna-cream text-komuna-dark">
       <JsonLd type="website" />
@@ -64,7 +75,17 @@ export default function KolaborasiPage() {
             <p className="text-sm font-bold uppercase tracking-[0.16em] text-komuna-coral">Koleksi Kolaborasi</p>
             <h2 className="mt-3 font-display text-3xl font-semibold text-komuna-dark sm:text-4xl">Kolaborasi Komunitas</h2>
             <div className="mt-8 rounded-2xl border border-dashed border-komuna-forest/20 bg-white p-10">
-              <p className="font-display text-2xl text-komuna-dark">Belum ada kolaborasi yang tersedia.</p>
+              {collaborations.length ? (
+                <div className="grid gap-4 text-left sm:grid-cols-2">
+                  {collaborations.map((item: { id: string; title: string; description?: string | null; communityA: { name: string }; communityB: { name: string } }) => (
+                    <article key={item.id} className="rounded-2xl border border-komuna-forest/10 bg-komuna-soft p-5">
+                      <h3 className="font-display text-xl font-semibold text-komuna-dark">{item.title}</h3>
+                      <p className="mt-2 text-sm font-semibold text-komuna-forest">{item.communityA.name} &times; {item.communityB.name}</p>
+                      {item.description && <p className="mt-2 text-sm leading-6 text-komuna-dark/65">{item.description}</p>}
+                    </article>
+                  ))}
+                </div>
+              ) : <p className="font-display text-2xl text-komuna-dark">Belum ada kolaborasi yang tersedia.</p>}
               <p className="mt-3 text-sm leading-7 text-komuna-dark/65">
                 Kolaborasi antar komunitas akan tampil di sini setelah tersedia.
               </p>

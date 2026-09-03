@@ -19,7 +19,7 @@ const DORMANT_FLAGS: Record<string, string> = {
 const MODULE_PATHS: Record<string, string[]> = {
   brand: ["/brands"],
   campaign: ["/campaigns"],
-  collaboration: ["/collaborations"],
+  collaboration: ["/collaborations", "/communities/:communityId/network"],
   partnership: ["/partnerships"],
   csr: ["/csr"],
   marketplace: ["/marketplace"],
@@ -45,7 +45,7 @@ function modulePathMatches(pathSegments: string[], modulePattern: string): boole
   if (patternSegments.length === 0) return false;
   if (pathSegments[0] !== patternSegments[0]) return false;
   if (patternSegments.length > pathSegments.length) return false;
-  return pathSegments.slice(0, patternSegments.length).join("/") === patternSegments.join("/");
+  return patternSegments.every((segment, index) => segment.startsWith(":") || segment === pathSegments[index]);
 }
 
 export function dormantFeatureGuard() {

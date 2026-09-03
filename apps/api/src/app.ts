@@ -23,6 +23,7 @@ import { masterDataRoutes } from "./routes/master-data";
 import { uploadRoutes } from "./routes/upload";
 import { orgStructureRoutes } from "./routes/org-structure";
 import { contactMessageRoutes } from "./routes/contact-messages";
+import { relationshipRoutes } from "./routes/relationships";
 
 const log = createChildLogger("server");
 
@@ -129,7 +130,8 @@ api.route("/categories", categoryRoutes);
 api.route("/master-data", masterDataRoutes);
 api.route("/upload", uploadRoutes);
 api.route("/organization-structure", orgStructureRoutes);
-api.route("/contact-messages", contactMessageRoutes);
+  api.route("/contact-messages", contactMessageRoutes);
+  api.route("/", relationshipRoutes);
 
 // OpenAPI JSON spec
 app.get("/api/v1/docs/openapi.json", (c) => {

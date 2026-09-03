@@ -70,6 +70,7 @@ model User {
   eventStatusHistory    EventStatusHistory[]   @relation("EventStatusActor")
   volunteerStatusHistory VolunteerStatusHistory[] @relation("VolunteerStatusActor")
   communityStatusHistory CommunityStatusHistory[] @relation("CommunityStatusActor")
+  createdCollaborations  Collaboration[] @relation("CollaborationCreator")
 
   @@index([status])
   @@index([deletedAt])
@@ -151,6 +152,10 @@ model Community {
   membershipHistories MembershipHistory[]
   statusHistory      CommunityStatusHistory[]
   savedBy             CommunitySave[]
+  networkRequests     CommunityNetworkRelationship[] @relation("NetworkRequester")
+  networkTargets      CommunityNetworkRelationship[] @relation("NetworkTarget")
+  collaborationsAsA   Collaboration[] @relation("CollaborationCommunityA")
+  collaborationsAsB   Collaboration[] @relation("CollaborationCommunityB")
 
   @@index([ownerId])
   @@index([status])
@@ -178,6 +183,70 @@ enum CommunityStatus {
   ARCHIVED
   REJECTED
   REVISION_REQUIRED
+}
+
+enum CommunityNetworkRelationshipStatus {
+  REQUESTED
+  ACCEPTED
+  DECLINED
+  REMOVED
+}
+
+model CommunityNetworkRelationship {
+  id          String                                  @id @default(cuid())
+  requesterId String
+  targetId    String
+  status      CommunityNetworkRelationshipStatus     @default(REQUESTED)
+  createdAt   DateTime                                @default(now())
+  updatedAt   DateTime                                @updatedAt
+
+  requester Community @relation("NetworkRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  target    Community @relation("NetworkTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, targetId])
+  @@index([requesterId, status])
+  @@index([targetId, status])
+  @@map("community_network_relationships")
+}
+
+enum CollaborationStatus {
+  DRAFT
+  INVITED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum CollaborationTargetType {
+  EVENT
+  VOLUNTEER
+}
+
+model Collaboration {
+  id            String                   @id @default(cuid())
+  communityAId  String
+  communityBId  String
+  title         String
+  description   String?                  @db.Text
+  status        CollaborationStatus     @default(DRAFT)
+  targetType    CollaborationTargetType
+  targetEventId  String?
+  targetProgramId String?
+  createdById   String
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+
+  communityA   Community @relation("CollaborationCommunityA", fields: [communityAId], references: [id], onDelete: Cascade)
+  communityB   Community @relation("CollaborationCommunityB", fields: [communityBId], references: [id], onDelete: Cascade)
+  createdBy    User      @relation("CollaborationCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  targetEvent  Event?    @relation("CollaborationEvent", fields: [targetEventId], references: [id], onDelete: SetNull)
+  targetProgram VolunteerProgram? @relation("CollaborationProgram", fields: [targetProgramId], references: [id], onDelete: SetNull)
+
+  @@index([communityAId, status])
+  @@index([communityBId, status])
+  @@index([createdById])
+  @@index([status])
+  @@map("collaborations")
 }
 
 model CommunityStatusHistory {
@@ -578,6 +647,7 @@ model Event {
   speakers               EventSpeaker[]
   tickets                EventTicket[]
   statusHistory          EventStatusHistory[]
+  collaborations         Collaboration[]      @relation("CollaborationEvent")
 
   @@index([communityId])
   @@index([organizationId])
@@ -881,6 +951,7 @@ model VolunteerProgram {
   applications    VolunteerProgramApplication[]
   statusHistory   VolunteerProgramStatusHistory[]
   savedBy         VolunteerProgramSave[]
+  collaborations  Collaboration[]            @relation("CollaborationProgram")
 
   @@unique([slug], map: "vp_slug_uq")
   @@unique([legacyOpportunityId], map: "vp_legacy_opportunity_uq")

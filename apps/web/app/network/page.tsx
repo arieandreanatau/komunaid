@@ -3,8 +3,6 @@ import Link from "next/link";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { JsonLd } from "@/components/json-ld";
-import { CommunityCard } from "@/components/community-card";
-import type { HomepageCommunity } from "@/lib/homepage-data";
 
 export const metadata: Metadata = {
   title: "Network Komunitas",
@@ -15,26 +13,7 @@ export const metadata: Metadata = {
   },
 };
 
-function getBaseUrl() {
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return process.env.API_URL || "http://localhost:3001";
-}
-
-async function fetchCommunities(): Promise<HomepageCommunity[]> {
-  try {
-    const response = await fetch(`${getBaseUrl()}/api/v1/communities?limit=12&sort=desc&orderBy=memberCount`, {
-      next: { revalidate: 60 },
-    });
-    if (!response.ok) return [];
-    const payload = await response.json();
-    return (payload.data ?? []) as HomepageCommunity[];
-  } catch {
-    return [];
-  }
-}
-
-export default async function NetworkPage() {
-  const communities = await fetchCommunities();
+export default function NetworkPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-komuna-cream text-komuna-dark">
@@ -73,7 +52,7 @@ export default async function NetworkPage() {
                 <p className="text-sm font-bold uppercase tracking-[0.16em] text-komuna-coral">Berpusat Komunitas</p>
                 <h2 className="mt-3 font-display text-2xl font-semibold text-komuna-dark">Bukan Umpan Sosial</h2>
                 <p className="mt-3 text-sm leading-7 text-komuna-dark/65">
-                  Network KomunaID tetap berpusat pada komunitas, kegiatan, dan kontribusi nyata &mdash; bukan umpan tanpa arah.
+                   Network KomunaID berpusat pada relasi komunitas yang disetujui, bukan umpan sosial.
                 </p>
               </div>
             </div>
@@ -97,16 +76,11 @@ export default async function NetworkPage() {
               </Link>
             </div>
 
-            {communities.length > 0 ? (
-              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-                {communities.map((community) => <CommunityCard key={community.id} community={community} />)}
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-dashed border-komuna-forest/20 bg-white p-10 text-center">
-                <p className="font-display text-2xl text-komuna-dark">Belum ada komunitas untuk dijelajahi.</p>
-                <Link href="/communities/create" className="mt-3 inline-block font-bold text-komuna-forest underline">Buat Komunitas</Link>
-              </div>
-            )}
+             <div className="rounded-2xl border border-dashed border-komuna-forest/20 bg-white p-10 text-center">
+               <p className="font-display text-2xl text-komuna-dark">Belum ada relasi network.</p>
+               <p className="mt-3 text-sm text-komuna-dark/65">Relasi network tampil di dashboard komunitas setelah permintaan disetujui.</p>
+               <Link href="/communities" className="mt-4 inline-block font-bold text-komuna-forest underline">Jelajahi Komunitas</Link>
+             </div>
           </div>
         </section>
 
